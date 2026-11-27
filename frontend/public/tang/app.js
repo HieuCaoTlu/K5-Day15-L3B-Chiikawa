@@ -1313,7 +1313,7 @@
     editSurveyTarget = null;
     armedDeleteSlug = '';
     if (sideWrap.hidden) return;
-    const a = instant ? null : anim(sidePanel, { x: [0, -760] }, { duration: 0.24, ease: 'easeIn' });
+    const a = instant ? null : anim(sidePanel, { x: [0, 760] }, { duration: 0.24, ease: 'easeIn' });
     done(a).then(() => { sideWrap.hidden = true; sidePanel.innerHTML = ''; });
     if (instant) { sideWrap.hidden = true; sidePanel.innerHTML = ''; }
     if (inApp && tab === 'pitching') rerender();
@@ -1413,7 +1413,7 @@
     dashStats = null;
     lastDashJson = '';
     rerender();
-    if (wasClosed) anim(sidePanel, { x: [-760, 0] }, { type: 'spring', stiffness: 280, damping: 30 });
+    if (wasClosed) anim(sidePanel, { x: [760, 0] }, { type: 'spring', stiffness: 280, damping: 30 });
     if (nextTab === 'stats') refreshDashStats(true);
   }
 
@@ -1467,7 +1467,7 @@
       editSurveyTarget = null;
       lastSavedSlug = '';
       rerender();
-      if (wasClosed) anim(sidePanel, { x: [-760, 0] }, { type: 'spring', stiffness: 280, damping: 30 });
+      if (wasClosed) anim(sidePanel, { x: [760, 0] }, { type: 'spring', stiffness: 280, damping: 30 });
     },
     openSelectedEdit() { openSideForSlug(activeTileSlug(), 'edit'); },
     openSelectedStats() { openSideForSlug(activeTileSlug(), 'stats'); },
