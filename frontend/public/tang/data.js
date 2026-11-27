@@ -155,7 +155,7 @@
     quality: {
       source: SAMPLE_SCORE.metric[0],
       metrics: [
-        { id: 'k1', name: 'Thời gian phản hồi trung vị giảm', baseline: null, target: 50, unit: '%', direction: 'up', kind: 'value', method: '',
+        { id: 'k1', name: 'Mức giảm thời gian phản hồi trung vị', baseline: null, target: 50, unit: '%', direction: 'up', kind: 'value', method: 'So thời gian phản hồi trung vị của tuần đó với tuần trước khi dùng AI.',
           rule: 'Nếu thời gian phản hồi trung vị giảm từ 50% so với trước khi dùng thì xem là đạt.', from: 'mau' },
         { id: 'k2', name: 'Bản nháp được gửi mà chỉ sửa nhẹ', baseline: null, target: 70, unit: '%', direction: 'up', kind: 'ai', method: 'Đếm bản nháp được gửi mà nhân viên chỉ sửa nhẹ, chia cho tổng số bản nháp, theo log khung chat.',
           rule: 'Nếu từ 70% bản nháp được gửi mà chỉ sửa nhẹ thì xem là AI soạn đủ tốt.', from: 'mau' }

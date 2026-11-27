@@ -136,8 +136,8 @@
     }
     if (i === 3) {
       const q = S.quality;
-      if (!q.metrics.length) return 'Để agent lấy metric từ scorecard';
-      if (q.source !== S.score.metric.text) return 'Scorecard đã đổi, lấy lại metric';
+      if (!q.metrics.length) return 'Để agent lấy chỉ số từ scorecard';
+      if (q.source !== S.score.metric.text) return 'Scorecard đã đổi, lấy lại chỉ số';
       if (!q.runs.length) return 'Ghi lần chạy thử đầu tiên';
       return q.runs.some(r => !r.sample) ? `Đã ghi ${q.runs.length} lần chạy` : 'Mới có dữ liệu mẫu, ghi lần chạy thật';
     }
@@ -283,29 +283,26 @@
       if (!range && !m) return null;
       const n = x => +String(x).replace(',', '.');
       let name = seg.replace(range ? range[0] : m[0], ' ').replace(/(ít nhất|tối thiểu|tối đa|không quá|dưới|trên|đạt)/gi, ' ').replace(/\s+/g, ' ').replace(/^[\s,:;.\-]+|[\s,:;.\-]+$/g, '');
-      name = name ? name[0].toUpperCase() + name.slice(1) : seg;
       const unit = range ? range[5] || range[2] || '' : m[2] || '';
+      const rel = !range && unit === '%' && name.match(/\s(giảm|tăng)$/i);
+      if (rel) name = `Mức ${rel[1].toLowerCase()} ${name.slice(0, rel.index).trim().replace(/^./, c => c.toLowerCase())}`;
+      if (range) name = name.replace(/\s(giảm|tăng)$/i, '');
+      name = name ? name[0].toUpperCase() + name.slice(1) : seg;
       const direction = range ? (/xuống|còn/i.test(range[3]) ? 'down' : 'up') : /(tối đa|không quá|dưới|ít hơn)/i.test(seg) ? 'down' : 'up';
       const k = { name: name.slice(0, 60), baseline: range ? n(range[1]) : null, target: range ? n(range[4]) : n(m[1]), unit, direction, kind: kindOf(seg), method: '' };
       return Object.assign(k, { rule: ruleOf(k) });
     }).filter(Boolean);
   }
-  /* Soát bộ metric theo khung Product thinking. Code chấm, không để LLM chấm. */
+  /* Gợi ý cho bộ chỉ số theo khung Product thinking. Code chấm, không để LLM chấm. Chỉ trả về điều còn thiếu. */
   function checkMetrics() {
     const q = S.quality, list = q.metrics, out = [];
-    const ok = (good, text, fix) => out.push({ good, text: good ? text : fix });
+    if (!list.length) return [];
     const nature = q.nature && q.nature !== 'other' ? q.nature : natureOf(S.score.problem.text);
-    if (!list.length) return [{ good: false, text: 'Chưa có metric. Để agent lấy từ scorecard hoặc thêm tay.' }];
-    const noBase = list.filter(k => num(k.baseline) === null), noMethod = list.filter(k => !String(k.method || '').trim());
-    ok(!noBase.length, 'Mọi metric đã có hiện trạng.', `Cần hiện trạng cho: ${noBase.map(k => k.name).join(', ')}. Không có hiện trạng thì không biết AI cải thiện được bao nhiêu.`);
-    ok(!noMethod.length, 'Mọi metric đã có cách đo.', `Cần ghi cách đo cho: ${noMethod.map(k => k.name).join(', ')}.`);
     const vanity = list.filter(k => RX.vanity.test(k.name));
-    ok(!vanity.length, 'Không có metric phù phiếm.', `${vanity.map(k => k.name).join(', ')} giống metric phù phiếm. Đổi sang hành vi lặp lại hoặc kết quả công việc thật.`);
-    ok(list.some(k => k.kind === 'value'), 'Có metric giá trị thật cho người dùng.', 'Cần một metric giá trị thật: dấu hiệu nào chứng minh người dùng được lợi?');
-    ok(list.some(k => k.kind === 'ai'), 'Có metric chất lượng AI.', 'Cần một metric chất lượng AI: thế nào là câu trả lời đúng, và ưu tiên bắt đúng (precision) hay bắt đủ (recall)?');
-    if (nature === 'behavior') ok(list.some(k => RX.behaviorMetric.test(k.name)), 'Problem về hành vi và đã có metric quay lại hoặc duy trì.', 'Problem về hành vi: nên đo hoàn thành phiên đầu, quay lại phiên thứ hai, số phiên mỗi tuần.');
-    if (nature === 'productivity') ok(list.some(k => RX.productivityMetric.test(k.name)), 'Problem về năng suất và đã có metric thời gian hoặc tỉ lệ chỉnh sửa.', 'Problem về năng suất: nên đo thời gian làm xong việc, tỉ lệ chỉnh sửa, số lần dùng thật.');
-    ok(list.some(k => k.kind === 'feasibility'), 'Có metric khả thi (độ trễ hoặc chi phí).', 'Chưa có metric khả thi. Chi phí đã theo dõi bằng token ở dưới; nếu người dùng phải chờ, thêm metric độ trễ.');
+    if (vanity.length) out.push(`${vanity.map(k => k.name).join(', ')} chỉ cho biết có bao nhiêu người đến, chưa cho biết sản phẩm có giúp được họ không. Nên thay bằng việc người dùng làm được nhờ sản phẩm.`);
+    if (!list.some(k => k.kind === 'ai')) out.push('Nên có một chỉ số cho biết AI trả lời đúng tới đâu, ví dụ tỉ lệ câu trả lời được dùng mà không phải sửa.');
+    if (nature === 'behavior' && !list.some(k => RX.behaviorMetric.test(k.name))) out.push('Bài toán là giúp người dùng duy trì thói quen, nên đo việc họ quay lại, ví dụ số phiên mỗi tuần.');
+    if (nature === 'productivity' && !list.some(k => RX.productivityMetric.test(k.name))) out.push('Bài toán là giúp làm việc nhanh hơn, nên đo thời gian làm xong việc hoặc tỉ lệ phải sửa lại.');
     return out;
   }
   const SOURCE = { agent: 'Agent', tu: 'Luật tách số', mau: 'Mẫu', tay: 'Nhập tay' };
@@ -371,7 +368,7 @@
     tasks: S.tasks.list.map(t => `${t.id} ${t.title} (${(STATUS[t.status] || ['?'])[0]})`),
     quality: {
       metrics: S.quality.metrics.map(m => `${m.name} (${(KIND[m.kind] || KIND.value)[0]}): hiện trạng ${num(m.baseline) === null ? 'chưa đo' : m.baseline + m.unit}, mục tiêu ${m.target}${m.unit}, cách đo: ${m.method || 'chưa ghi'}`),
-      metricChecks: checkMetrics().filter(c => !c.good).map(c => c.text),
+      metricTips: checkMetrics(),
       runs: sortedRuns().slice(-5).map(r => `${r.at} ${r.model}: pass ${r.passed}/${r.total}, token ${r.inTok}/${r.outTok}${r.sample ? ' (dữ liệu mẫu)' : ''}`),
       health: HNAMES[health().level], reasons: health().reasons.map(reasonText)
     },
@@ -548,22 +545,19 @@
       const costIn = Object.entries({ priceIn: 'USD / 1 triệu token vào', priceOut: 'USD / 1 triệu token ra', tickets: 'Câu hỏi mỗi shop/tháng', price: 'Giá mỗi shop USD/tháng', infra: 'Hạ tầng USD/tháng', teams: 'Số shop trả phí' })
         .map(([k, l]) => `<label>${l}<input type="number" min="0" step="any" data-bind="cost" data-id="${k}" value="${+c[k] || 0}"></label>`).join('');
       return head(3, 'Mỗi lần đổi model hay prompt là một lần chạy thử. Ghi lại để thấy chất lượng, token và chi phí đi về đâu.') + `<div class="stack">
-        <div class="cols"><div class="panel">${panelHead('Metric từ Product thinking', btn('metrics', q.metrics.length ? 'Agent lấy lại metric' : 'Agent lấy metric', 'tone small'))}
-          <p class="muted">Nguồn duy nhất là scorecard. Agent đọc mục Metric, đối chiếu với Problem và Feasibility. Mỗi metric cần đủ hiện trạng, mục tiêu và cách đo.</p>
+        <div class="cols"><div class="panel">${panelHead('Chỉ số cần đạt', btn('metrics', q.metrics.length ? 'Agent lấy lại chỉ số' : 'Agent lấy chỉ số', 'tone small'))}
+          <p class="muted">Agent đọc mục Metric trong scorecard và tách thành từng chỉ số. Mỗi lần chạy thử, đội nhập con số đo được để so với mục tiêu ở đây.</p>
           <div class="prose" style="margin:8px 0">${src ? esc(src) : 'Mục Metric đang trống. Điền ở tab Product thinking trước.'}</div>
-          ${stale ? `<p class="note-warn">Scorecard đã đổi sau lần lấy metric gần nhất. Bấm lấy lại để cập nhật.</p>` : ''}
-          <div class="stack" style="gap:10px;margin-top:10px">${q.metrics.map(k => { const b = f => `data-bind="qmetric" data-id="${esc(k.id)}" data-field="${f}"`; return `<div class="metric" style="--c:${(KIND[k.kind] || KIND.value)[1]}">
-            <div class="metric-top"><input class="metric-name" ${b('name')} value="${esc(k.name)}" aria-label="Tên metric"><select ${b('kind')} aria-label="Loại metric">${Object.entries(KIND).map(([id, [n]]) => `<option value="${id}" ${k.kind === id ? 'selected' : ''}>${n}</option>`).join('')}</select>${btn('delmetric', 'Bỏ', 'soft small', `data-id="${esc(k.id)}"`)}</div>
-            <div class="cost"><label>Hiện trạng<input type="number" step="any" ${b('baseline')} value="${num(k.baseline) === null ? '' : +k.baseline}" placeholder="Chưa đo"></label>
-              <label>Mục tiêu<input type="number" step="any" ${b('target')} value="${esc(k.target)}"></label>
-              <label>Đơn vị<input ${b('unit')} value="${esc(k.unit)}"></label>
-              <label>Hướng tốt<select ${b('direction')}><option value="up" ${k.direction !== 'down' ? 'selected' : ''}>Càng cao càng tốt</option><option value="down" ${k.direction === 'down' ? 'selected' : ''}>Càng thấp càng tốt</option></select></label></div>
-            <label class="field">Cách đo<input ${b('method')} value="${esc(k.method || '')}" placeholder="Đo bằng gì, ở đâu, bao lâu một lần"></label>
-            <label class="field">Tiêu chí thành công<input ${b('rule')} value="${esc(k.rule || ruleOf(k))}"></label>
-            <span class="muted">Nguồn: ${SOURCE[k.from] || 'Nhập tay'}</span></div>`; }).join('') || '<p class="muted">Chưa có metric.</p>'}</div>
-          <div style="margin-top:14px"><h4 style="margin-bottom:4px">Soát theo Product thinking <span class="tag">Problem ${NATURE[q.nature && q.nature !== 'other' ? q.nature : natureOf(S.score.problem.text)].toLowerCase()}</span></h4>
-            ${checkMetrics().map(c => `<div class="check"><span class="tag" style="--c:${c.good ? 'var(--green)' : 'var(--orange)'}">${c.good ? 'Đủ' : 'Cần thêm'}</span><span>${esc(c.text)}</span></div>`).join('')}</div>
-          <p style="margin-top:10px">${btn('addmetric', 'Thêm metric tay', 'soft small')}</p></div>
+          ${stale ? `<p class="note-warn">Scorecard đã đổi sau lần lấy chỉ số gần nhất. Bấm lấy lại để cập nhật.</p>` : ''}
+          <div class="stack" style="gap:10px;margin-top:10px">${q.metrics.map(k => { const b = f => `data-bind="qmetric" data-id="${esc(k.id)}" data-field="${f}"`; const extra = num(k.baseline) !== null || String(k.method || '').trim(); return `<div class="metric">
+            <div class="metric-top"><input class="metric-name" ${b('name')} value="${esc(k.name)}" aria-label="Tên chỉ số">${btn('delmetric', 'Bỏ', 'soft small', `data-id="${esc(k.id)}"`)}</div>
+            <div class="goal"><span>Đạt khi</span><select ${b('direction')} aria-label="Ít nhất hay tối đa"><option value="up" ${k.direction !== 'down' ? 'selected' : ''}>ít nhất</option><option value="down" ${k.direction === 'down' ? 'selected' : ''}>tối đa</option></select>
+              <input class="goal-num" type="number" step="any" ${b('target')} value="${esc(k.target)}" aria-label="Mục tiêu"><input class="goal-unit" ${b('unit')} value="${esc(k.unit)}" placeholder="đơn vị" aria-label="Đơn vị"></div>
+            <details><summary class="muted">Thêm thông tin (${extra ? 'đã điền' : 'không bắt buộc'})</summary><div class="stack" style="gap:8px;margin-top:8px">
+              <label class="field">Con số trước khi có AI<input type="number" step="any" ${b('baseline')} value="${num(k.baseline) === null ? '' : +k.baseline}" placeholder="Ví dụ 12. Để trống nếu chưa đo"></label>
+              <label class="field">Đo bằng cách nào<input ${b('method')} value="${esc(k.method || '')}" placeholder="Ví dụ: đếm trong log chat mỗi tuần"></label></div></details></div>`; }).join('') || '<p class="muted">Chưa có chỉ số nào.</p>'}</div>
+          ${(() => { const tips = checkMetrics(); return tips.length ? `<div class="tips"><h4>Gợi ý cho bộ chỉ số</h4><ul>${tips.map(t => `<li>${esc(t)}</li>`).join('')}</ul></div>` : ''; })()}
+          <p style="margin-top:10px">${btn('addmetric', 'Thêm chỉ số', 'soft small')}</p></div>
         <div class="panel">${panelHead(editing ? 'Sửa lần chạy thử' : 'Khai lần chạy thử', samples ? `<span class="muted">${samples} lần chạy là dữ liệu mẫu</span>` : '')}
           <form class="stack" style="gap:10px" data-form="run"><div class="cost">
             ${field('at', 'Thời điểm', editing ? editing.at : nowLocal(), 'type="datetime-local" required')}
@@ -748,12 +742,12 @@
 Mục Metric: "${src}"
 Các mục khác của scorecard:
 ${card}
-Với mỗi chỉ số trả về: name (tối đa 8 từ); baseline là hiện trạng (số, hoặc null nếu văn bản không nêu, tuyệt đối không tự đoán); target (số có trong văn bản, không tự đặt mục tiêu mới); unit; direction "up" nếu càng cao càng tốt, "down" nếu càng thấp càng tốt; kind là "value" (giá trị thật cho người dùng, hành vi lặp lại hoặc kết quả công việc), "ai" (chất lượng câu trả lời của AI: đúng sai, precision, recall, tỉ lệ được dùng mà không sửa) hoặc "feasibility" (độ trễ, chi phí); method là cách đo nếu văn bản có nêu, không có thì để chuỗi rỗng; rule là tiêu chí thành công viết thành một câu "Nếu ... thì ...".
+Với mỗi chỉ số trả về: name (tối đa 8 từ; nếu văn bản nói giảm hoặc tăng X% thì đặt tên "Mức giảm …" hoặc "Mức tăng …" và target là X); baseline là hiện trạng (số, hoặc null nếu văn bản không nêu, tuyệt đối không tự đoán); target (số có trong văn bản, không tự đặt mục tiêu mới); unit; direction "up" nếu càng cao càng tốt, "down" nếu càng thấp càng tốt; kind là "value" (giá trị thật cho người dùng, hành vi lặp lại hoặc kết quả công việc), "ai" (chất lượng câu trả lời của AI: đúng sai, precision, recall, tỉ lệ được dùng mà không sửa) hoặc "feasibility" (độ trễ, chi phí); method là cách đo nếu văn bản có nêu, không có thì để chuỗi rỗng; rule là tiêu chí thành công viết thành một câu "Nếu ... thì ...".
 nature là bản chất problem: "behavior" nếu là problem hành vi (duy trì, động lực, quay lại), "productivity" nếu là problem năng suất (thủ công, mất thời gian), "other" nếu chưa rõ.`,
         '{"nature":"productivity","metrics":[{"name":"","baseline":null,"target":0,"unit":"%","direction":"up","kind":"value","method":"","rule":"Nếu ... thì ..."}]}',
         o => o && Array.isArray(o.metrics) && o.metrics.length && o.metrics.every(k => str(k.name) && isFinite(+k.target)),
         () => ({ metrics: parseMetrics(src), nature: natureOf(S.score.problem.text), rule: true }));
-      if (!out.metrics.length) { toast('Chưa tách được số mục tiêu từ văn bản. Thêm metric tay hoặc ghi rõ con số trong scorecard.'); return ['quality', () => {}]; }
+      if (!out.metrics.length) { toast('Chưa tách được số mục tiêu từ văn bản. Thêm chỉ số tay hoặc ghi rõ con số trong scorecard.'); return ['quality', () => {}]; }
       const old = S.quality.metrics, used = new Set();
       const next = out.metrics.slice(0, 6).map((k, i) => {
         const name = String(k.name).slice(0, 60);
@@ -770,7 +764,7 @@ nature là bản chất problem: "behavior" nếu là problem hành vi (duy trì
       S.quality.source = S.score.metric.text;
       S.quality.nature = NATURE[out.nature] ? out.nature : natureOf(S.score.problem.text);
       save('quality');
-      toast(`Đã lấy ${next.length} metric từ scorecard${out.rule ? ' bằng luật tách số' : ''}.`);
+      toast(`Đã lấy ${next.length} chỉ số từ scorecard${out.rule ? ' bằng luật tách số' : ''}.`);
       return ['quality', () => rise($$('#view .metric'))];
     }
   };
@@ -1009,7 +1003,7 @@ nature là bản chất problem: "behavior" nếu là problem hành vi (duy trì
       S.quality.runs = S.quality.runs.filter(r => !r.sample); runEdit = null;
       save('quality'); rerender(); toast('Đã xóa dữ liệu mẫu');
     },
-    addmetric() { S.quality.metrics.push({ id: 'k' + Date.now().toString(36), name: 'Metric mới', baseline: null, target: 0, unit: '%', direction: 'up', kind: 'value', method: '', rule: '', from: 'tay' }); save('quality'); rerender(); const all = $$('[data-field="name"]', view); if (all.length) { all[all.length - 1].focus(); all[all.length - 1].select(); } },
+    addmetric() { S.quality.metrics.push({ id: 'k' + Date.now().toString(36), name: 'Chỉ số mới', baseline: null, target: 0, unit: '%', direction: 'up', kind: 'value', method: '', rule: '', from: 'tay' }); save('quality'); rerender(); const all = $$('[data-field="name"]', view); if (all.length) { all[all.length - 1].focus(); all[all.length - 1].select(); } },
     delmetric(b) {
       if (!twice(b, 'metric' + b.dataset.id, 'Bấm lần nữa')) return;
       S.quality.metrics = S.quality.metrics.filter(k => k.id !== b.dataset.id); save('quality'); rerender();
@@ -1122,6 +1116,7 @@ nature là bản chất problem: "behavior" nếu là problem hành vi (duy trì
     }
     if (k === 'qmetric') {
       const x = S.quality.metrics.find(x => x.id === id), fl = t.dataset.field;
+      if (x && fl === 'name') x.kind = kindOf(v);
       if (x) x[fl] = fl === 'target' ? (+v || 0) : fl === 'baseline' ? num(v) : fl === 'direction' ? (v === 'down' ? 'down' : 'up') : fl === 'kind' ? (KIND[v] ? v : 'value') : v.trim().slice(0, { unit: 12, name: 60 }[fl] || 200);
       save('quality'); rerender();
     }

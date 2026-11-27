@@ -260,3 +260,13 @@ details ul{margin:8px 0 0;padding-left:18px;display:grid;gap:4px}
 .metric-top select{flex:1 1 130px;width:auto}
 .chart-wrap{overflow-x:auto}
 @media (max-width:640px){.chart{min-width:460px}.chart text{font-size:15px}}
+/* Thẻ chỉ số đơn giản: tên, rồi một câu "Đạt khi ít nhất 70 %" */
+.metric{--c:var(--indigo)}
+.goal{display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-size:14px}
+.goal select{width:auto}
+.goal .goal-num{width:90px}
+.goal .goal-unit{width:80px}
+.metric details summary{cursor:pointer;font-size:13px}
+.tips{margin-top:14px;background:var(--soft);border-radius:14px;padding:12px 14px;display:grid;gap:6px}
+.tips ul{margin:0;padding-left:18px;display:grid;gap:4px;font-size:13px}
+@media (max-width:1000px){.goal{gap:6px}.goal select{padding-inline:8px}.goal .goal-num{width:60px;padding-inline:8px}.goal .goal-unit{width:54px;padding-inline:8px}}
