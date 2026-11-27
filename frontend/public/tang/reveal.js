@@ -9,8 +9,7 @@
 
   // Mỗi nhóm trượt lần lượt: khối sau trễ hơn khối trước một nhịp
   const GROUPS = [
-    '.sec-head', '.steps', '#features .card', '.viewer',
-    '.orbit-core, .orbit-card', '.cta h2, .cta .row'
+    '.sec-head', '.cta h2, .cta .row'
   ];
   const STEP = 90;
 

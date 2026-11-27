@@ -36,8 +36,8 @@ Dataset nào, xử lý gì (từ `data/DATA_CARD.md`): (1) khảo sát Google Fo
 
 | Lượt | Run ID | Model | Cấu hình (prompt / công cụ / thay đổi) | Đạt / tổng | % | Đạt chuẩn? |
 |---|---|---|---|---|---|---|
-| 1 | | | | __/__ | | |
-| 2 | | | | __/__ | | |
+| 1 | run-1@20261128-010324 | gemini-3.5-flash-lite | prompt `update_canvas` có thêm phần tư duy sản phẩm; chấm bằng `eval/grade.py` | 18/23 | 78% | Chưa (thuong+kho 14/19 = 73,7% < 75%; 3 câu GO sai) |
+| 2 | run-2@20261128-021100 | gemini-3.5-flash-lite | thêm luật code: trích dẫn của ô JTBD phải nêu điều chính người dùng muốn đạt (không phải nỗi đau, lời đoán, nghe kể lại), ô Workaround phải mô tả cách đang làm; thêm quy tắc `no_ai_needed` cho nguyên nhân là thói quen | 20/23 | 87% | Đạt (thuong+kho 16/19 = 84,2%; tu_choi 4/4; 0 câu GO sai) |
 
 Lượt chạy lại vì lỗi kỹ thuật, lượt sau CP4: ghi thêm dòng, không sửa dòng cũ.
 

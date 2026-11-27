@@ -148,3 +148,33 @@ def test_vietnamese_quote_matching_normalizes_both_sides(form):
     }
     canvas, _ = apply_update(None, _upd(pain_point=proof), request, {})
     assert canvas["pain_point"]["status"] == "evidence"
+
+
+def _status(cell: str, quote: str, request: str) -> str:
+    fact = {"content": quote, "who": "chị Mai", "when": "hôm qua", "quote": quote}
+    canvas, _ = apply_update(empty_canvas(), _upd(**{cell: fact}), request, {})
+    return canvas[cell]["status"]
+
+
+def test_jtbd_quote_that_only_tells_the_pain_is_not_evidence():
+    """Câu kể nỗi đau có thật trong tin nhắn nhưng không phải điều người đó nói muốn đạt."""
+    request = "Hôm qua chị Mai mất cả buổi sáng đối chiếu hóa đơn."
+    assert _status("jtbd", "chị Mai mất cả buổi sáng đối chiếu hóa đơn", request) == "assumption"
+
+
+def test_jtbd_quote_that_is_a_guess_or_hearsay_is_not_evidence():
+    request = "Hôm qua chị Mai đối chiếu hóa đơn. Nghe bạn chị kể là chị ấy chắc muốn làm nhanh hơn, mình đoán vậy."
+    quote = "Nghe bạn chị kể là chị ấy chắc muốn làm nhanh hơn, mình đoán vậy"
+    assert _status("jtbd", quote, request) == "assumption"
+
+
+def test_jtbd_quote_in_the_users_own_words_is_evidence():
+    request = "Hôm qua chị Mai nói thẳng: chị chỉ muốn đối chiếu xong trong 10 phút."
+    assert _status("jtbd", "chị chỉ muốn đối chiếu xong trong 10 phút", request) == "evidence"
+
+
+def test_workaround_quote_must_describe_what_they_do_today():
+    request = "Hôm qua chị Mai mất cả buổi sáng đối chiếu hóa đơn."
+    assert _status("current_workaround", "chị Mai mất cả buổi sáng đối chiếu hóa đơn", request) == "assumption"
+    request = "Hôm qua chị Mai đang làm tay trên Excel."
+    assert _status("current_workaround", "chị Mai đang làm tay trên Excel", request) == "evidence"

@@ -3,26 +3,33 @@
   const iso = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   const inDays = n => { const d = new Date(); d.setDate(d.getDate() + n); return iso(d); };
 
-  // Bốn bước: mỗi bước một màu
+  // Năm module: mỗi module một màu.
+  // tag (việc của FDE), lead, does (bạn sẽ được...): nội dung trang giới thiệu.
+  // from, to: câu chuyển tư duy hiện ở đầu từng tab trong workstation.
   const STEPS = [
-    { id: 'product', name: 'Thinking', color: 'blue', hex: '#0a9cf0',
-      lead: 'Bạn kể ý tưởng, agent hỏi lại cho đến khi rõ ai cần nó và vì sao. Trưởng nhóm duyệt xong thì cả đội mới lên kế hoạch.',
+    { id: 'product', name: 'Thinking', color: 'blue', hex: '#0a9cf0', tag: 'Phân tích nhu cầu',
+      lead: 'Phân tích bài toán, tìm điểm đau của người dùng, chốt MVP và phạm vi',
+      does: ['Trò chuyện với agent để hoàn thành AI MVP Canvas (khung phân tích bài toán)', 'Được hỗ trợ quyết định có thực hiện dự án hay không'],
       from: 'Cái này làm được. Dùng công nghệ gì cho hay đây?', to: 'Ai đang khổ vì chuyện này, và giờ họ đang xoay xở ra sao?',
       out: ['Persona', 'Job-to-be-done', 'Pain Point', 'Current Workaround', 'Solution', 'AI Leverage', 'MVP Scope', 'Metrics', 'Prior Art & Edge'] },
-    { id: 'planning', name: 'Planning', color: 'green', hex: '#14b86a',
-      lead: 'Chia người, chia việc, tính xem tốn bao nhiêu. Pull request đi tới đâu, task tự đổi trạng thái tới đó, khỏi phải nhắc nhau cập nhật.',
+    { id: 'planning', name: 'Planning', color: 'green', hex: '#14b86a', tag: 'Quản lý tiến độ',
+      lead: 'Chia việc cho cả nhóm, theo dõi tiến độ',
+      does: ['Tự động tạo ra các chặng công việc, phân công tự động cho từng thành viên', 'Tự động cập nhật trạng thái công việc theo nội dung Pull request'],
       from: 'Cứ ghi hết ticket ra rồi code thôi.', to: 'Làm việc này thì người dùng được gì? Tiền bỏ ra sẽ thu lại từ đâu?',
       out: ['Vai trò', 'Tổng quan', 'File pitching', 'User story', 'Task', 'Tech stack', 'Chi phí và doanh thu'] },
-    { id: 'pitching', name: 'Pitching', color: 'orange', hex: '#ff8a1f',
-      lead: 'Làm form hỏi người dùng, xem câu trả lời được gom lại, rồi dựng bài thuyết trình từ chính những gì bạn nghe được.',
+    { id: 'pitching', name: 'Pitching', color: 'orange', hex: '#ff8a1f', tag: 'Khảo sát và quảng bá',
+      lead: 'Thu thập khảo sát người dùng, quảng bá sản phẩm',
+      does: ['Tự động tạo Form khảo sát và phân tích biểu đồ phản hồi', 'Tự động tạo Slide quảng bá sản phẩm'],
       from: 'Demo chạy mượt là người ta hiểu ngay.', to: 'Trước khi mở demo, người nghe đã tin vấn đề này có thật chưa?',
       out: ['Form', 'Dashboard', 'AI overview', 'Pitching HTML', 'Pitching script', 'Bài quảng cáo'] },
-    { id: 'quality', name: 'Quality', color: 'indigo', hex: '#4d5bf0',
-      lead: 'Lần chạy thử model nào cũng ghi lại được. Nhìn biểu đồ là biết chất lượng lên hay xuống, và đã tốn bao nhiêu.',
+    { id: 'quality', name: 'Quality', color: 'indigo', hex: '#4d5bf0', tag: 'Dự đoán chi phí',
+      lead: 'Quản lý chất lượng sản phẩm, dự đoán chi phí',
+      does: ['Ghi lại chất lượng model theo thời gian', 'Theo dõi token và ước tính chi phí', 'Gợi ý một số phương pháp thu lợi nhuận'],
       from: 'Thử vài câu thấy ổn là được rồi.', to: 'Sửa prompt xong thì tốt hơn hay tệ đi? Tốn thêm bao nhiêu?',
       out: ['Chỉ số cần đạt', 'Lịch sử AI', 'Biểu đồ chất lượng', 'Token', 'Chi phí', 'Kế hoạch kiếm tiền'] },
-    { id: 'maintaining', name: 'Maintaining', color: 'violet', hex: '#a24ce8',
-      lead: 'Ra mắt rồi vẫn còn việc: đặt lịch bảo trì và để mắt tới sức khỏe sản phẩm. Có gì xuống cấp, mô hình 3D sẽ báo.',
+    { id: 'maintaining', name: 'Maintaining', color: 'violet', hex: '#a24ce8', tag: 'Vận hành sản phẩm',
+      lead: 'Giữ sản phẩm khỏe sau khi ra mắt',
+      does: ['Đặt lịch bảo trì, nhắc khi đến hạn', 'Nhận gợi ý cập nhật khi model hoặc giá đổi'],
       from: 'Deploy xong là xong.', to: 'Tuần sau model đổi, giá đổi, câu trả lời dở đi thì ai là người biết?',
       out: ['Lịch bảo trì', 'Sức khỏe sản phẩm'] }
   ];

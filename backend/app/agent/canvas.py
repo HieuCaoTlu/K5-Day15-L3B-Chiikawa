@@ -50,6 +50,25 @@ CELL_CUES = {
 }
 
 
+# Trích dẫn phải đúng KIỂU thông tin của ô thì mới là bằng chứng (lượt 2: sửa lỗi GO sai ở B13, B14, B16).
+# Một câu kể nỗi đau không phải là điều người đó nói muốn đạt; lời đoán hay nghe kể lại không phải lời của chính họ.
+DESIRE_RX = re.compile(r"\b(muốn|cần|mong|ước|hy vọng|kỳ vọng|mục tiêu|cố gắng)\b")
+HEARSAY_RX = re.compile(r"\b(chắc|đoán|có lẽ|hình như|nghe\s+(nói|bảo|đâu)|nghe\s+\S+(\s+\S+)?\s+kể|mình nghĩ)\b")
+WORKAROUND_RX = re.compile(
+    r"\b(đang|tự|thủ công|bằng tay|tay|excel|sheets?|zalo|sổ|giấy|ghi|chép|nhắn|gọi|copy|dán|nhờ|dùng|xử lý)\b"
+)
+
+
+def quote_fits(cell: str, quote: str) -> bool:
+    """Đoạn trích có đúng kiểu thông tin của ô không. Chỉ kiểm ô JTBD và Current Workaround."""
+    text = normalize(quote)
+    if cell == "jtbd":
+        return bool(DESIRE_RX.search(text)) and not HEARSAY_RX.search(text)
+    if cell == "current_workaround":
+        return bool(WORKAROUND_RX.search(text))
+    return True
+
+
 def normalize(text: str) -> str:
     return " ".join(unicodedata.normalize("NFC", text.casefold()).split())
 
@@ -96,7 +115,7 @@ def apply_update(prev: dict | None, upd: CanvasUpdate, request: str, flags: dict
             continue
         quote = u.quote.strip()
         key = normalize(quote)
-        grounded = bool(key) and key in text
+        grounded = bool(key) and key in text and quote_fits(cell, quote)
         if key in used_quotes:
             continue
         accepted[cell] = {
@@ -123,6 +142,32 @@ def apply_update(prev: dict | None, upd: CanvasUpdate, request: str, flags: dict
     return recompute(canvas), flags
 
 
+def question_for(canvas: dict, cell: str | None) -> str:
+    """Câu hỏi cho ô lõi cần hỏi tiếp. Ô đã có nội dung nhưng thiếu bằng chứng thì ghi nhận điều người dùng vừa nói
+    và chỉ ra đúng phần còn thiếu, để không hỏi lại y nguyên câu cũ."""
+    if not cell:
+        return ""
+    data = canvas.get(cell) or {}
+    content = str(data.get("content", "")).strip()
+    if not content:
+        return QUESTIONS.get(cell, "")
+    missing = []
+    if not str(data.get("who", "")).strip():
+        missing.append("một người cụ thể (tên hoặc vai)")
+    if not str(data.get("when", "")).strip():
+        missing.append("một lần cụ thể đã xảy ra (khi nào, chuyện gì)")
+    if not missing:
+        missing.append(
+            "điều chính họ nói là muốn đạt, chép nguyên văn (không phải lời đoán hay nghe kể lại)"
+            if cell == "jtbd"
+            else "lời của chính họ chép nguyên văn, không tóm tắt"
+        )
+    return (
+        f"Mình ghi nhận: {content.rstrip('.')}. Nhưng ô {CELL_LABELS[cell]} mới là giả định, chưa phải chuyện thật. "
+        f"Còn thiếu: {' và '.join(missing)}. Bạn kể thêm giúp mình nhé?"
+    )
+
+
 def next_missing(canvas: dict) -> str | None:
     return next((c for c in ASK_ORDER if canvas[c]["status"] != "evidence"), None)
 
@@ -143,6 +188,7 @@ def decide(canvas: dict, flags: dict) -> tuple[str, list[str], str | None]:
     reasons = ["Cả 4 ô lõi đều có chuyện thật: một người cụ thể, một lần cụ thể."]
     if todo:
         reasons.append("Còn cần làm rõ ở Planning: " + ", ".join(todo) + ".")
+    reasons.append("Trước khi làm: chốt ai là người trả tiền và sản phẩm kiếm hay tiết kiệm tiền cho họ bằng cách nào.")
     return "GO", reasons, None
 
 

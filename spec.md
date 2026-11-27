@@ -96,7 +96,7 @@ Data BTC cấp đã dùng (nếu có — không commit nguyên file): không dù
 ## §7. Đánh giá & chuẩn "đạt" *(guide 2.4, 4.1)*
 - Data card: `data/DATA_CARD.md` · bộ câu thử: `eval/benchmark.csv` — 23 câu (thuong 3 · kho 16 · tu_choi 4) · metric: `eval/metric_spec.yaml` (4 metric)
 - **Chuẩn "đạt"** (chốt **trước 19:30 Thứ Sáu 27/11**, giữ nguyên đến 23:59 Thứ Bảy 28/11): "Đạt khi ≥ 75% câu `thuong` và `kho` qua, và 100% câu `tu_choi` qua, và không có câu nào trả GO khi còn ô lõi chưa có bằng chứng"
-- Kết quả: lượt 1 chưa chạy chính thức (làm ở CP3) · lượt 2 chưa chạy → chi tiết `eval/report.md`, hồ sơ `eval/README.md`. Chạy thử trước CP2 với Gemini thật (`gemini-3.5-flash-lite`): 19/23 (83%); agent luôn trả NOT YET chỉ qua 11/23 (48%). Lỗi còn lại: chưa nhận ra việc không cần AI (2 câu), chưa gắn tên người vào Persona (2 câu).
+- Kết quả: **lượt 1 (CP3): 18/23 (78%)**, run ID `run-1@20261128-010324`, model `gemini-3.5-flash-lite`: `thuong` 3/3 · `kho` 11/16 (69%) · `tu_choi` 4/4. Tính riêng `thuong` + `kho`: 14/19 (73,7%), **chưa đạt chuẩn** (cần ≥ 75%), và có 3 câu trả GO khi còn ô lõi chưa có chuyện thật (B13, B14, B16), nên cũng chưa đạt điều kiện "không câu nào trả GO sai". Hai câu tệ đi: B03 và B04 (đạt → trượt, agent trả NO thay vì NOT YET). Chi tiết `eval/report.md`, hồ sơ `eval/README.md`. Chạy thử trước CP2 với Gemini thật (`gemini-3.5-flash-lite`): 19/23 (83%); agent luôn trả NOT YET chỉ qua 11/23 (48%). Lỗi còn lại: chưa nhận ra việc không cần AI (2 câu), chưa gắn tên người vào Persona (2 câu).
 
 ## §8. Chi phí khi dùng thật *(guide 4.2)*
 - Persona + giá: `cost/personas.yaml` · lượt mô phỏng: `cost/simulate-__.csv` — *làm ở CP4*.
@@ -112,6 +112,9 @@ Data BTC cấp đã dùng (nếu có — không commit nguyên file): không dù
 - Phân công có tên: **Hiếu**: Thinking (lát cắt chính), ghép nối, landing page · **Thành Đạt (Lê Phạm)**: Planning · **Duy**: Pitching, khảo sát và bằng chứng · **Thành Đạt (Cao Phạm)**: Quality, Maintaining, bộ câu thử và chi phí.
 - Dùng AI vào việc gì: Claude Code viết agent Thinking, giao diện, bộ câu thử và tài liệu; Gemini là model chạy trong sản phẩm. Chi tiết `docs/ai-usage.md`.
 - Nhật ký thay đổi — **mọi thay đổi sau CP2 19:30 Thứ Sáu 27/11 phải có dòng ở đây**: *(chưa có thay đổi sau CP2)*.
+  - 28/11 (trước lượt 1): thêm phần tư duy sản phẩm vào prompt `update_canvas` (nỗi đau của khách trước giải pháp, không chiều người dùng, nhìn về người trả tiền); lý do GO có thêm dòng nhắc chốt người trả tiền. Lượt 1 chạy với bản này.
+  - 28/11 (trước lượt 1): agent ghi nhận điều người dùng vừa nói và hỏi đúng phần còn thiếu thay vì lặp lại một câu hỏi (`question_for`).
+  - 28/11 (cải tiến cho lượt 2): luật code `quote_fits` (trích dẫn JTBD phải nêu điều chính người dùng muốn đạt, trích dẫn Workaround phải mô tả cách đang làm); prompt thêm quy tắc `no_ai_needed` cho nguyên nhân là thói quen; sửa `demo_cache.json` và mock `update_canvas` cho khớp luật mới. **Không đổi** bộ câu thử, đáp án, `metric_spec.yaml` hay chuẩn "đạt".
 
 **CP2 → CP4** (dự kiến): nối `codebase/agent.py` với agent Thinking để `python run.py eval` chạy bộ câu thử thật; chạy lượt 1; chọn một cải tiến cho lượt 2 (chưa nhận ra việc không cần AI: B10, B11; chưa gắn tên người vào Persona: B13, B17); hỏi thêm người dùng để kiểm lại bằng phỏng vấn.
 

@@ -181,10 +181,10 @@ export function TeamForm({ profile, members, busy, mutate, onComplete }: {
   );
 }
 
-export function JoinForm({ profile, busy, mutate, onComplete }: {
-  profile: Profile; busy: boolean; mutate: Mutate; onComplete: () => void;
+export function JoinForm({ profile, busy, mutate, onComplete, initialCode = '' }: {
+  profile: Profile; busy: boolean; mutate: Mutate; onComplete: () => void; initialCode?: string;
 }) {
-  const [code, setCode] = useState('');
+  const [code, setCode] = useState(initialCode);
   const [row, setRow] = useState<EditorRow>(() => draftRow({
     github_id: profile.github_id, login: profile.login, name: profile.demo ? '' : profile.name, experience: '', tags: [], avatar: 1,
   }, profile.github_id));
@@ -271,19 +271,19 @@ export function TeamList({ members, busy, mutate }: { members: Member[]; busy?: 
 
   return (
     <>
-      <div className="pl-team-grid">{members.map((member) => (
-        <article key={member.github_id} className="d-card min-w-0">
-          <div className="pl-row">
-            <Avatar styleIndex={member.avatar} />
-            <div className="min-w-0">
-              <h3 className="pl-break text-lg">{member.name}</h3>
-              <p className="d-muted text-sm pl-break">@{member.login}{member.leader ? ' · Trưởng nhóm' : ''}</p>
-            </div>
+      <div className="pl-team-grid pl-member-grid">{members.map((member) => (
+        <article key={member.github_id} className="d-card min-w-0 pl-member">
+          <div className="pl-member-art"><Avatar styleIndex={member.avatar} /></div>
+          <div className="pl-member-info min-w-0">
+            <h3 className="pl-break text-lg">{member.name}</h3>
+            <p className="d-muted text-sm pl-break">@{member.login}{member.leader ? ' · Trưởng nhóm' : ''}</p>
+            <p className="d-muted text-sm mt-3 pl-break">{member.experience}</p>
+            <div className="pl-tag-row mt-3">{member.tags.map((tag) => <span className="d-chip d-info" key={tag}>{tag}</span>)}</div>
           </div>
-          <p className="d-muted text-sm mt-3 pl-break">{member.experience}</p>
-          <div className="pl-tag-row mt-3">{member.tags.map((tag) => <span className="d-chip d-info" key={tag}>{tag}</span>)}</div>
-          {mutate && !member.leader && <button type="button" className="d-btn d-b2 mt-3" disabled={busy}
-            aria-label={'Xóa ' + member.name + ' khỏi đội'} onClick={() => void remove(member)}>Xóa khỏi đội</button>}
+          {mutate && !member.leader && <button type="button" className="pl-member-remove" disabled={busy}
+            aria-label={'Xóa ' + member.name + ' khỏi đội'} title="Xóa khỏi đội" onClick={() => void remove(member)}>
+            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M6 6l12 12M18 6L6 18" /></svg>
+          </button>}
         </article>
       ))}</div>
       {confirm}
