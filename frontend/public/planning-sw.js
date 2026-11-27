@@ -1,4 +1,4 @@
-/* Thông báo của Planning trên đúng origin của Tầng. Chỉ mở đường dẫn trong Planning. */
+/* Thông báo của Planning trên đúng origin của ProductPilot. Chỉ mở đường dẫn trong Planning. */
 const ALLOWED = /^\/planning(\?task=[1-9][0-9]*)?$/;
 
 self.addEventListener('push', (event) => {

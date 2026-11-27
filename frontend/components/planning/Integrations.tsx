@@ -47,7 +47,7 @@ export function Repository({ state, showPicker, togglePicker, busy, mutate }: {
       ) : <p className="d-muted text-sm">{isLeader ? 'Chọn repo để đọc pull request và theo dõi các task của đội.' : 'Trưởng nhóm sẽ kết nối repo cho đội.'}</p>}
       {isLeader && !repo && !state.profile?.demo && <Steps current={3} />}
       {repo?.access && !state.webhook && !state.profile?.demo && <p className="d-muted text-sm">
-        Địa chỉ này chưa nhận được thông báo từ GitHub. Máy chủ Tầng tự đọc PR khoảng mỗi 60 giây, kể cả khi bạn không mở trang.
+        Địa chỉ này chưa nhận được thông báo từ GitHub. Máy chủ ProductPilot tự đọc PR khoảng mỗi 60 giây, kể cả khi bạn không mở trang.
       </p>}
 
       {isLeader && repo && (
@@ -65,7 +65,7 @@ export function Repository({ state, showPicker, togglePicker, busy, mutate }: {
       {isLeader && (!repo || showPicker) && (
         <>
           {state.install_url && !choices?.length && <p className="d-muted text-sm">
-            Bấm Cấp quyền trên GitHub và chọn repo cần theo dõi. Khi bạn quay lại, Tầng tự tải danh sách repo.
+            Bấm Cấp quyền trên GitHub và chọn repo cần theo dõi. Khi bạn quay lại, ProductPilot tự tải danh sách repo.
           </p>}
           {state.install_url && <div className="pl-row">
             <a className={'d-btn ' + (choices?.length ? 'd-b2' : 'd-b1')} href={state.install_url} target="_top">Cấp quyền trên GitHub</a>
@@ -192,7 +192,7 @@ export function PullRequests({ state, tasks, busy, mutate }: { state: PlanningSt
               : <span>#{pull.number} {pull.title}</span>}
             {pull.note && <p className="text-rust text-sm">{pull.note}</p>}
           </div>
-        </div>) : <Empty>Đặt mã task trong tiêu đề PR để Tầng tìm việc tương ứng.</Empty>}
+        </div>) : <Empty>Đặt mã task trong tiêu đề PR để ProductPilot tìm việc tương ứng.</Empty>}
       </section>
     </div>
   );

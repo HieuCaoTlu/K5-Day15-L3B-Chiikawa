@@ -408,7 +408,7 @@
     }
     const state = repo.access ? '<span class="side-chip ok">Đang theo dõi</span>' : '<span class="side-chip warn">Cần cấp lại quyền</span>';
     const name = repo.url ? `<a href="${esc(repo.url)}" target="_blank" rel="noopener">${esc(repo.name)}</a>` : esc(repo.name);
-    const note = repo.access && !live.webhook && !demo ? '<p class="muted">Chưa nhận được thông báo từ GitHub. Máy chủ Tầng tự đọc PR khoảng mỗi 60 giây.</p>' : '';
+    const note = repo.access && !live.webhook && !demo ? '<p class="muted">Chưa nhận được thông báo từ GitHub. Máy chủ ProductPilot tự đọc PR khoảng mỗi 60 giây.</p>' : '';
     const actions = leader ? `<div class="task-dialog-actions">${btn('planning-repo', repo.access ? 'Đổi repo' : 'Cấp quyền lại', 'soft small')}${!demo && repo.access ? btn('repo-refresh', 'Đọc lại PR', 'soft small') : ''}</div><p class="muted" id="sheetMessage" role="status"></p>` : '';
     openSheet('Repo GitHub', `<div class="side-name">${name}</div><p>${state} <span class="muted">Nhánh theo dõi · ${esc(repo.branch)}</span></p>${note}${actions}`);
   }
@@ -416,7 +416,7 @@
   function openNotify(message = '') {
     if (!joined()) return;
     let status, actions = '';
-    if (!supportsPush()) status = 'Trình duyệt này chưa hỗ trợ thông báo. Mở Tầng bằng HTTPS hoặc localhost trên Chrome, Edge hay Firefox.';
+    if (!supportsPush()) status = 'Trình duyệt này chưa hỗ trợ thông báo. Mở ProductPilot bằng HTTPS hoặc localhost trên Chrome, Edge hay Firefox.';
     else if (!live.push_key) status = 'Máy chủ đang tắt thông báo trình duyệt.';
     else if (Notification.permission === 'denied') status = 'Trình duyệt đang chặn thông báo của trang này. Bấm biểu tượng cạnh thanh địa chỉ, cho phép Thông báo, rồi tải lại trang.';
     else if (notifyOn()) {
@@ -426,7 +426,7 @@
       status = 'Đang tắt. Bấm Bật thông báo, rồi chọn Cho phép khi trình duyệt hỏi.';
       actions = btn('notify-on', 'Bật thông báo', 'primary small');
     }
-    openSheet('Thông báo', `<p>${status}</p><p class="muted">Bạn được nhắc khi task của mình còn tối đa 24 giờ và 1 giờ, kể cả khi đã đóng tab. Trình duyệt và máy chủ Tầng cần đang chạy.</p>${actions ? `<div class="task-dialog-actions">${actions}</div>` : ''}<p class="muted" id="sheetMessage" role="status">${esc(message)}</p>`);
+    openSheet('Thông báo', `<p>${status}</p><p class="muted">Bạn được nhắc khi task của mình còn tối đa 24 giờ và 1 giờ, kể cả khi đã đóng tab. Trình duyệt và máy chủ ProductPilot cần đang chạy.</p>${actions ? `<div class="task-dialog-actions">${actions}</div>` : ''}<p class="muted" id="sheetMessage" role="status">${esc(message)}</p>`);
   }
 
   async function pushRequest(path, method, data) {
@@ -2712,9 +2712,10 @@ nature là bản chất problem: "behavior" nếu là problem hành vi (duy trì
   /* ---------- Sự kiện ---------- */
   const actions = {
     enter: () => enter(),
+    'enter-demo': () => { location.href = '/workstation?demo=full'; },
+    'enter-model': () => { local.model = landingModel; persist(); enter(); },
+    'model-pick': b => pickModel(b.dataset.pick),
     home,
-    replay: () => replay(),
-    flow: () => $('#flow').scrollIntoView({ behavior: reduced ? 'auto' : 'smooth' }),
     tab: b => go(b.dataset.id),
     'planning-live': () => setPlanningOpen(true),
     'repo-open': openRepo,
@@ -3303,29 +3304,101 @@ nature là bản chất problem: "behavior" nếu là problem hành vi (duy trì
     heroScene.state.p = 0;
     intro = M.animate(0, 1, { duration: 5.2, delay: 0.35, ease: [0.55, 0, 0.15, 1], onUpdate: v => { heroScene.state.p = v; } });
   }
+  const MODEL_NOTES = {
+    house: 'Công trình đang xây: mỗi task xong thắp sáng thêm một khối.',
+    rubik: 'Bốn mặt bên ứng với bốn bước đầu, mặt trên tổng hợp toàn bộ tiến độ.',
+    uni: 'Khuôn viên 5 công trình, mỗi công trình ứng với một bước.',
+    tree: 'Năm tầng tán ứng với năm bước, sáng dần theo tiến độ.'
+  };
+  // Tiến độ mẫu để thấy khác biệt giữa phần đã xong và phần còn lại
+  const SAMPLE_PROGRESS = [1, 1, 0.6, 0.25, 0];
+  let landingModel = 'house', modelScene = null;
+  function pickModel(m) {
+    if (!MODEL_NOTES[m]) return;
+    landingModel = m;
+    $$('#modelTabs button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.pick === m)));
+    $('#modelNote').textContent = MODEL_NOTES[m] + ' Hình đang dùng tiến độ mẫu.';
+    if (modelScene) modelScene.mode(m);
+  }
+  function initModelViewer() {
+    if (!window.Scenes) return;
+    const canvas = $('#modelCanvas');
+    // Chỉ dựng cảnh 3D thứ hai khi người xem cuộn gần tới
+    const io = new IntersectionObserver(e => {
+      if (!e[0].isIntersecting) return;
+      io.disconnect();
+      try {
+        modelScene = window.Scenes.site(canvas, STEPS.map(s => s.color), SEED().meta.members.map(m => color(m.color)), () => {});
+        modelScene.set(SAMPLE_PROGRESS);
+        if (landingModel !== 'house') modelScene.mode(landingModel);
+        modelScene.focus('overview');
+      } catch (err) {
+        console.error('[Tang 3D]', err);
+        $('#modelNote').textContent = 'Thiết bị này không hiển thị được 3D. Bạn vẫn vào buồng lái được.';
+      }
+    }, { rootMargin: '200px' });
+    io.observe(canvas);
+  }
+  function selectStep(i, moveFocus) {
+    $$('#stepTabs [role="tab"]').forEach((t, k) => {
+      t.setAttribute('aria-selected', String(k === i));
+      t.tabIndex = k === i ? 0 : -1;
+      if (k === i && moveFocus) t.focus();
+    });
+    $$('#stepPanels [role="tabpanel"]').forEach((p, k) => p.classList.toggle('on', k === i));
+  }
+  function initSteps() {
+    $('#stepTabs').innerHTML = STEPS.map(s => `<button type="button" role="tab" id="step-tab-${s.id}" aria-controls="step-panel-${s.id}" style="--c:${s.hex}"><i aria-hidden="true"></i>${s.name}</button>`).join('');
+    $('#stepPanels').innerHTML = STEPS.map(s => `<div class="step-panel" role="tabpanel" id="step-panel-${s.id}" aria-labelledby="step-tab-${s.id}" style="--c:${s.hex}">
+      <div class="step-lead"><h3>${s.name}</h3><p>${s.lead}</p></div>
+      <dl class="shift"><div><dt>Lúc đầu ta hay nghĩ</dt><dd>${s.from}</dd></div><div><dt>Nhưng nên tự hỏi</dt><dd>${s.to}</dd></div></dl>
+      <div class="step-out"><h4>Xong bước này, bạn có trong tay</h4><ul>${s.out.map(o => `<li>${o}</li>`).join('')}</ul></div>
+      <button type="button" class="btn primary" data-step="${s.id}">Mở ${s.name}</button></div>`).join('');
+    const tabs = $$('#stepTabs [role="tab"]'), n = tabs.length;
+    tabs.forEach((t, i) => {
+      t.addEventListener('click', () => selectStep(i));
+      t.addEventListener('keydown', e => {
+        const next = { ArrowDown: (i + 1) % n, ArrowRight: (i + 1) % n, ArrowUp: (i + n - 1) % n, ArrowLeft: (i + n - 1) % n, Home: 0, End: n - 1 }[e.key];
+        if (next === undefined) return;
+        e.preventDefault();
+        selectStep(next, true);
+      });
+    });
+    $$('#stepPanels [data-step]').forEach(b => b.addEventListener('click', () => enter(b.dataset.step)));
+    selectStep(0);
+  }
   function landing() {
-    $('#flowList').innerHTML = STEPS.map((s, i) => `<li><button class="step" style="--c:${s.hex}" data-step="${s.id}"><span class="step-no">${i + 1}</span><span class="step-body"><span class="step-title">${s.name}</span><span>${s.lead}</span>
-      <span class="shift"><span><small>Engineer thường nghĩ</small>${s.from}</span><span><small>AI builder hỏi</small>${s.to}</span></span><span class="chips">${s.out.map(o => `<span class="chip">${o}</span>`).join('')}</span></span></button></li>`).join('');
-    $$('.step').forEach(b => b.addEventListener('click', () => enter(b.dataset.step)));
+    initSteps();
+    pickModel('house');
+    initModelViewer();
     if (window.Scenes) {
       try {
-        let tipAnim;
-        heroScene = window.Scenes.hero($('#heroCanvas'), FLOORS, (i, group) => {
-          const f = FLOORS[i], tip = $('#floorTip');
-          tip.style.setProperty('--c', `var(--${f.color})`);
-          $('span', tip).textContent = `Tầng ${i + 1}, ${f.name}: ${f.text}`;
-          anim(tip, { y: [14, 0], opacity: [0, 1] }, { type: 'spring' });
-          if (canAnim) { if (tipAnim) tipAnim.stop(); tipAnim = M.animate(0, 1, { duration: 0.7, onUpdate: v => { const s = 1 + Math.sin(v * Math.PI) * 0.12; group.scale.set(s, 1, s); } }); }
+        const card = $('#floorCard');
+        heroScene = window.Scenes.hero($('#heroCanvas'), FLOORS, i => {
+          card.classList.toggle('on', i >= 0);
+          if (i < 0) return;
+          const f = FLOORS[i];
+          card.style.setProperty('--c', `var(--${f.color})`);
+          $('.floor-no', card).textContent = `Tầng ${i + 1}`;
+          $('h2', card).textContent = f.name;
+          $('p', card).textContent = f.text;
+        }, (x, y) => {
+          // Card nằm bên trái tầng đang chọn, không tràn khỏi khung
+          const box = card.offsetParent;
+          if (!box) return;
+          const left = Math.max(16, Math.min(box.clientWidth - card.offsetWidth - 16, x - card.offsetWidth - 12));
+          const top = Math.max(16, Math.min(box.clientHeight - card.offsetHeight - 16, y - card.offsetHeight / 2));
+          card.style.setProperty('--x', `${Math.round(left)}px`);
+          card.style.setProperty('--y', `${Math.round(top)}px`);
         });
         replay();
-      } catch (e) { $('#floorTip span').textContent = 'Thiết bị này không hiển thị được 3D.'; }
-    }
-    rise($$('.hero-copy > *'), 0.5);
-    if (canAnim && M.inView) {
-      $$('.step, .flow-head, .flow-end').forEach(el => {
-        el.style.opacity = 0;
-        M.inView(el, () => { M.animate(el, { opacity: [0, 1], y: [40, 0] }, { duration: 0.7, ease: EASE }); }, { amount: 0.2 });
-      });
+      } catch (e) {
+        const card = $('#floorCard');
+        card.classList.add('on');
+        $('.floor-no', card).textContent = '';
+        $('h2', card).textContent = 'Chưa hiển thị được 3D';
+        $('p', card).textContent = 'Thiết bị này không chạy được mô hình. Bạn vẫn vào buồng lái được.';
+      }
     }
   }
 

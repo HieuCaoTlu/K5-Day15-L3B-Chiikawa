@@ -74,7 +74,7 @@ def test_manifest_for_localhost_has_no_webhook(make_client):
     assert result.status_code == 200, result.text
     assert result.json()["action"].startswith("https://github.com/settings/apps/new?state=")
     manifest = json.loads(result.json()["manifest"])
-    assert manifest["name"].startswith("Tang Planning ")
+    assert manifest["name"].startswith("ProductPilot Planning ")
     assert len(manifest["name"]) <= 34
     assert manifest["url"] == LOCAL
     assert manifest["redirect_url"] == LOCAL + BASE + "/setup/callback"

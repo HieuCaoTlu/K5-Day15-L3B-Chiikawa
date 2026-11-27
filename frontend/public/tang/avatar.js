@@ -1,4 +1,4 @@
-/* Avatar nổi khối của Tầng: vẽ bằng SVG, dùng chung cho Workstation và khung Planning.
+/* Avatar nổi khối của ProductPilot: vẽ bằng SVG, dùng chung cho Workstation và khung Planning.
    Đầu và mắt nhìn theo con trỏ khi con trỏ đến gần. Màu trong file này là màu minh họa của nhân vật. */
 (function (root) {
   'use strict';

@@ -1,6 +1,6 @@
-# DESIGN.md — Claude Artifact Tầng
+# DESIGN.md — Claude Artifact ProductPilot
 
-**Chuẩn giao diện của Tầng** là landing và Workstation đang chạy trên website. Quy tắc trong file này áp dụng khi làm màn hình mới hoặc chỉnh giao diện hiện có. Đối chiếu trang thật và mã nguồn khi cần thêm mẫu. [Tầng đang chạy](https://estatesmart.site/) · [HTML Workstation](frontend/public/index.html) · [Token dùng chung](frontend/public/tang/tokens.css) · [CSS Artifact](frontend/public/tang/style.css) · [Màu từng khu vực](frontend/public/tang/data.js)
+**Chuẩn giao diện của ProductPilot** là landing và Workstation đang chạy trên website. Quy tắc trong file này áp dụng khi làm màn hình mới hoặc chỉnh giao diện hiện có. Đối chiếu trang thật và mã nguồn khi cần thêm mẫu. [ProductPilot đang chạy](https://estatesmart.site/) · [HTML Workstation](frontend/public/index.html) · [Token dùng chung](frontend/public/tang/tokens.css) · [CSS Artifact](frontend/public/tang/style.css) · [Màu từng khu vực](frontend/public/tang/data.js)
 
 ## 1. Màu và phân cấp
 
@@ -17,7 +17,7 @@
 | `--orange` | `#ff8a1f` | Pitching |
 | `--indigo` | `#4d5bf0` | Quality. Cùng giá trị với màu liên kết và focus; trong tab Quality, phân biệt bằng chấm màu, chip và dải cạnh thay vì chữ màu |
 | `--violet` | `#a24ce8` | Maintaining |
-| `--red` / `--yellow` | `#ff4d5e` / `#ffc21a` | Màu phổ Tầng, điểm cảnh báo hoặc điểm nhấn agent |
+| `--red` / `--yellow` | `#ff4d5e` / `#ffc21a` | Màu phổ ProductPilot, điểm cảnh báo hoặc điểm nhấn agent |
 
 - Gắn một màu khu vực vào `--c` ở phần tử bao. Dùng chấm màu, thanh tiến độ, dải cạnh hoặc nền nhạt pha 8–13% cho mục đang chọn. Vạch phổ màu mảnh là dấu hiệu nhận diện ở thanh đầu.
 - Dùng nền trắng và lớp nền phụ rất nhạt để phân cấp. Thẻ có viền mảnh, không đổ bóng theo mẫu `.panel`. Màu khu vực chỉ chiếm diện tích nhỏ.
@@ -42,7 +42,7 @@ Tiêu đề có line-height khoảng 1.2, tracking âm nhẹ. Chữ đứng, vi�
 
 | Thành phần | Mẫu trên Artifact |
 |---|---|
-| Thanh đầu | Nền trắng, cao khoảng 62px trên desktop, logo Tầng gọn và vạch phổ mảnh |
+| Thanh đầu | Nền trắng, cao khoảng 62px trên desktop, logo ProductPilot gọn và vạch phổ mảnh |
 | Điều hướng | Nút pill, chấm màu khu vực và nền nhạt cho mục đang chọn. Workstation dùng thanh dưới khi hẹp |
 | Bố cục nội dung | Cụm công việc theo `.stack` và `.cols`, gap 18px. Gộp về một cột khi thiếu chỗ |
 | Panel | Nền trắng, bo 20px, padding 20px, viền mảnh, không đổ bóng |

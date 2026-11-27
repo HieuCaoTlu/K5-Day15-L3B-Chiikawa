@@ -135,7 +135,7 @@ export default function PublicSurveyPage() {
             <div>
               <a href="/" className="d-btn d-b2 d-sm">
                 <Icon name="back" size={16} />
-                Quay lại Tầng
+                Quay lại ProductPilot
               </a>
             </div>
           </>
@@ -150,7 +150,7 @@ export default function PublicSurveyPage() {
                 Gửi thêm phản hồi khác
               </button>
               <a href="/" className="d-btn d-b2 d-sm">
-                Về Tầng Workstation
+                Về buồng lái ProductPilot
               </a>
             </div>
           </div>

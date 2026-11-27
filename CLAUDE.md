@@ -1,6 +1,6 @@
 # CLAUDE.md — mục lục cho agent code
 
-Đọc file này trước. Đây là **mục lục và quy ước bắt buộc**. Đối chiếu hành vi với code hiện tại và đối chiếu giao diện với Claude Artifact Tầng trong [DESIGN.md](DESIGN.md).
+Đọc file này trước. Đây là **mục lục và quy ước bắt buộc**. Đối chiếu hành vi với code hiện tại và đối chiếu giao diện với Claude Artifact ProductPilot trong [DESIGN.md](DESIGN.md).
 
 ## Đọc nhanh (≤ 60 giây)
 
@@ -43,7 +43,7 @@ backend/app/
     demo_cache.json    kết quả mẫu cho DEMO_MODE
 backend/tests/         test_api.py · agent/test_nodes.py · agent/test_flow.py
 backend/eval/          cases.json + run_eval.py (số liệu "agent đúng X%")
-frontend/public/index.html   / (landing và Workstation Claude Artifact Tầng)
+frontend/public/index.html   / (landing và Workstation Claude Artifact ProductPilot)
 frontend/public/tang/        tokens.css (token dùng chung) · style.css (mẫu UI) · data.js (màu khu vực) · app.js · scene.js
 frontend/app/                /planning · /chat · /admin
 frontend/components/         planning/ · kit/ (ui.tsx, Shell, ProposalCard) · chat/ · landing/ · motion/
@@ -53,7 +53,7 @@ frontend/app/components.css  lớp d-* và nền tảng component Next.js
 
 ## Luật thiết kế (STRICT)
 
-**Dùng design pattern của Claude Artifact Tầng** trên [estatesmart.site](https://estatesmart.site/). Đọc [DESIGN.md](DESIGN.md) trước khi sửa UI. Mẫu tham chiếu trong repo là Workstation ở `frontend/public/index.html`, `frontend/public/tang/tokens.css`, `frontend/public/tang/style.css` và `frontend/public/tang/data.js`.
+**Dùng design pattern của Claude Artifact ProductPilot** trên [estatesmart.site](https://estatesmart.site/). Đọc [DESIGN.md](DESIGN.md) trước khi sửa UI. Mẫu tham chiếu trong repo là Workstation ở `frontend/public/index.html`, `frontend/public/tang/tokens.css`, `frontend/public/tang/style.css` và `frontend/public/tang/data.js`.
 
 1. Dùng **Be Vietnam Pro**, nội dung 15px, tiêu đề weight 500. Thanh đầu và nền chính trắng. Panel bo 20px, viền mảnh, không đổ bóng. Khoảng cách giữa các panel khoảng 18px.
 2. Giữ màu theo khu vực của Workstation. **Planning dùng xanh lá `#14b86a`**. Dùng token CSS cho chấm màu, chip, thẻ tiến độ và mục đang chọn. Dùng indigo cho liên kết và focus.

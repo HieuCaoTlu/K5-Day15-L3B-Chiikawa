@@ -58,10 +58,10 @@ def require_same_origin(request: Request) -> None:
         "same-origin",
         "none",
     ):
-        raise HTTPException(403, "Mở Planning trên đúng địa chỉ của Tầng.")
+        raise HTTPException(403, "Mở Planning trên đúng địa chỉ của ProductPilot.")
     origin = request.headers.get("Origin")
     if settings.app_env == "production" and origin and origin != settings.site_origin:
-        raise HTTPException(403, "Mở Planning trên đúng địa chỉ của Tầng.")
+        raise HTTPException(403, "Mở Planning trên đúng địa chỉ của ProductPilot.")
 
 
 def _clear_session(db: Session, session: PlanningSession) -> None:

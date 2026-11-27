@@ -159,7 +159,7 @@ export function TeamForm({ profile, members, busy, mutate, onComplete }: {
       <div className="pl-between">
         <div>
           <h2 className="text-lg">{members.length ? 'Cập nhật đội' : 'Thiết lập đội'}</h2>
-          <p className="d-muted text-sm">Hồ sơ kinh nghiệm giúp Tầng đề xuất người phù hợp cho từng task.</p>
+          <p className="d-muted text-sm">Hồ sơ kinh nghiệm giúp ProductPilot đề xuất người phù hợp cho từng task.</p>
         </div>
         {profile.demo && !members.length && <button type="button" className="d-btn d-b2" onClick={fillDemo}>Điền đội mẫu</button>}
       </div>
