@@ -20,7 +20,7 @@
 | `--red` / `--yellow` | `#ff4d5e` / `#ffc21a` | Màu phổ Tầng, điểm cảnh báo hoặc điểm nhấn agent |
 
 - Gắn một màu khu vực vào `--c` ở phần tử bao. Dùng chấm màu, thanh tiến độ, dải cạnh hoặc nền nhạt pha 8–13% cho mục đang chọn. Vạch phổ màu mảnh là dấu hiệu nhận diện ở thanh đầu.
-- Dùng nền trắng và lớp nền phụ rất nhạt để phân cấp. Thẻ có viền nhẹ và bóng mềm theo mẫu `.panel`. Màu khu vực chỉ chiếm diện tích nhỏ.
+- Dùng nền trắng và lớp nền phụ rất nhạt để phân cấp. Thẻ có viền mảnh, không đổ bóng theo mẫu `.panel`. Màu khu vực chỉ chiếm diện tích nhỏ.
 - Trạng thái luôn có nhãn tiếng Việt. Chọn màu chữ đủ tương phản trên nền nhạt. Dùng đỏ cho thao tác xóa tiến độ và cảnh báo đến hạn phù hợp với mức độ.
 - Khai báo màu dùng chung trong `frontend/public/tang/tokens.css`, rồi dùng biến trong component. Chỉ mở rộng màu khi cần thêm vai trò trong hệ thống.
 
@@ -45,7 +45,7 @@ Tiêu đề có line-height khoảng 1.2, tracking âm nhẹ. Chữ đứng, vi�
 | Thanh đầu | Nền trắng, cao khoảng 62px trên desktop, logo Tầng gọn và vạch phổ mảnh |
 | Điều hướng | Nút pill, chấm màu khu vực và nền nhạt cho mục đang chọn. Workstation dùng thanh dưới khi hẹp |
 | Bố cục nội dung | Cụm công việc theo `.stack` và `.cols`, gap 18px. Gộp về một cột khi thiếu chỗ |
-| Panel | Nền trắng, bo 20px, padding 20px, viền mảnh và bóng màu khu vực nhẹ |
+| Panel | Nền trắng, bo 20px, padding 20px, viền mảnh, không đổ bóng |
 | Nút | Dạng pill. Chính dùng nền `--ink`; nhấn theo khu vực dùng tone phù hợp tương phản. Nút phụ dùng `--soft`, ghost có viền mảnh |
 | Form | Ô tương tác dùng nền `--soft`, bo 10px, chuyển nền trắng và viền indigo khi focus |
 | Chip và trạng thái | Nền pha nhẹ theo màu khu vực hoặc trạng thái. Có tên rõ và không phụ thuộc vào màu để đọc |
