@@ -14,7 +14,8 @@
     ...STEPS.map((s, i) => ({ id: s.id, name: s.name, short: ['Thinking', 'Plan', 'Pitch', 'Quality', 'Bảo trì'][i] || s.name, hex: s.hex }))];
 
   const anim = (el, kf, o) => (canAnim && el && (el.length === undefined || el.length) ? M.animate(el, kf, o) : null);
-  const done = a => (a ? Promise.resolve(a.finished || a).catch(() => {}) : Promise.resolve());
+  // Motion báo xong rồi mới ghi giá trị cuối vào style ở khung hình kế tiếp. Chờ thêm khung đó, nếu không nó đè lên style đặt sau done().
+  const done = a => (a ? Promise.resolve(a.finished || a).catch(() => {}).then(() => new Promise(r => requestAnimationFrame(r))) : Promise.resolve());
   const rise = (els, base = 0) => anim(els, { opacity: [0, 1], y: [18, 0] }, { duration: 0.5, ease: EASE, delay: canAnim ? M.stagger(0.06, { startDelay: base }) : 0 });
   const wait = ms => new Promise(r => setTimeout(r, ms));
 
