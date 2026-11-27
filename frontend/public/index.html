@@ -14,7 +14,7 @@
   <header class="land-nav">
     <div class="brand"><span class="logo" aria-hidden="true"><i></i><i></i><i></i></span>Tầng</div>
     <div class="row">
-      <button class="btn ghost" data-act="flow">Xem 4 bước</button>
+      <button class="btn ghost" data-act="flow">Xem 5 bước</button>
       <button class="btn primary" data-act="enter">Mở workstation</button>
     </div>
   </header>
@@ -32,7 +32,7 @@
   </div>
   <div class="flow" id="flow">
     <div class="flow-head">
-      <h2>Bốn bước, mỗi bước đổi một cách nghĩ</h2>
+      <h2>Năm bước, mỗi bước đổi một cách nghĩ</h2>
       <p>Agent đóng vai chuyên gia AI Builder, hiểu cả cách phối hợp đồng đội lẫn cách vận hành một sản phẩm AI.</p>
     </div>
     <ol id="flowList"></ol>
@@ -58,6 +58,7 @@
       <div id="pins"></div>
       <div class="stage-head">
         <div class="total"><span id="totalPct">0%</span><small>tiến độ sản phẩm</small></div>
+        <button class="health-chip" id="healthChip" data-act="tab" data-id="maintaining" title="Xem sức khỏe sản phẩm ở tab Maintaining"><i></i>Sức khỏe</button>
         <div class="seg" role="group" aria-label="Kiểu mô hình">
           <button data-model="house" class="on">Nhà tầng</button>
           <button data-model="rubik">Rubik</button>
@@ -97,6 +98,7 @@
 <script src="/tang/scene.js"></script>
 <script src="/tang/avatar.js"></script>
 <script src="/tang/data.js"></script>
+<script src="/tang/health.js"></script>
 <script src="/tang/app.js"></script>
 </body>
 </html>

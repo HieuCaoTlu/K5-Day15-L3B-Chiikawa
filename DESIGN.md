@@ -15,11 +15,12 @@
 | `--blue` | `#0a9cf0` | Product thinking |
 | `--green` | `#14b86a` | Planning |
 | `--orange` | `#ff8a1f` | Pitching |
+| `--indigo` | `#4d5bf0` | Quality. Cùng giá trị với màu liên kết và focus; trong tab Quality, phân biệt bằng chấm màu, chip và dải cạnh thay vì chữ màu |
 | `--violet` | `#a24ce8` | Maintaining |
 | `--red` / `--yellow` | `#ff4d5e` / `#ffc21a` | Màu phổ Tầng, điểm cảnh báo hoặc điểm nhấn agent |
 
 - Gắn một màu khu vực vào `--c` ở phần tử bao. Dùng chấm màu, thanh tiến độ, dải cạnh hoặc nền nhạt pha 8–13% cho mục đang chọn. Vạch phổ màu mảnh là dấu hiệu nhận diện ở thanh đầu.
-- Dùng nền trắng và lớp nền phụ rất nhạt để phân cấp. Thẻ chỉ dùng viền mảnh theo mẫu `.panel`, không đổ bóng hay quầng sáng. Màu khu vực chỉ chiếm diện tích nhỏ.
+- Dùng nền trắng và lớp nền phụ rất nhạt để phân cấp. Thẻ có viền mảnh, không đổ bóng theo mẫu `.panel`. Màu khu vực chỉ chiếm diện tích nhỏ.
 - Trạng thái luôn có nhãn tiếng Việt. Chọn màu chữ đủ tương phản trên nền nhạt. Dùng đỏ cho thao tác xóa tiến độ và cảnh báo đến hạn phù hợp với mức độ.
 - Khai báo màu dùng chung trong `frontend/public/tang/tokens.css`, rồi dùng biến trong component. Chỉ mở rộng màu khi cần thêm vai trò trong hệ thống.
 

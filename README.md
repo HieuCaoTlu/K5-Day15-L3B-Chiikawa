@@ -125,6 +125,19 @@ Chốt trước khi code, sửa ở đây khi đổi (FE đọc chi tiết ở `
 | POST | `/api/v1/planning/demo/pull` | `{repo_version,number,title,author_id,state}` | Ghi PR mẫu (204) |
 | POST | `/api/v1/planning/push/test` | — | Gửi thông báo thử tới trình duyệt đang đăng nhập (204); 409 chưa bật, 502 gửi chưa được |
 | POST / DELETE | `/api/v1/planning/push/subscription` | Đăng ký `{endpoint,keys}` hoặc tắt `{endpoint}` | Cập nhật thiết bị nhận nhắc hạn (204) |
+| POST | `/api/v1/pitching/surveys/generate` | `ProblemContext` | `{title, description, target_role, sections[], questions[], source}` |
+| POST | `/api/v1/pitching/surveys` | `{project_name, target_role?, problem_context, title, description, sections?, questions[]}` | `Survey` (201, kèm `slug`) |
+| GET | `/api/v1/pitching/surveys` | — | `Survey[]` |
+| GET / PUT / DELETE | `/api/v1/pitching/surveys/{slug}` | `SurveyPublishIn?` | `Survey` / 204 |
+| POST | `/api/v1/pitching/surveys/{slug}/responses` | `{respondent_role?, answers, is_sample?}` | `SurveyResponse` (201) |
+| GET | `/api/v1/pitching/surveys/{slug}/responses` | — | `SurveyResponse[]` |
+| GET | `/api/v1/pitching/surveys/{slug}/stats` | — | `SurveyStats` (đếm, `%`, TB thang điểm, thật vs mẫu) |
+| POST | `/api/v1/pitching/surveys/{slug}/samples` | — | `SurveyStats` (thêm 8 phản hồi mẫu `is_sample=true`) |
+| POST | `/api/v1/pitching/decks/generate` | `{context, survey_slug?, slide_count?}` | `{title, survey_slug, slides[] (<=10), source}` |
+| POST / GET | `/api/v1/pitching/decks` | `PitchDeckPublishIn` / — | `PitchDeck` (`slug` cho `/pitch?slug=...`) / `PitchDeck[]` |
+| GET / PUT / DELETE | `/api/v1/pitching/decks/{slug}` | `PitchDeckPublishIn?` | `PitchDeck` / 204 |
+| POST | `/api/v1/pitching/assets/generate` | `{context, survey_slug?}` | `{ads[], source}` (bài quảng cáo chung có placeholder) |
+| POST | `/api/v1/pitching/overview` | `{context, survey_slug?}` | `{overview, total_responses, real_responses, sample_responses, source}` |
 
 Các yêu cầu ghi Planning từ trình duyệt gửi header `X-Planning-Request: 1`. `repo_version` đến từ `GET /state` để thao tác chỉ áp dụng vào repo đang xem.
 
@@ -146,6 +159,9 @@ Các yêu cầu ghi Planning từ trình duyệt gửi header `X-Planning-Reques
 | `planning_logs` | Nhật ký task đổi tiến độ do pull request; `GET /state` trả `log` |
 | `planning_invites`, `planning_join_attempts` | Mã mời của đội, số lần nhập sai theo tài khoản |
 | `planning_github_app`, `planning_setup_states` | GitHub App tạo từ manifest (bí mật đã mã hóa), lượt tạo kết nối đang chờ |
+| `pitch_surveys` | id, slug, project_name, problem_context (JSON), title, description, questions (JSON), published, created_at, updated_at |
+| `pitch_survey_responses` | id, survey_id, respondent_role, answers (JSON), is_sample, created_at |
+| `pitch_decks` | id, slug, project_name, survey_slug, title, slides (JSON), script, ads (JSON), created_at, updated_at |
 
 ## Kiểm tra chất lượng
 

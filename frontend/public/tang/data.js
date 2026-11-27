@@ -17,10 +17,14 @@
       lead: 'Tạo form khảo sát, dashboard và nhận định tự động, kèm bộ tài liệu thuyết trình.',
       from: 'Demo đủ chức năng thì người nghe sẽ hiểu.', to: 'Kể bằng bằng chứng từ người dùng, rồi mới tới demo.',
       out: ['Form', 'Dashboard', 'AI overview', 'Pitching HTML', 'Pitching script', 'Bài quảng cáo'] },
+    { id: 'quality', name: 'Quality', color: 'indigo', hex: '#4d5bf0',
+      lead: 'Agent lấy metric từ Product thinking. Đội ghi từng lần chạy thử model, xem biểu đồ chất lượng, token và chi phí.',
+      from: 'Chạy thử thấy ổn là được.', to: 'Mỗi lần đổi model hay prompt, chất lượng và chi phí đổi bao nhiêu?',
+      out: ['Chỉ số cần đạt', 'Lịch sử AI', 'Biểu đồ chất lượng', 'Token', 'Chi phí', 'Kế hoạch kiếm tiền'] },
     { id: 'maintaining', name: 'Maintaining', color: 'violet', hex: '#a24ce8',
-      lead: 'Gợi ý cập nhật công nghệ và lịch bảo trì định kỳ.',
+      lead: 'Theo dõi sức khỏe sản phẩm và lịch bảo trì định kỳ. Mô hình 3D báo khi sản phẩm xuống cấp.',
       from: 'Deploy xong là xong.', to: 'Model, chi phí và chất lượng thay đổi mỗi tuần, cần người canh.',
-      out: ['Gợi ý cập nhật', 'Lịch bảo trì'] }
+      out: ['Lịch bảo trì', 'Sức khỏe sản phẩm'] }
   ];
 
   // Bảy tầng của tòa nhà ở trang giới thiệu, từ dưới lên
@@ -29,8 +33,8 @@
     { color: 'yellow', name: 'Agent AI Builder', text: 'Người đồng hành đặt câu hỏi đúng ở từng bước.' },
     { color: 'blue', name: 'Product thinking', text: 'Chốt người dùng, vấn đề và phạm vi MVP.' },
     { color: 'green', name: 'Planning', text: 'Vai trò, task, công nghệ và chi phí.' },
-    { color: 'orange', name: 'Pitching', text: 'Form, dashboard, slide, kịch bản và quảng cáo.' },
-    { color: 'violet', name: 'Maintaining', text: 'Cập nhật công nghệ và lịch bảo trì.' },
+    { color: 'orange', name: 'Pitching', text: 'Form, dashboard, slide và quảng cáo.' },
+    { color: 'violet', name: 'Quality và Maintaining', text: 'Theo dõi chất lượng, chi phí và lịch bảo trì.' },
     { color: 'indigo', name: 'Một nơi quản lý', text: 'Toàn bộ tiến độ trong một công trình 3D.' }
   ];
 
@@ -81,7 +85,7 @@
         'Là nhân viên CSKH, tôi muốn biết bản nháp dựa trên chính sách nào để tin tưởng khi gửi.',
         'Là chủ shop, tôi muốn xem thời gian phản hồi mỗi ngày để biết công cụ có đáng tiền.'
       ],
-      cost: { teams: 30, tickets: 1500, inTok: 2000, outTok: 400, priceIn: 3, priceOut: 15, infra: 80, price: 39 }
+      cost: { teams: 30, tickets: 1500, inTok: 2000, outTok: 400, priceIn: 3, priceOut: 15, infra: 80, price: 39, pricePerM: 5, apiCalls: 45000, pricePerCall: 0.05, setupFee: 500, newCustomers: 2 }
     },
     tasks: {
       list: [
@@ -101,12 +105,16 @@
       log: []
     },
     pitch: {
+      sections: [
+        { id: 's0', title: 'Phần 1 · Bối cảnh & tần suất', description: 'Kênh phản hồi và mức độ phiền hiện tại' },
+        { id: 's1', title: 'Phần 2 · Mức độ tin tưởng & giá', description: 'Điều kiện duyệt dùng và mức sẵn sàng chi trả' }
+      ],
       form: [
-        { id: 'q0', type: 'choice', q: 'Bạn thường trả lời khách qua kênh nào nhiều nhất?', options: ['Facebook Messenger', 'Zalo', 'Website chat', 'Sàn TMĐT'] },
-        { id: 'q1', type: 'scale', q: 'Mức độ phiền khi phải trả lời câu hỏi lặp lại (1 là không, 5 là rất phiền)', options: [] },
-        { id: 'q2', type: 'choice', q: 'Bạn có tin AI soạn nháp rồi mình duyệt không?', options: ['Có, nếu thấy nguồn', 'Có, nếu sai ít', 'Chưa chắc', 'Không'] },
-        { id: 'q3', type: 'choice', q: 'Mức giá mỗi tháng bạn thấy hợp lý', options: ['Dưới 20 USD', '20 đến 40 USD', '40 đến 80 USD', 'Trên 80 USD'] },
-        { id: 'q4', type: 'text', q: 'Điều gì khiến bạn ngại dùng công cụ này nhất?', options: [] }
+        { id: 'q0', section_id: 's0', type: 'choice', q: 'Bạn thường trả lời khách qua kênh nào nhiều nhất?', options: ['Facebook Messenger', 'Zalo', 'Website chat', 'Sàn TMĐT'] },
+        { id: 'q1', section_id: 's0', type: 'scale', q: 'Mức độ phiền khi phải trả lời câu hỏi lặp lại (1 là không, 5 là rất phiền)', options: [] },
+        { id: 'q2', section_id: 's1', type: 'choice', q: 'Bạn có tin AI soạn nháp rồi mình duyệt không?', options: ['Có, nếu thấy nguồn', 'Có, nếu sai ít', 'Chưa chắc', 'Không'] },
+        { id: 'q3', section_id: 's1', type: 'choice', q: 'Mức giá mỗi tháng bạn thấy hợp lý', options: ['Dưới 20 USD', '20 đến 40 USD', '40 đến 80 USD', 'Trên 80 USD'] },
+        { id: 'q4', section_id: 's1', type: 'text', q: 'Điều gì khiến bạn ngại dùng công cụ này nhất?', options: [] }
       ],
       responses: [
         { answers: { q0: 'Facebook Messenger', q1: '5', q2: 'Có, nếu thấy nguồn', q3: '20 đến 40 USD', q4: 'Sợ trả lời sai giá làm mất khách.' } },
@@ -119,30 +127,41 @@
         { answers: { q0: 'Zalo', q1: '2', q2: 'Không', q3: 'Dưới 20 USD', q4: 'Shop ít tin nhắn, tự trả lời được.' } }
       ],
       overview: 'Tín hiệu chính: 5 trên 8 người chấm mức phiền từ 4 trở lên, và 5 người sẵn sàng thử nếu thấy nguồn hoặc sai ít. Mức giá được chọn nhiều nhất là 20 đến 40 USD.\n\nChưa kết luận được: mẫu mới 8 người, chủ yếu từ mạng quen của nhóm, nên chưa đại diện cho thị trường.\n\nNên làm tiếp:\n1. Thu thêm ít nhất 20 phản hồi từ shop không quen biết.\n2. Phỏng vấn sâu 3 người nêu rào cản về giá và sàn TMĐT.\n3. Thử bản nháp trên loại câu hỏi hỏi đơn hàng, vì đây là loại lặp lại nhiều nhất.',
-      deck: [
-        { title: 'Đáp Nhanh: trợ lý CSKH cho shop online', body: 'Bản nháp trả lời khách trong vài giây, nhân viên duyệt rồi mới gửi.' },
-        { title: 'Vấn đề', body: 'Khoảng 60% tin nhắn là câu hỏi lặp lại về đơn hàng, đổi trả, size. Khách chờ lâu vào giờ cao điểm (ước tính của nhóm, cần đo lại).' },
-        { title: 'Bằng chứng từ người dùng', body: '5 trên 8 chủ shop chấm mức phiền từ 4 trên 5. 5 người sẵn sàng thử nếu thấy nguồn hoặc sai ít.' },
-        { title: 'Giải pháp', body: 'AI soạn nháp từ chính sách và trạng thái đơn. Giá và ngày giao lấy từ API, không để model tự nhớ.' },
-        { title: 'Đo thành công', body: 'Thời gian phản hồi trung vị giảm 50%. Ít nhất 70% bản nháp được gửi mà chỉ sửa nhẹ.' },
-        { title: 'Mô hình thu', body: 'Thuê bao 39 USD mỗi shop mỗi tháng. Hòa vốn hạ tầng ở khoảng 3 shop.' },
-        { title: 'Kế hoạch 4 tuần', body: 'Tuần 1 dữ liệu và đánh giá, tuần 2 nháp, tuần 3 duyệt và nguồn, tuần 4 thử với 3 shop.' }
-      ],
-      script: '',
-      ads: ''
+      deck: null,
+      deckShown: false,
+      deckSlug: '',
+      deckTitle: '',
+      deckSource: '',
+      ads: '',
+      adPosts: []
     },
     maintain: {
-      tech: [
-        { title: 'Chạy bộ đánh giá trước khi đổi phiên bản model', why: 'Đổi model có thể làm câu trả lời lệch chính sách mà không báo lỗi.', level: 'Cao', color: 'red' },
-        { title: 'Đặt hạn mức chi phí theo ngày', why: 'Một vòng lặp lỗi có thể đốt hết ngân sách token trong vài giờ.', level: 'Cao', color: 'red' },
-        { title: 'Cache phần chính sách lặp lại trong prompt', why: 'Giảm chi phí và độ trễ cho mỗi bản nháp.', level: 'Vừa', color: 'orange' }
-      ],
       schedule: [
         { id: 'm1', title: 'Rà 30 bản nháp bị sửa nhiều nhất', every: 7, next: inDays(0), owner: 'thao', runs: 1 },
         { id: 'm2', title: 'Kiểm tra chi phí token và độ trễ', every: 7, next: inDays(3), owner: 'huy', runs: 0 },
         { id: 'm3', title: 'Cập nhật chính sách đổi trả trong kho tra cứu', every: 30, next: inDays(10), owner: 'lan', runs: 0 },
         { id: 'm4', title: 'Cập nhật thư viện và vá bảo mật', every: 30, next: inDays(18), owner: 'lan', runs: 0 },
         { id: 'm5', title: 'Xóa log chứa thông tin cá nhân quá hạn', every: 90, next: inDays(40), owner: 'minh', runs: 0 }
+      ],
+      suggest: []
+    },
+    // Metric lấy từ mục Metric của scorecard (nguồn duy nhất); source giữ bản văn lúc tách để biết khi scorecard đổi.
+    // Các lần chạy có sample: true là dữ liệu mẫu cho demo, không phải số đo thật.
+    quality: {
+      source: SAMPLE_SCORE.metric[0],
+      revenueModel: 'sub',
+      metrics: [
+        { id: 'k1', name: 'Mức giảm thời gian phản hồi trung vị', baseline: null, target: 50, unit: '%', direction: 'up', kind: 'value', method: 'So thời gian phản hồi trung vị của tuần đó với tuần trước khi dùng AI.',
+          rule: 'Nếu thời gian phản hồi trung vị giảm từ 50% so với trước khi dùng thì xem là đạt.', from: 'mau' },
+        { id: 'k2', name: 'Bản nháp được gửi mà chỉ sửa nhẹ', baseline: null, target: 70, unit: '%', direction: 'up', kind: 'ai', method: 'Đếm bản nháp được gửi mà nhân viên chỉ sửa nhẹ, chia cho tổng số bản nháp, theo log khung chat.',
+          rule: 'Nếu từ 70% bản nháp được gửi mà chỉ sửa nhẹ thì xem là AI soạn đủ tốt.', from: 'mau' }
+      ],
+      nature: 'productivity',
+      runs: [
+        { id: 'r1', at: inDays(-12) + 'T09:30', model: 'Model A, prompt v1', values: { k1: 22, k2: 48 }, passed: 14, total: 20, estTok: 45000, actTok: 49200, note: 'Lần đầu chạy bộ 20 câu.', sample: true },
+        { id: 'r2', at: inDays(-8) + 'T14:00', model: 'Model A, prompt v2', values: { k1: 35, k2: 61 }, passed: 17, total: 20, estTok: 48000, actTok: 51600, note: 'Thêm nguồn chính sách vào prompt.', sample: true },
+        { id: 'r3', at: inDays(-4) + 'T10:15', model: 'Model A, prompt v3', values: { k1: 41, k2: 66 }, passed: 18, total: 20, estTok: 50000, actTok: 46900, note: 'Cache phần chính sách lặp lại.', sample: true },
+        { id: 'r4', at: inDays(-1) + 'T16:40', model: 'Model B, prompt v3', values: { k1: 47, k2: 58 }, passed: 15, total: 20, estTok: 48000, actTok: 54000, note: 'Thử đổi model, sai nhiều ở câu đổi trả.', sample: true }
       ]
     }
   });

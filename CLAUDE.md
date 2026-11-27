@@ -54,7 +54,7 @@ frontend/app/components.css  lớp d-* và nền tảng component Next.js
 
 **Dùng design pattern của Claude Artifact Tầng** trên [estatesmart.site](https://estatesmart.site/). Đọc [DESIGN.md](DESIGN.md) trước khi sửa UI. Mẫu tham chiếu trong repo là Workstation ở `frontend/public/index.html`, `frontend/public/tang/tokens.css`, `frontend/public/tang/style.css` và `frontend/public/tang/data.js`.
 
-1. Dùng **Be Vietnam Pro**, nội dung 15px, tiêu đề weight 500. Thanh đầu và nền chính trắng. Panel bo 20px, viền mảnh và bóng nhẹ. Khoảng cách giữa các panel khoảng 18px.
+1. Dùng **Be Vietnam Pro**, nội dung 15px, tiêu đề weight 500. Thanh đầu và nền chính trắng. Panel bo 20px, viền mảnh, không đổ bóng. Khoảng cách giữa các panel khoảng 18px.
 2. Giữ màu theo khu vực của Workstation. **Planning dùng xanh lá `#14b86a`**. Dùng token CSS cho chấm màu, chip, thẻ tiến độ và mục đang chọn. Dùng indigo cho liên kết và focus.
 3. Nút dạng pill, CTA chính nền `--ink` hoặc tone khu vực đủ tương phản. Ô nhập nền `--soft`, bo 10px. Trạng thái có nhãn chữ và hướng xử lý khi cần.
 4. Trên các route Next.js, dùng lại hành vi form, tab, trạng thái và hộp thoại từ `components/kit/`. Áp hình thức Artifact bằng CSS có phạm vi trang. Giữ nhất quán với mẫu Workstation trước khi thêm component hoặc thư viện giao diện.
