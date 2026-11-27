@@ -18,7 +18,7 @@ QUESTIONS: dict[str, str] = {
     "persona": "Một người cụ thể sẽ dùng thứ này là ai? Cho mình tên hoặc vai của họ và một lần gần nhất họ gặp vấn đề.",
     "pain_point": "Lần gần nhất người đó gặp vấn đề này là khi nào? Chuyện gì đã xảy ra và họ mất gì?",
     "current_workaround": "Hôm nay họ xử lý bằng cách nào, và vì sao họ chưa bỏ cách đó?",
-    "jtbd": "Họ đang cố hoàn thành việc gì? Viết một câu gồm động từ, đối tượng và bối cảnh, không có chữ AI.",
+    "jtbd": "Trong lần đó, họ nói muốn đạt được kết quả gì? Chép lại lời của họ, không có chữ AI.",
 }
 REFUSALS: dict[str, str] = {
     "force_verdict": "Mình không đánh dấu ô nào là có bằng chứng khi chưa có chuyện thật của một người cụ thể.",

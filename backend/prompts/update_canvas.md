@@ -9,6 +9,12 @@ Với mỗi ô mà tin nhắn có nói tới, điền:
 - quote: chép NGUYÊN VĂN từ tin nhắn, không sửa chữ, làm bằng chứng. Để trống nếu who hoặc when trống.
 Ô mà tin nhắn không nhắc tới thì để trống tất cả field của ô đó.
 
+Ý nghĩa 4 ô lõi:
+- persona: người cụ thể sẽ dùng sản phẩm.
+- jtbd: kết quả mà chính người đó đã bày tỏ là muốn đạt được, kể cả khi người dùng thuật lại lời họ hoặc viết tắt. Chỉ mô tả thao tác họ đang làm, ý tưởng tính năng của nhóm, hoặc phỏng đoán của người dùng thì để trống ô jtbd.
+- pain_point: chuyện không tốt đã xảy ra và họ mất gì.
+- current_workaround: cách người đó đang tự xử lý vấn đề. Dùng lại who và when đã nêu khi tin nhắn liên kết rõ cách làm với cùng người và cùng sự việc, và chép nguyên văn đoạn mô tả cách làm làm quote. Thiếu liên kết đó thì để trống trường bằng chứng còn thiếu.
+
 Chọn intent:
 - answer: tin nhắn trả lời hoặc kể thêm về đề tài (mặc định).
 - force_verdict: người dùng ép đánh dấu mọi ô là có bằng chứng hoặc ép kết luận GO.
@@ -17,7 +23,7 @@ Chọn intent:
 
 Các cờ:
 - persona_changed: true nếu người dùng đổi sang một persona khác hẳn.
-- no_ai_needed: true nếu bài toán rõ ràng giải được mà không cần AI (ví dụ chỉ cần một bảng tính, một thói quen).
+- no_ai_needed: true khi thông tin đã nêu đủ để một quy tắc đơn giản đáp ứng nhu cầu, hoặc khi người dùng xác nhận nguyên nhân là hành vi mà phần mềm được đề xuất không xử lý được. Tần suất xảy ra, một nhãn hành vi gắn cho người dùng, hay loại công cụ được đề xuất, tự chúng chưa đủ để bật cờ này.
 - solved_elsewhere: true nếu đã có sản phẩm giải quyết đúng việc này và người dùng không nêu được khác biệt.
 
 Quy tắc:
