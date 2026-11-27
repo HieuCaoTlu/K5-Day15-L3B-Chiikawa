@@ -237,16 +237,16 @@ class PitchDeckOut(BaseModel):
 
 
 class PitchAssetsGenerateIn(BaseModel):
-    """Ngữ cảnh sinh kịch bản nói 3 phút & 3 bài quảng cáo kèm placeholder."""
+    """Ngữ cảnh sinh bài quảng cáo chung kèm placeholder."""
 
     context: ProblemContextIn
     survey_slug: str = Field(default="", max_length=64)
 
 
 class PitchAssetsOut(BaseModel):
-    """Kịch bản pitching 3 phút và danh sách bài quảng cáo đa kênh có placeholder."""
+    """Bài quảng cáo chung có placeholder."""
 
-    script: str
+    script: str = ""
     ads: list[PitchAdPost] = Field(min_length=1, max_length=6)
     source: Literal["llm", "fallback"]
 

@@ -17,10 +17,14 @@
       lead: 'Tạo form khảo sát, dashboard và nhận định tự động, kèm bộ tài liệu thuyết trình.',
       from: 'Demo đủ chức năng thì người nghe sẽ hiểu.', to: 'Kể bằng bằng chứng từ người dùng, rồi mới tới demo.',
       out: ['Form', 'Dashboard', 'AI overview', 'Pitching HTML', 'Pitching script', 'Bài quảng cáo'] },
+    { id: 'quality', name: 'Quality', color: 'indigo', hex: '#4d5bf0',
+      lead: 'Agent lấy metric từ Product thinking. Đội ghi từng lần chạy thử model, xem biểu đồ chất lượng, token và chi phí.',
+      from: 'Chạy thử thấy ổn là được.', to: 'Mỗi lần đổi model hay prompt, chất lượng và chi phí đổi bao nhiêu?',
+      out: ['Chỉ số cần đạt', 'Lịch sử AI', 'Biểu đồ chất lượng', 'Token', 'Chi phí', 'Kế hoạch kiếm tiền'] },
     { id: 'maintaining', name: 'Maintaining', color: 'violet', hex: '#a24ce8',
-      lead: 'Gợi ý cập nhật công nghệ và lịch bảo trì định kỳ.',
+      lead: 'Theo dõi sức khỏe sản phẩm và lịch bảo trì định kỳ. Mô hình 3D báo khi sản phẩm xuống cấp.',
       from: 'Deploy xong là xong.', to: 'Model, chi phí và chất lượng thay đổi mỗi tuần, cần người canh.',
-      out: ['Gợi ý cập nhật', 'Lịch bảo trì'] }
+      out: ['Lịch bảo trì', 'Sức khỏe sản phẩm'] }
   ];
 
   // Bảy tầng của tòa nhà ở trang giới thiệu, từ dưới lên
@@ -29,8 +33,8 @@
     { color: 'yellow', name: 'Agent AI Builder', text: 'Người đồng hành đặt câu hỏi đúng ở từng bước.' },
     { color: 'blue', name: 'Product thinking', text: 'Chốt người dùng, vấn đề và phạm vi MVP.' },
     { color: 'green', name: 'Planning', text: 'Vai trò, task, công nghệ và chi phí.' },
-    { color: 'orange', name: 'Pitching', text: 'Form, dashboard, slide, kịch bản và quảng cáo.' },
-    { color: 'violet', name: 'Maintaining', text: 'Cập nhật công nghệ và lịch bảo trì.' },
+    { color: 'orange', name: 'Pitching', text: 'Form, dashboard, slide và quảng cáo.' },
+    { color: 'violet', name: 'Quality và Maintaining', text: 'Theo dõi chất lượng, chi phí và lịch bảo trì.' },
     { color: 'indigo', name: 'Một nơi quản lý', text: 'Toàn bộ tiến độ trong một công trình 3D.' }
   ];
 
@@ -81,7 +85,7 @@
         'Là nhân viên CSKH, tôi muốn biết bản nháp dựa trên chính sách nào để tin tưởng khi gửi.',
         'Là chủ shop, tôi muốn xem thời gian phản hồi mỗi ngày để biết công cụ có đáng tiền.'
       ],
-      cost: { teams: 30, tickets: 1500, inTok: 2000, outTok: 400, priceIn: 3, priceOut: 15, infra: 80, price: 39 }
+      cost: { teams: 30, tickets: 1500, inTok: 2000, outTok: 400, priceIn: 3, priceOut: 15, infra: 80, price: 39, pricePerM: 5, apiCalls: 45000, pricePerCall: 0.05, setupFee: 500, newCustomers: 2 }
     },
     tasks: {
       list: [
@@ -128,22 +132,36 @@
       deckSlug: '',
       deckTitle: '',
       deckSource: '',
-      script: '',
       ads: '',
       adPosts: []
     },
     maintain: {
-      tech: [
-        { title: 'Chạy bộ đánh giá trước khi đổi phiên bản model', why: 'Đổi model có thể làm câu trả lời lệch chính sách mà không báo lỗi.', level: 'Cao', color: 'red' },
-        { title: 'Đặt hạn mức chi phí theo ngày', why: 'Một vòng lặp lỗi có thể đốt hết ngân sách token trong vài giờ.', level: 'Cao', color: 'red' },
-        { title: 'Cache phần chính sách lặp lại trong prompt', why: 'Giảm chi phí và độ trễ cho mỗi bản nháp.', level: 'Vừa', color: 'orange' }
-      ],
       schedule: [
         { id: 'm1', title: 'Rà 30 bản nháp bị sửa nhiều nhất', every: 7, next: inDays(0), owner: 'thao', runs: 1 },
         { id: 'm2', title: 'Kiểm tra chi phí token và độ trễ', every: 7, next: inDays(3), owner: 'huy', runs: 0 },
         { id: 'm3', title: 'Cập nhật chính sách đổi trả trong kho tra cứu', every: 30, next: inDays(10), owner: 'lan', runs: 0 },
         { id: 'm4', title: 'Cập nhật thư viện và vá bảo mật', every: 30, next: inDays(18), owner: 'lan', runs: 0 },
         { id: 'm5', title: 'Xóa log chứa thông tin cá nhân quá hạn', every: 90, next: inDays(40), owner: 'minh', runs: 0 }
+      ],
+      suggest: []
+    },
+    // Metric lấy từ mục Metric của scorecard (nguồn duy nhất); source giữ bản văn lúc tách để biết khi scorecard đổi.
+    // Các lần chạy có sample: true là dữ liệu mẫu cho demo, không phải số đo thật.
+    quality: {
+      source: SAMPLE_SCORE.metric[0],
+      revenueModel: 'sub',
+      metrics: [
+        { id: 'k1', name: 'Mức giảm thời gian phản hồi trung vị', baseline: null, target: 50, unit: '%', direction: 'up', kind: 'value', method: 'So thời gian phản hồi trung vị của tuần đó với tuần trước khi dùng AI.',
+          rule: 'Nếu thời gian phản hồi trung vị giảm từ 50% so với trước khi dùng thì xem là đạt.', from: 'mau' },
+        { id: 'k2', name: 'Bản nháp được gửi mà chỉ sửa nhẹ', baseline: null, target: 70, unit: '%', direction: 'up', kind: 'ai', method: 'Đếm bản nháp được gửi mà nhân viên chỉ sửa nhẹ, chia cho tổng số bản nháp, theo log khung chat.',
+          rule: 'Nếu từ 70% bản nháp được gửi mà chỉ sửa nhẹ thì xem là AI soạn đủ tốt.', from: 'mau' }
+      ],
+      nature: 'productivity',
+      runs: [
+        { id: 'r1', at: inDays(-12) + 'T09:30', model: 'Model A, prompt v1', values: { k1: 22, k2: 48 }, passed: 14, total: 20, estTok: 45000, actTok: 49200, note: 'Lần đầu chạy bộ 20 câu.', sample: true },
+        { id: 'r2', at: inDays(-8) + 'T14:00', model: 'Model A, prompt v2', values: { k1: 35, k2: 61 }, passed: 17, total: 20, estTok: 48000, actTok: 51600, note: 'Thêm nguồn chính sách vào prompt.', sample: true },
+        { id: 'r3', at: inDays(-4) + 'T10:15', model: 'Model A, prompt v3', values: { k1: 41, k2: 66 }, passed: 18, total: 20, estTok: 50000, actTok: 46900, note: 'Cache phần chính sách lặp lại.', sample: true },
+        { id: 'r4', at: inDays(-1) + 'T16:40', model: 'Model B, prompt v3', values: { k1: 47, k2: 58 }, passed: 15, total: 20, estTok: 48000, actTok: 54000, note: 'Thử đổi model, sai nhiều ở câu đổi trả.', sample: true }
       ]
     }
   });

@@ -536,7 +536,7 @@ def delete_deck(slug: str, session: Session = Depends(get_session)) -> None:
 
 @router.post("/assets/generate", response_model=PitchAssetsOut)
 def generate_assets(body: PitchAssetsGenerateIn, session: Session = Depends(get_session)) -> PitchAssetsOut:
-    """Sinh kịch bản nói 3 phút & 3 bài quảng cáo kèm placeholder từ Product thinking + khảo sát."""
+    """Sinh bài quảng cáo chung kèm placeholder từ Product thinking + khảo sát."""
     stats = _lookup_stats(body.survey_slug, session)
     return generate_pitch_assets(body.context, stats)
 

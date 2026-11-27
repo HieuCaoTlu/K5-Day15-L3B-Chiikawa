@@ -172,14 +172,14 @@ export type PitchDeck = {
   survey_slug: string;
   title: string;
   slides: PitchSlide[];
-  script: string;
+  script?: string;
   ads: PitchAdPost[];
   created_at: string;
   updated_at: string;
 };
 
 export type PitchAssets = {
-  script: string;
+  script?: string;
   ads: PitchAdPost[];
   source: 'llm' | 'fallback';
 };

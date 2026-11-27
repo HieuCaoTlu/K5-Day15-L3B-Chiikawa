@@ -293,7 +293,8 @@ def test_pitch_deck_overview_and_ads_flow(client):
     assets = assets_res.json()
     assert len(assets["ads"]) == 1
     assert assets["ads"][0]["placeholders"]
-    assert "0:00" in assets["script"]
+    assert assets["ads"][0]["body"]
+    assert assets["script"] == ""
 
     pub = client.post(
         "/api/v1/pitching/decks",
@@ -302,7 +303,6 @@ def test_pitch_deck_overview_and_ads_flow(client):
             "survey_slug": slug,
             "title": draft["title"],
             "slides": draft["slides"],
-            "script": assets["script"],
             "ads": assets["ads"],
         },
     )
@@ -317,7 +317,6 @@ def test_pitch_deck_overview_and_ads_flow(client):
             "survey_slug": slug,
             "title": "Deck L3B đã sửa",
             "slides": draft["slides"][:5],
-            "script": assets["script"],
             "ads": assets["ads"],
         },
     )

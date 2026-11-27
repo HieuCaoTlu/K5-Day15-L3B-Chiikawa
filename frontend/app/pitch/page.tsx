@@ -30,7 +30,6 @@ export default function PublicPitchPage() {
   const [error, setError] = useState<string | null>(null);
   const [idx, setIdx] = useState(0);
   const [viewMode, setViewMode] = useState<'present' | 'all'>('present');
-  const [showScript, setShowScript] = useState(false);
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
@@ -126,11 +125,6 @@ export default function PublicPitchPage() {
                   Tất cả slide
                 </button>
               </div>
-              {deck.script ? (
-                <button type="button" className="d-btn d-b2 d-sm" onClick={() => setShowScript((v) => !v)}>
-                  {showScript ? 'Ẩn kịch bản' : 'Xem kịch bản'}
-                </button>
-              ) : null}
               <button type="button" className="d-btn d-b2 d-sm" onClick={copyLink}>
                 <Icon name={copied ? 'check' : 'link'} size={16} />
                 {copied ? 'Đã sao chép link' : 'Sao chép link'}
@@ -230,15 +224,6 @@ export default function PublicPitchPage() {
               ))}
             </div>
           )}
-
-          {showScript && deck.script ? (
-            <section className="d-card flex flex-col gap-2">
-              <div className="d-ov">Kịch bản nói 3 phút</div>
-              <pre className="m-0 whitespace-pre-wrap font-sans text-[16px] leading-relaxed text-ink">
-                {deck.script}
-              </pre>
-            </section>
-          ) : null}
         </>
       )}
     </main>

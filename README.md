@@ -78,7 +78,7 @@ Chốt trước khi code, sửa ở đây khi đổi (FE đọc chi tiết ở `
 | POST | `/api/v1/pitching/decks/generate` | `{context, survey_slug?, slide_count?}` | `{title, survey_slug, slides[] (<=10), source}` |
 | POST / GET | `/api/v1/pitching/decks` | `PitchDeckPublishIn` / — | `PitchDeck` (`slug` cho `/pitch?slug=...`) / `PitchDeck[]` |
 | GET / PUT / DELETE | `/api/v1/pitching/decks/{slug}` | `PitchDeckPublishIn?` | `PitchDeck` / 204 |
-| POST | `/api/v1/pitching/assets/generate` | `{context, survey_slug?}` | `{script, ads[], source}` (kịch bản & bài quảng cáo có placeholder) |
+| POST | `/api/v1/pitching/assets/generate` | `{context, survey_slug?}` | `{ads[], source}` (bài quảng cáo chung có placeholder) |
 | POST | `/api/v1/pitching/overview` | `{context, survey_slug?}` | `{overview, total_responses, real_responses, sample_responses, source}` |
 
 `Run = {id, session_id, request, status, source, proposal: {title, summary, steps[], confidence} | null, result, created_at, updated_at}`

@@ -309,9 +309,8 @@ class _GeneratedDeck(BaseModel):
 
 
 class _GeneratedAssets(BaseModel):
-    """Schema structured output cho kịch bản nói và bài quảng cáo chung kèm placeholder."""
+    """Schema structured output cho bài quảng cáo chung kèm placeholder."""
 
-    script: str = Field(min_length=20, max_length=5000)
     ads: list[PitchAdPost] = Field(min_length=1, max_length=3)
 
 
@@ -482,18 +481,6 @@ def _rule_based_assets(ctx: ProblemContextIn, stats: SurveyStatsOut | None) -> P
     metric = _clip(ctx.metric, 140, "giảm thời gian chờ và hạn chế sai sót")
     note, _ = _format_stats_summary(stats)
 
-    script = (
-        f"0:00 Mở đầu\n"
-        f"Hãy tưởng tượng một {role_label} đang kẹt giữa lúc cao điểm và gặp vấn đề: {problem}\n\n"
-        f"0:30 Vấn đề thật\n"
-        f"Hiện tại họ phải xoay xở thủ công, mất thời gian và dễ bỏ sót.\n\n"
-        f"1:10 Giải pháp & đòn bẩy AI — {project}\n"
-        f"{leverage}. Demo trực tiếp 1 luồng gọn trong phạm vi: {ctx.scope or 'MVP 1 vai chính'}.\n\n"
-        f"1:55 Bằng chứng & cách đo\n"
-        f"{note}\nChỉ số theo dõi: {metric}.\n\n"
-        f"2:30 Lời mời\n"
-        f"Nhóm đang tìm 5–10 {role_label} thử nghiệm bản đầu tiên trong 2 tuần tới."
-    )
     survey_hint = f"/survey?slug={stats.slug}" if stats and stats.slug else "[Điền link khảo sát / dùng thử]"
     ads = [
         PitchAdPost(
@@ -510,11 +497,11 @@ def _rule_based_assets(ctx: ProblemContextIn, stats: SurveyStatsOut | None) -> P
             placeholders=[survey_hint, "[Số lượng: 5–10]", "[Mốc thời gian]"],
         )
     ]
-    return PitchAssetsOut(script=script, ads=ads, source="fallback")
+    return PitchAssetsOut(script="", ads=ads, source="fallback")
 
 
 def generate_pitch_assets(ctx: ProblemContextIn, stats: SurveyStatsOut | None = None) -> PitchAssetsOut:
-    """Sinh kịch bản nói 3 phút & bài quảng cáo chung kèm placeholder qua LLM hoặc luật dự phòng."""
+    """Sinh bài quảng cáo chung kèm placeholder qua LLM hoặc luật dự phòng."""
     prompt = render("pitch_assets", **_prompt_ctx_fields(ctx, stats))
     try:
         generated = llm.structured(_GeneratedAssets, prompt, node="pitch_assets")
@@ -529,7 +516,7 @@ def generate_pitch_assets(ctx: ProblemContextIn, stats: SurveyStatsOut | None = 
             )
             for ad in generated.ads[:1]
         ]
-        return PitchAssetsOut(script=generated.script.strip()[:5000], ads=ads, source="llm")
+        return PitchAssetsOut(script="", ads=ads, source="llm")
     except llm.LLMUnavailableError:
         pass
     except Exception as exc:  # noqa: BLE001 — fallback an toàn theo bài toán

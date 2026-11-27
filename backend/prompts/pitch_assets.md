@@ -1,6 +1,5 @@
 Bạn là chuyên gia truyền thông & thuyết trình sản phẩm AI thực chiến. Từ <bai_toan> và <du_lieu_khao_sat>, hãy viết:
-1. `script`: Kịch bản nói pitching trong 3 phút, chia rõ mốc thời gian (`0:00 Mở đầu`, `0:30 Vấn đề`, `1:10 Giải pháp & AI giúp gì`, `1:55 Bằng chứng khảo sát`, `2:30 Bước tiếp theo`), dùng đúng tên sản phẩm và bối cảnh trong <bai_toan>. Không bịa số liệu chưa có.
-2. `ads`: Đúng 1 bài quảng cáo chung đa năng (dùng đăng lên Facebook, LinkedIn, Zalo hoặc nhóm cộng đồng đều hợp):
+`ads`: Đúng 1 bài quảng cáo chung đa năng (dùng đăng lên Facebook, LinkedIn, Zalo hoặc nhóm cộng đồng đều hợp):
    - id: "ad0"
    - channel: "Bài đăng chung"
    - hook: 1 câu mở đầu đánh đúng nỗi đau của đối tượng mục tiêu
