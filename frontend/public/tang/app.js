@@ -325,13 +325,55 @@
 
     pitching() {
       const p = S.pitch;
-      const form = p.form ? `<form data-form="answer">${p.form.map((q, i) => `<div class="question"><span>${i + 1}. ${esc(q.q)}</span><div>${q.type === 'text' ? `<input style="width:100%" name="${esc(q.id)}" aria-label="${esc(q.q)}">` : (q.type === 'scale' ? [1, 2, 3, 4, 5] : q.options).map(o => `<label><input type="radio" name="${esc(q.id)}" value="${esc(o)}">${esc(o)}</label>`).join('')}</div></div>`).join('')}<button class="btn tone small">Gửi phản hồi</button></form>` : '<p class="muted">Agent soạn câu hỏi từ scorecard để kiểm chứng vấn đề và mức sẵn sàng trả tiền.</p>';
+      const roleOptions = ['Học viên', 'Trợ giảng / Lab coach', 'Giảng viên / Mentor', 'Nhân viên CSKH', 'Chủ shop / Quản lý', 'Kỹ sư / Đội sản phẩm'];
+      const curRole = p.targetRole || '';
+      const ctx = pitchCtx();
+      const roleBar = `<div class="role-pick">
+        <div class="row" style="justify-content:space-between">
+          <span><b>Ý tưởng nhóm (từ Product thinking):</b> ${esc(ctx.project_name)}</span>
+          ${btn('tab', 'Sửa ở Product thinking', 'soft small', 'data-id="product"')}
+        </div>
+        <div class="muted">${esc(ctx.problem || ctx.overview || 'Chưa điền Problem ở tab Product thinking — AI sẽ dùng tên dự án và chat nhóm để gợi ý.')}</div>
+        <span class="muted" style="margin-top:4px">Chọn 1 đối tượng nhận form (1 Form = 1 Vai chính)</span>
+        <div class="row">${roleOptions.map(r => `<button type="button" class="btn small ${curRole === r ? 'tone' : 'soft'}" data-act="pickRole" data-id="${esc(r)}">${esc(r)}</button>`).join('')}</div>
+        <input data-bind="targetRole" value="${esc(curRole)}" placeholder="Hoặc nhập 1 đối tượng cụ thể (vd: Học viên lớp L3B, Người dùng thử)">
+        <span class="muted">AI lấy ý tưởng từ Product thinking + đối tượng trên để gợi ý sẵn câu hỏi.</span>
+      </div>`;
+      const sourceBadge = p.draftSource === 'llm'
+        ? '<span class="tag" style="--c:var(--green)">AI Gemini gợi ý theo Product thinking</span>'
+        : p.draftSource === 'fallback'
+          ? '<span class="tag">Gợi ý theo ngữ cảnh (thiếu GOOGLE_API_KEY nên chưa gọi Gemini)</span>'
+          : '<span class="tag">Bản mẫu — bấm “AI gợi ý câu hỏi” để tạo từ Product thinking</span>';
+      const editor = p.form ? `<div class="stack" style="gap:10px;margin-top:10px">
+        <div class="review-note"><b>Đọc lại &amp; sửa theo ý bạn:</b> AI đã gợi ý sẵn bên dưới. Bạn có thể sửa câu chữ, đổi loại câu hỏi, sửa phương án hoặc thêm/xóa câu trước khi publish.</div>
+        <div class="row">${curRole ? `<span class="tag" style="--c:var(--orange)">Đối tượng: ${esc(curRole)}</span>` : ''}${sourceBadge}</div>
+        <input data-bind="formTitle" value="${esc(p.formTitle || ('Khảo sát: ' + ctx.project_name))}" placeholder="Tiêu đề form khảo sát" aria-label="Tiêu đề form">
+        <input data-bind="formDesc" value="${esc(p.formDesc || '')}" placeholder="Lời giới thiệu ngắn" aria-label="Lời giới thiệu">
+        ${p.form.map((q, i) => `<div class="question">
+          <div class="q-head"><strong>Câu ${i + 1}</strong>
+            <select data-bind="qType" data-id="${i}" aria-label="Loại câu ${i + 1}">
+              <option value="choice" ${q.type === 'choice' ? 'selected' : ''}>Trắc nghiệm (chọn 1)</option>
+              <option value="multi" ${q.type === 'multi' ? 'selected' : ''}>Chọn nhiều đáp án</option>
+              <option value="scale" ${q.type === 'scale' ? 'selected' : ''}>Thang 1–5</option>
+              <option value="text" ${q.type === 'text' ? 'selected' : ''}>Câu hỏi mở</option>
+            </select>
+            <label class="req"><input type="checkbox" data-bind="qReq" data-id="${i}" ${q.required !== false ? 'checked' : ''}>Bắt buộc</label>
+            ${p.form.length > 1 ? btn('delQ', 'Xóa', 'soft small', `data-id="${i}"`) : ''}
+          </div>
+          <textarea class="q-text" rows="2" data-bind="formQ" data-id="${i}" aria-label="Nội dung câu ${i + 1}">${esc(q.q)}</textarea>
+          ${q.type === 'choice' || q.type === 'multi' ? `<div class="chips">${(q.options || []).filter(Boolean).map(o => `<span class="chip">${esc(o)}</span>`).join('')}</div>
+            <textarea rows="2" data-bind="qOpts" data-id="${i}" placeholder="Mỗi dòng một phương án" aria-label="Phương án câu ${i + 1}">${esc((q.options || []).join('\n'))}</textarea>` : ''}
+        </div>`).join('')}
+        <div class="row">${btn('addQ', '+ Thêm câu hỏi', 'soft small')}${btn('publishSurvey', p.publishedSlug ? 'Publish link mới' : 'Publish link khảo sát', 'primary small')}${p.publishedSlug ? `<a class="btn soft small" style="text-decoration:none" href="/survey?slug=${encodeURIComponent(p.publishedSlug)}" target="_blank" rel="noopener">Mở trang khảo sát</a>` : ''}</div>
+        ${p.publishedSlug ? `<div class="pub-box"><div><strong>Đã publish:</strong> <code>/survey?slug=${esc(p.publishedSlug)}</code></div><div class="row"><input readonly value="${esc(location.origin + '/survey?slug=' + p.publishedSlug)}" aria-label="Link công khai">${btn('copySurveyLink', 'Sao chép link', 'tone small')}</div></div>` : ''}
+      </div>` : '<p class="muted" style="margin-top:10px">Điền ý tưởng nhóm và đối tượng ở trên rồi bấm “AI gợi ý câu hỏi”.</p>';
       const deck = p.deck ? `<div class="deck" tabindex="0">${p.deck.map((s, i) => `<section class="slide" style="--s:${STEPS[i % 4].hex}"><h3>${esc(s.title)}</h3><p>${esc(s.body)}</p></section>`).join('')}</div>
         <div class="row" style="margin-top:10px">${btn('slide', 'Trang trước', 'soft small', 'data-n="-1"')}${btn('slide', 'Trang sau', 'soft small', 'data-n="1"')}${btn('copy', 'Sao chép HTML', 'soft small', 'data-id="html"')}${downloads ? btn('download', 'Tải file HTML', 'primary small') : ''}</div>` : '<p class="muted">Tạo bộ slide từ scorecard và phản hồi đã thu.</p>';
       const textPanel = (key, title, act, empty) => `<div class="panel">${panelHead(title, btn(act, p[key] ? 'Tạo lại' : 'Tạo', 'tone small'))}${p[key] ? `<div class="prose">${esc(p[key])}</div><p style="margin-top:10px">${btn('copy', 'Sao chép', 'soft small', `data-id="${key}"`)}</p>` : `<p class="muted">${empty}</p>`}</div>`;
       return head(2, 'Thu bằng chứng trước, kể chuyện sau. Dashboard tự dựng từ câu trả lời.') + `<div class="stack">
-        <div class="cols"><div class="panel">${panelHead('Form khảo sát', btn('form', p.form ? 'Tạo lại form' : 'Tự tạo form', 'tone small'))}${form}</div>
+        <div class="cols"><div class="panel">${panelHead('Form khảo sát', btn('form', p.draftSource ? 'AI gợi ý lại' : 'AI gợi ý câu hỏi', 'tone small'))}${roleBar}${editor}</div>
         <div class="panel">${panelHead('Dashboard', p.form ? btn('seed', 'Thêm 8 phản hồi mẫu', 'soft small') : '')}${dashboard()}</div></div>
+        ${publishedPanel()}
         <div class="panel">${panelHead('AI overview từ form', p.responses.length ? btn('summary', p.overview ? 'Phân tích lại' : 'Phân tích phản hồi', 'tone small') : '')}${p.overview ? `<div class="prose">${esc(p.overview)}</div>` : `<p class="muted">${p.responses.length ? 'Bấm phân tích để agent tóm tắt tín hiệu và việc nên làm tiếp.' : 'Cần ít nhất một phản hồi.'}</p>`}</div>
         <div class="panel">${panelHead('Pitching HTML', btn('deck', p.deck ? 'Tạo lại slide' : 'Tạo slide', 'tone small'))}${deck}</div>
         <div class="cols">${textPanel('script', 'Pitching script', 'script', 'Kịch bản nói khoảng 3 phút, chia mốc thời gian.')}${textPanel('ads', 'Bài quảng cáo', 'ads', 'Ba bài cho ba kênh, giọng khác nhau.')}</div></div>`;
@@ -345,6 +387,56 @@
     }
   };
 
+  let surveysCache = null, surveysLoading = false, surveysError = '', activeSurveyDetail = null, armedDeleteSlug = '';
+  function pitchCtx() {
+    const role = (S.pitch.targetRole || '').trim();
+    const chatNotes = (S.chat || []).filter(m => m.who !== 'agent').slice(-4).map(m => m.text).join(' | ');
+    return {
+      project_name: S.meta.name || 'Sản phẩm mới',
+      target_role: role,
+      persona: score('persona') || role,
+      problem: score('problem'),
+      leverage: score('leverage'),
+      scope: score('scope'),
+      metric: score('metric'),
+      overview: S.plan.overview || chatNotes || ''
+    };
+  }
+  async function loadPublishedSurveys(force = false) {
+    if (surveysLoading || (!force && surveysCache !== null)) return;
+    surveysLoading = true; surveysError = '';
+    try {
+      const res = await fetch('/api/v1/pitching/surveys');
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      surveysCache = await res.json();
+    } catch (e) { surveysError = 'Chưa tải được danh sách link đã publish từ backend.'; }
+    surveysLoading = false;
+    if (inApp && tab === 'pitching') refresh();
+  }
+  function publishedPanel() {
+    const list = surveysCache;
+    let body = '';
+    if (surveysLoading && !list) body = '<p class="muted">Đang tải danh sách khảo sát…</p>';
+    else if (surveysError) body = `<p class="muted">${esc(surveysError)}</p>`;
+    else if (!list || !list.length) body = '<p class="muted">Chưa có link nào được publish. Tạo form ở trên rồi bấm “Publish link khảo sát”.</p>';
+    else {
+      body = `<div class="scroll"><table><thead><tr><th>Tiêu đề & vai chính</th><th>Phản hồi</th><th>Đường dẫn công khai</th><th></th></tr></thead><tbody>${list.map(s => {
+        const isOpen = !!(activeSurveyDetail && activeSurveyDetail.slug === s.slug);
+        const detailRow = isOpen ? `<tr class="resp-row"><td colspan="4"><div class="resp-drawer">
+          ${activeSurveyDetail.responses.length ? activeSurveyDetail.responses.map(r => `<div class="resp-item"><div class="row" style="justify-content:space-between"><strong>${esc(r.respondent_role || s.target_role || 'Ẩn danh')}</strong><span class="muted">${esc((r.created_at || '').slice(0, 16).replace('T', ' '))}${r.is_sample ? ' · Mẫu' : ''}</span></div>
+            ${(activeSurveyDetail.survey.questions || []).map(q => { const a = (r.answers || {})[q.id]; return `<div><span class="muted">${esc(q.q)}:</span> ${esc(Array.isArray(a) ? a.join(' · ') : (a || '—'))}</div>`; }).join('')}</div>`).join('') : '<span class="muted">Chưa có câu trả lời nào cho link này. Mở form để gửi thử phản hồi đầu tiên.</span>'}
+        </div></td></tr>` : '';
+        return `<tr>
+          <td><div>${esc(s.title)}</div><div class="row" style="margin-top:4px">${s.target_role ? `<span class="tag" style="--c:var(--orange)">${esc(s.target_role)}</span>` : ''}<span class="muted">${esc(s.project_name)}</span></div></td>
+          <td><div class="resp-cell"><strong>${+s.response_count || 0}</strong><button type="button" class="btn small ${isOpen ? 'tone' : 'soft'} arrow-btn" data-act="toggleResponses" data-id="${esc(s.slug)}" aria-expanded="${isOpen}" title="${isOpen ? 'Thu gọn phản hồi' : 'Xem phản hồi'}" aria-label="Xem phản hồi"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="transform:${isOpen ? 'rotate(180deg)' : 'none'}"><path d="M4 6l4 4 4-4"/></svg></button></div></td>
+          <td><code>/survey?slug=${esc(s.slug)}</code></td>
+          <td><div class="row">${btn('copySlug', 'Sao chép link', 'soft small', `data-id="${esc(s.slug)}"`)}<a class="btn soft small" style="text-decoration:none" href="/survey?slug=${encodeURIComponent(s.slug)}" target="_blank" rel="noopener">Mở form</a>${btn('delSurvey', armedDeleteSlug === s.slug ? 'Bấm nữa để xóa' : 'Xóa', 'danger small', `data-id="${esc(s.slug)}"`)}</div></td>
+        </tr>${detailRow}`;
+      }).join('')}</tbody></table></div>`;
+    }
+    return `<div class="panel">${panelHead('Các link khảo sát đã publish', btn('reloadSurveys', 'Tải lại', 'soft small'))}${body}</div>`;
+  }
+
   function kpis() {
     const c = Object.fromEntries(Object.entries(S.plan.cost).map(([k, v]) => [k, +v || 0]));
     const perShop = c.tickets * (c.inTok * c.priceIn + c.outTok * c.priceOut) / 1e6;
@@ -356,8 +448,12 @@
   function stats() {
     const p = S.pitch;
     return (p.form || []).map(q => {
-      const a = p.responses.map(r => r.answers[q.id]).filter(v => v !== undefined && v !== '');
+      const a = p.responses.map(r => r.answers[q.id]).filter(v => Array.isArray(v) ? v.length > 0 : (v !== undefined && v !== ''));
       if (q.type === 'text') return { q: q.q, type: q.type, texts: a };
+      if (q.type === 'multi') {
+        const flat = a.flatMap(v => Array.isArray(v) ? v : [v]).map(String);
+        return { q: q.q, type: q.type, n: a.length, avg: null, counts: q.options.map(o => [o, flat.filter(v => v === String(o)).length]) };
+      }
       const opts = q.type === 'scale' ? ['1', '2', '3', '4', '5'] : q.options;
       return { q: q.q, type: q.type, n: a.length, avg: q.type === 'scale' && a.length ? a.reduce((x, y) => x + +y, 0) / a.length : null, counts: opts.map(o => [o, a.filter(v => String(v) === String(o)).length]) };
     });
@@ -365,7 +461,7 @@
   function dashboard() {
     const p = S.pitch;
     if (!p.form) return '<p class="muted">Tạo form để dashboard tự xuất hiện.</p>';
-    if (!p.responses.length) return '<p class="muted">Chưa có phản hồi. Điền thử form hoặc thêm phản hồi mẫu.</p>';
+    if (!p.responses.length) return '<p class="muted">Chưa có phản hồi trên máy này. Mở link đã publish để thu phản hồi thật hoặc thêm phản hồi mẫu.</p>';
     const samples = p.responses.filter(r => r.sample).length;
     return `<div class="kpis" style="margin:0"><div class="kpi" style="--c:var(--orange)"><b>${p.responses.length}</b><span>Phản hồi, trong đó ${samples} là mẫu</span></div></div>` + stats().map(s => `<div class="question"><span>${esc(s.q)}${s.avg !== null && s.avg !== undefined ? ` <span class="tag" style="--c:var(--orange)">TB ${s.avg.toFixed(1)}</span>` : ''}</span>${s.type === 'text' ? s.texts.slice(-4).map(t => `<div class="muted">"${esc(t)}"</div>`).join('') || '<span class="muted">Chưa có câu trả lời chữ.</span>' : `<div>${s.counts.map(([o, n]) => `<div class="hbar"><span>${esc(o)}</span><div class="bar" style="--c:var(--orange)"><span class="grow" style="width:${s.n ? n / s.n * 100 : 0}%"></span></div><span>${n}</span></div>`).join('')}</div>`}</div>`).join('');
   }
@@ -397,19 +493,60 @@
       return ['plan', () => anim($$('#view .role .av'), { scale: [0, 1], rotate: [-90, 0] }, { type: 'spring', delay: canAnim ? M.stagger(0.08) : 0 })];
     },
     async form() {
-      const out = await generate('Soạn 5 câu hỏi khảo sát người dùng để kiểm chứng vấn đề, giải pháp và mức sẵn sàng trả tiền. Gồm 2 câu type "scale" (chấm 1 đến 5), 2 câu "choice" (có 3 đến 4 options), 1 câu "text".',
-        '{"questions":[{"type":"scale","q":""},{"type":"choice","q":"","options":["",""]},{"type":"text","q":""}]}',
-        o => o && Array.isArray(o.questions) && o.questions.length >= 3 && o.questions.every(q => str(q.q) && (q.type === 'text' || q.type === 'scale' || (q.type === 'choice' && Array.isArray(q.options) && q.options.length > 1))),
-        () => ({ questions: [
-          { type: 'scale', q: 'Việc trả lời câu hỏi lặp lại làm bạn mệt tới mức nào? (1 ít, 5 rất nhiều)' },
-          { type: 'choice', q: 'Loại câu hỏi nào bạn gặp nhiều nhất?', options: ['Trạng thái đơn', 'Đổi trả', 'Chọn size', 'Khác'] },
-          { type: 'scale', q: 'Bạn tin một bản nháp do AI soạn tới mức nào nếu được duyệt trước? (1 đến 5)' },
-          { type: 'choice', q: 'Mức giá hằng tháng bạn thấy hợp lý?', options: ['Dưới 20 USD', '20 đến 40 USD', 'Trên 40 USD'] },
-          { type: 'text', q: 'Điều gì khiến bạn không muốn dùng công cụ này?' }] }));
-      S.pitch.form = out.questions.slice(0, 7).map((q, i) => ({ id: 'q' + i, type: q.type, q: String(q.q), options: q.type === 'choice' ? q.options.map(String).slice(0, 5) : [] }));
-      S.pitch.responses = []; S.pitch.overview = '';
+      const ctx = pitchCtx();
+      try {
+        const res = await fetch('/api/v1/pitching/surveys/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(ctx)
+        });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const draft = await res.json();
+        S.pitch.form = draft.questions;
+        S.pitch.formTitle = draft.title;
+        S.pitch.formDesc = draft.description;
+        S.pitch.targetRole = draft.target_role || ctx.target_role;
+        S.pitch.draftSource = draft.source;
+        S.pitch.publishedSlug = '';
+        S.pitch.responses = [];
+        S.pitch.overview = '';
+        save('pitch');
+        toast(draft.source === 'llm' ? 'Đã tạo form khảo sát bằng Gemini' : 'Đã tạo form khảo sát theo vai ' + (S.pitch.targetRole || 'mục tiêu'));
+        return ['pitch', () => rise($$('#view .question'))];
+      } catch (e) {
+        toast('Không kết nối được backend để tạo form.');
+        return ['pitch', () => {}];
+      }
+    },
+    async publishSurvey() {
+      if (!S.pitch.form || !S.pitch.form.length) return toast('Hãy tạo form khảo sát trước.');
+      const ctx = pitchCtx();
+      const cleaned = S.pitch.form.map((q, i) => ({
+        id: q.id || 'q' + i,
+        type: ['choice', 'multi', 'scale', 'text'].includes(q.type) ? q.type : 'text',
+        q: String(q.q || '').trim() || `Câu hỏi ${i + 1}`,
+        options: ['choice', 'multi'].includes(q.type) ? (q.options || []).map(x => String(x).trim()).filter(Boolean) : [],
+        required: q.required !== false
+      }));
+      const res = await fetch('/api/v1/pitching/surveys', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          project_name: ctx.project_name,
+          target_role: ctx.target_role,
+          problem_context: ctx,
+          title: (S.pitch.formTitle || '').trim() || ('Khảo sát: ' + ctx.project_name),
+          description: (S.pitch.formDesc || '').trim(),
+          questions: cleaned
+        })
+      });
+      if (!res.ok) return toast('Không publish được form (kiểm tra lại câu hỏi và phương án).');
+      const created = await res.json();
+      S.pitch.publishedSlug = created.slug;
       save('pitch');
-      return ['pitch', () => rise($$('#view .question'))];
+      if (Array.isArray(surveysCache)) surveysCache = [created, ...surveysCache];
+      toast('Đã publish link khảo sát');
+      return ['pitch', () => rise($$('#view .pub-box'))];
     },
     async summary() {
       const out = await generate(`Phân tích kết quả khảo sát: ${JSON.stringify(stats())}. Có ${S.pitch.responses.filter(r => r.sample).length}/${S.pitch.responses.length} phản hồi là dữ liệu mẫu, phải nói rõ. Nêu tín hiệu chính, điều chưa kết luận được và 3 việc nên làm.`,
@@ -486,6 +623,7 @@
     if (desktopOverview) { overlay.innerHTML = views.overview(); view.innerHTML = ''; }
     else { view.innerHTML = views[tab](); overlay.innerHTML = ''; }
     if (tab === 'product') { $('#chatSlot').append(chat); renderChat(); }
+    if (tab === 'pitching') loadPublishedSurveys();
   }
   function layout(animate) {
     const over = tab === 'overview', isMobile = mobile.matches;
@@ -658,6 +796,54 @@
     drawer: toggleDrawer,
     me(b) { local.me = b.dataset.id; persist(); renderChat(); anim($('.speak .me', chat), { scale: [0.6, 1] }, { type: 'spring' }); },
     quick: b => send(b.textContent),
+    pickRole(b) { S.pitch.targetRole = b.dataset.id; save('pitch'); rerender(); },
+    addQ() {
+      if (!S.pitch.form) return;
+      S.pitch.form.push({ id: 'q' + Date.now().toString(36), type: 'choice', q: 'Câu hỏi khảo sát mới', options: ['Lựa chọn 1', 'Lựa chọn 2'], required: true });
+      save('pitch'); rerender();
+    },
+    delQ(b) {
+      if (!S.pitch.form || S.pitch.form.length <= 1) return;
+      S.pitch.form.splice(+b.dataset.id, 1); save('pitch'); rerender();
+    },
+    reloadSurveys() { loadPublishedSurveys(true); },
+    async copySurveyLink() {
+      if (!S.pitch.publishedSlug) return;
+      try { await navigator.clipboard.writeText(location.origin + '/survey?slug=' + S.pitch.publishedSlug); toast('Đã sao chép link khảo sát'); }
+      catch (e) { toast('Trình duyệt chặn sao chép, hãy copy trực tiếp trong ô link.'); }
+    },
+    async copySlug(b) {
+      try { await navigator.clipboard.writeText(location.origin + '/survey?slug=' + b.dataset.id); toast('Đã sao chép link khảo sát'); }
+      catch (e) { toast('Trình duyệt chặn sao chép, link: /survey?slug=' + b.dataset.id); }
+    },
+    async toggleResponses(b) {
+      const slug = b.dataset.id, survey = (surveysCache || []).find(x => x.slug === slug);
+      if (activeSurveyDetail && activeSurveyDetail.slug === slug) { activeSurveyDetail = null; rerender(); return; }
+      if (!survey) return;
+      try {
+        const res = await fetch('/api/v1/pitching/surveys/' + encodeURIComponent(slug) + '/responses');
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        activeSurveyDetail = { slug, survey, responses: await res.json() };
+        rerender();
+      } catch (e) { toast('Không tải được danh sách phản hồi.'); }
+    },
+    async delSurvey(b) {
+      const slug = b.dataset.id;
+      if (armedDeleteSlug !== slug) {
+        armedDeleteSlug = slug; rerender();
+        setTimeout(() => { if (armedDeleteSlug === slug) { armedDeleteSlug = ''; if (inApp && tab === 'pitching') rerender(); } }, 4000);
+        return;
+      }
+      armedDeleteSlug = '';
+      try {
+        const res = await fetch('/api/v1/pitching/surveys/' + encodeURIComponent(slug), { method: 'DELETE' });
+        if (!res.ok && res.status !== 204) throw new Error('HTTP ' + res.status);
+        if (Array.isArray(surveysCache)) surveysCache = surveysCache.filter(x => x.slug !== slug);
+        if (activeSurveyDetail && activeSurveyDetail.slug === slug) activeSurveyDetail = null;
+        if (S.pitch.publishedSlug === slug) { S.pitch.publishedSlug = ''; save('pitch'); }
+        rerender(); toast('Đã xóa link khảo sát');
+      } catch (e) { toast('Không xóa được link khảo sát.'); }
+    },
     reset(b) {
       if (Date.now() - resetArmed > 4000) { resetArmed = Date.now(); b.textContent = db ? 'Bấm lần nữa: đặt lại cho cả đội' : 'Bấm lần nữa để đặt lại'; setTimeout(() => { b.textContent = 'Đặt lại demo'; }, 4000); return; }
       S = SEED(); resetArmed = 0; b.textContent = 'Đặt lại demo';
@@ -669,7 +855,7 @@
       const texts = ['Sợ trả lời sai chính sách', 'Ngại cài đặt phức tạp', 'Giá phải rẻ', 'Lo lộ thông tin khách', 'Chưa tin AI viết tự nhiên'];
       for (let i = 0; i < 8; i++) {
         const n = S.pitch.responses.length;
-        S.pitch.responses.push({ sample: true, answers: Object.fromEntries(S.pitch.form.map((q, k) => [q.id, q.type === 'scale' ? String(2 + ((n * 7 + k * 3) % 4)) : q.type === 'choice' ? q.options[(n * n + k) % q.options.length] : texts[(n + k) % texts.length]])) });
+        S.pitch.responses.push({ sample: true, answers: Object.fromEntries(S.pitch.form.map((q, k) => [q.id, q.type === 'scale' ? String(2 + ((n * 7 + k * 3) % 4)) : q.type === 'multi' && q.options.length > 1 ? [q.options[(n + k) % q.options.length], q.options[(n + k + 1) % q.options.length]] : q.type === 'choice' ? q.options[(n * n + k) % q.options.length] : texts[(n + k) % texts.length]])) });
       }
       S.pitch.responses = S.pitch.responses.slice(-200); S.pitch.overview = ''; save('pitch'); rerender();
       anim($$('.grow', view), { scaleX: [0, 1] }, { duration: 0.8, ease: EASE, delay: canAnim ? M.stagger(0.04) : 0 });
@@ -754,6 +940,23 @@
       anim($$('.grow', view), { scaleX: [0, 1] }, { duration: 0.8, ease: EASE });
     }
   });
+  function bindPitchText(t, rerenderChips) {
+    const k = t.dataset.bind, id = t.dataset.id, v = t.value;
+    if (k === 'targetRole') { S.pitch.targetRole = v; save('pitch'); return true; }
+    if (k === 'formTitle') { S.pitch.formTitle = v; save('pitch'); return true; }
+    if (k === 'formDesc') { S.pitch.formDesc = v; save('pitch'); return true; }
+    if (k === 'formQ') { if (S.pitch.form && S.pitch.form[+id]) { S.pitch.form[+id].q = v; save('pitch'); } return true; }
+    if (k === 'qOpts') {
+      const q = S.pitch.form && S.pitch.form[+id];
+      if (q) { q.options = v.split('\n').map(x => x.trim()).filter(Boolean); save('pitch'); if (rerenderChips) rerender(); }
+      return true;
+    }
+    return false;
+  }
+  document.addEventListener('input', e => {
+    const t = e.target;
+    if (t && t.dataset && t.dataset.bind) bindPitchText(t, false);
+  });
   document.addEventListener('change', e => {
     const t = e.target, k = t.dataset.bind, id = t.dataset.id;
     if (t.id === 'projectName') { S.meta.name = t.value.trim() || 'Dự án chưa đặt tên'; save('meta'); return; }
@@ -767,6 +970,17 @@
     if (k === 'cost') { S.plan.cost[id] = Math.max(0, +v || 0); save('plan'); $('#kpis').innerHTML = kpis(); anim($$('#kpis b'), { opacity: [0.2, 1], y: [6, 0] }, { duration: 0.4 }); }
     if (k === 'owner' || k === 'status') { moveTasks(() => { const x = S.tasks.list.find(x => x.id === id); if (x) x[k] = v; }); save('tasks'); }
     if (k === 'mowner') { const x = S.maintain.schedule.find(x => x.id === id); if (x) x.owner = v; save('maintain'); }
+    if (bindPitchText(t, true)) return;
+    if (k === 'qType') {
+      const q = S.pitch.form && S.pitch.form[+id];
+      if (q) {
+        q.type = v;
+        if (['choice', 'multi'].includes(v) && (!q.options || q.options.length < 2)) q.options = ['Phương án 1', 'Phương án 2', 'Phương án 3'];
+        if (!['choice', 'multi'].includes(v)) q.options = [];
+        save('pitch'); rerender();
+      }
+    }
+    if (k === 'qReq') { const q = S.pitch.form && S.pitch.form[+id]; if (q) { q.required = t.checked; save('pitch'); } }
   });
   document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDrawer(); });
   mobile.addEventListener('change', () => { if (inApp) { render(); layout(false); syncProgress(); } });

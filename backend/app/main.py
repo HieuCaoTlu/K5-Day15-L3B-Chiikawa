@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import admin, agent, health, items
+from app.api import admin, agent, health, items, pitching
 from app.config import get_settings
 from app.db import init_db, session_scope
 from app.seed import seed
@@ -58,6 +58,7 @@ def create_app() -> FastAPI:
     app.include_router(items.router, prefix="/api/v1")
     app.include_router(agent.router, prefix="/api/v1")
     app.include_router(admin.router, prefix="/api/v1")
+    app.include_router(pitching.router, prefix="/api/v1")
     return app
 
 

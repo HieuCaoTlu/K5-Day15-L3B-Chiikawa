@@ -51,6 +51,59 @@ export type ChatSession = {
   last_request: string | null; tokens: number; cost_usd: number;
 };
 
+export type ProblemContext = {
+  project_name: string;
+  target_role: string;
+  persona: string;
+  problem: string;
+  leverage: string;
+  scope: string;
+  metric: string;
+  overview: string;
+};
+
+export type SurveyQuestionType = 'scale' | 'choice' | 'multi' | 'text';
+
+export type SurveyQuestion = {
+  id: string;
+  type: SurveyQuestionType;
+  q: string;
+  options: string[];
+  required: boolean;
+};
+
+export type SurveyDraft = {
+  title: string;
+  description: string;
+  target_role: string;
+  questions: SurveyQuestion[];
+  source: 'llm' | 'fallback';
+};
+
+export type Survey = {
+  id: string;
+  slug: string;
+  project_name: string;
+  target_role: string;
+  problem_context: Record<string, string>;
+  title: string;
+  description: string;
+  questions: SurveyQuestion[];
+  published: boolean;
+  response_count: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type SurveyResponseItem = {
+  id: number;
+  survey_id: string;
+  respondent_role: string;
+  answers: Record<string, string | string[]>;
+  is_sample: boolean;
+  created_at: string;
+};
+
 async function request<T>(path: string, init?: RequestInit & { signal?: AbortSignal }): Promise<T> {
   const res = await fetch(path, { ...init, headers: { 'Content-Type': 'application/json', ...init?.headers } });
   if (!res.ok) {
@@ -76,4 +129,14 @@ export const api = {
   runs: (status?: RunStatus) => request<Run[]>(`/api/v1/agent/runs${status ? `?status=${status}` : ''}`),
   review: (id: string, approved: boolean, note = '') =>
     request<Run>(`/api/v1/agent/runs/${id}/review`, { method: 'POST', body: JSON.stringify({ approved, note }) }),
+  generateSurvey: (ctx: ProblemContext) =>
+    request<SurveyDraft>('/api/v1/pitching/surveys/generate', { method: 'POST', body: JSON.stringify(ctx) }),
+  publishSurvey: (body: { project_name: string; target_role: string; problem_context: ProblemContext; title: string; description: string; questions: SurveyQuestion[] }) =>
+    request<Survey>('/api/v1/pitching/surveys', { method: 'POST', body: JSON.stringify(body) }),
+  surveys: () => request<Survey[]>('/api/v1/pitching/surveys'),
+  survey: (slug: string) => request<Survey>(`/api/v1/pitching/surveys/${encodeURIComponent(slug)}`),
+  deleteSurvey: (slug: string) => request<void>(`/api/v1/pitching/surveys/${encodeURIComponent(slug)}`, { method: 'DELETE' }),
+  submitSurveyResponse: (slug: string, body: { respondent_role?: string; answers: Record<string, string | string[]>; is_sample?: boolean }) =>
+    request<SurveyResponseItem>(`/api/v1/pitching/surveys/${encodeURIComponent(slug)}/responses`, { method: 'POST', body: JSON.stringify(body) }),
+  surveyResponses: (slug: string) => request<SurveyResponseItem[]>(`/api/v1/pitching/surveys/${encodeURIComponent(slug)}/responses`),
 };
