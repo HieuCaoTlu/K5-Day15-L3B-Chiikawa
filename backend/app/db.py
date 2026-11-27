@@ -51,6 +51,7 @@ def reset_engine() -> None:
 
 def init_db() -> None:
     from app import models  # noqa: F401 — đăng ký model vào Base.metadata
+    from app.planning import models as planning_models  # noqa: F401
 
     Base.metadata.create_all(get_engine())
 

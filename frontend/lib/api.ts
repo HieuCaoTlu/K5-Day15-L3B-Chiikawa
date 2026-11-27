@@ -193,7 +193,7 @@ export type PitchOverview = {
   source: 'llm' | 'fallback';
 };
 
-async function request<T>(path: string, init?: RequestInit & { signal?: AbortSignal }): Promise<T> {
+export async function request<T>(path: string, init?: RequestInit & { signal?: AbortSignal }): Promise<T> {
   const res = await fetch(path, { ...init, headers: { 'Content-Type': 'application/json', ...init?.headers } });
   if (!res.ok) {
     const body = await res.json().catch(() => null);

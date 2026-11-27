@@ -9,6 +9,7 @@ os.environ.update(
     DEMO_MODE="false",
     MOCK_NODES="",
     SEED_ON_START="true",
+    PLANNING_PUSH_AUTO="false",
 )
 
 import pytest  # noqa: E402

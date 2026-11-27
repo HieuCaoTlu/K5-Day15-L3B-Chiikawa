@@ -4,6 +4,7 @@ import logging
 from uuid import uuid4
 
 from langgraph.types import Command
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.agent.graph import get_graph
@@ -47,11 +48,25 @@ def _invoke(session: Session, run: AgentRun, payload) -> AgentRun:
     return _sync(session, run)
 
 
+def _previous_canvas(session: Session, session_id: str | None) -> dict:
+    """Canvas của lượt gần nhất trong cùng phiên chat: mỗi tin nhắn là một lượt, canvas nối tiếp qua các lượt."""
+    if not session_id:
+        return {}
+    rows = session.scalars(
+        select(AgentRun).where(AgentRun.session_id == session_id).order_by(AgentRun.created_at.desc()).limit(10)
+    ).all()
+    for row in rows:
+        if row.proposal and row.proposal.get("canvas"):
+            return {"canvas": row.proposal["canvas"], "flags": row.proposal.get("flags") or {}}
+    return {}
+
+
 def start_run(session: Session, request: str, session_id: str | None = None) -> AgentRun:
+    carried = _previous_canvas(session, session_id)
     run = AgentRun(id=uuid4().hex, session_id=session_id, request=request, status="running")
     session.add(run)
     session.commit()
-    return _invoke(session, run, {"request": request})
+    return _invoke(session, run, {"request": request, **carried})
 
 
 def review_run(session: Session, run: AgentRun, review: ReviewIn) -> AgentRun:

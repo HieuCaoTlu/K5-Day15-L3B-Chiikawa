@@ -1,0 +1,184 @@
+{
+  "node": "ask_next",
+  "description": "Còn ô lõi chưa có chuyện thật → hỏi đúng 1 câu vào ô thiếu tiếp theo, kèm NOT YET. Code thuần. Lượt kết thúc, chờ tin nhắn sau.",
+  "input": {
+    "canvas": {
+      "persona": {
+        "content": "",
+        "who": "",
+        "when": "",
+        "quote": "",
+        "grounded": false,
+        "status": "empty"
+      },
+      "jtbd": {
+        "content": "",
+        "who": "",
+        "when": "",
+        "quote": "",
+        "grounded": false,
+        "status": "empty"
+      },
+      "pain_point": {
+        "content": "",
+        "who": "",
+        "when": "",
+        "quote": "",
+        "grounded": false,
+        "status": "empty"
+      },
+      "current_workaround": {
+        "content": "",
+        "who": "",
+        "when": "",
+        "quote": "",
+        "grounded": false,
+        "status": "empty"
+      },
+      "solution": {
+        "content": "Chatbot hỗ trợ khách hàng cho shop online",
+        "who": "",
+        "when": "",
+        "quote": "",
+        "grounded": false,
+        "status": "assumption"
+      },
+      "ai_leverage": {
+        "content": "",
+        "who": "",
+        "when": "",
+        "quote": "",
+        "grounded": false,
+        "status": "empty"
+      },
+      "mvp_scope": {
+        "content": "",
+        "who": "",
+        "when": "",
+        "quote": "",
+        "grounded": false,
+        "status": "empty"
+      },
+      "metrics": {
+        "content": "",
+        "who": "",
+        "when": "",
+        "quote": "",
+        "grounded": false,
+        "status": "empty"
+      },
+      "prior_art": {
+        "content": "",
+        "who": "",
+        "when": "",
+        "quote": "",
+        "grounded": false,
+        "status": "empty"
+      }
+    },
+    "flags": {},
+    "intent": "answer"
+  },
+  "output": {
+    "proposal": {
+      "verdict": "NOT YET",
+      "reply": "Một người cụ thể sẽ dùng thứ này là ai? Cho mình tên hoặc vai của họ và một lần gần nhất họ gặp vấn đề.",
+      "next_cell": "persona",
+      "reasons": [
+        "Persona còn trống",
+        "Pain Point còn trống",
+        "Current Workaround còn trống",
+        "Job-to-be-done còn trống"
+      ],
+      "canvas": {
+        "persona": {
+          "content": "",
+          "who": "",
+          "when": "",
+          "quote": "",
+          "grounded": false,
+          "status": "empty"
+        },
+        "jtbd": {
+          "content": "",
+          "who": "",
+          "when": "",
+          "quote": "",
+          "grounded": false,
+          "status": "empty"
+        },
+        "pain_point": {
+          "content": "",
+          "who": "",
+          "when": "",
+          "quote": "",
+          "grounded": false,
+          "status": "empty"
+        },
+        "current_workaround": {
+          "content": "",
+          "who": "",
+          "when": "",
+          "quote": "",
+          "grounded": false,
+          "status": "empty"
+        },
+        "solution": {
+          "content": "Chatbot hỗ trợ khách hàng cho shop online",
+          "who": "",
+          "when": "",
+          "quote": "",
+          "grounded": false,
+          "status": "assumption"
+        },
+        "ai_leverage": {
+          "content": "",
+          "who": "",
+          "when": "",
+          "quote": "",
+          "grounded": false,
+          "status": "empty"
+        },
+        "mvp_scope": {
+          "content": "",
+          "who": "",
+          "when": "",
+          "quote": "",
+          "grounded": false,
+          "status": "empty"
+        },
+        "metrics": {
+          "content": "",
+          "who": "",
+          "when": "",
+          "quote": "",
+          "grounded": false,
+          "status": "empty"
+        },
+        "prior_art": {
+          "content": "",
+          "who": "",
+          "when": "",
+          "quote": "",
+          "grounded": false,
+          "status": "empty"
+        }
+      },
+      "flags": {},
+      "title": "NOT YET: còn thiếu bằng chứng",
+      "summary": "Một người cụ thể sẽ dùng thứ này là ai? Cho mình tên hoặc vai của họ và một lần gần nhất họ gặp vấn đề.",
+      "steps": [
+        "Persona còn trống",
+        "Pain Point còn trống",
+        "Current Workaround còn trống",
+        "Job-to-be-done còn trống"
+      ],
+      "confidence": 0.0
+    },
+    "result": {
+      "status": "needs_info",
+      "verdict": "NOT YET",
+      "next_cell": "persona"
+    }
+  }
+}
