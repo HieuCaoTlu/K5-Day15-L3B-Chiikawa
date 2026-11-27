@@ -44,7 +44,7 @@ Gradient Gemini (`#2c6ab0 → #7b6fd6 → #d96570`) **chỉ** dùng trong khung 
 |---|---|---|---|
 | Mọi chữ | Familjen Grotesk | body 18px / 400 | mặc định |
 | Chữ thương hiệu trang trí (mặc định không dùng) | Instrument Serif, **không nghiêng** | `clamp(72px, 13vw, 200px)`, leading .82 | `font-serif` + `aria-hidden` |
-| Hero landing | Grotesk | `clamp(44px, 6.4vw, 96px)` / 400 / tracking -0.04em | xem `app/page.tsx` |
+| Hero landing | Grotesk | `clamp(44px, 6.4vw, 96px)` / 400 / tracking -0.04em | `.word-mask > .word-up` |
 | Tiêu đề section landing | Grotesk | `clamp(32px, 3.6vw, 54px)` / 400 | `.h2` |
 | Tiêu đề trang ứng dụng | Grotesk | 34px / 400 / -0.02em | `.d-h1` |
 | Tiêu đề thẻ | Grotesk | `text-lg` (20px) / 400 | `text-lg` |

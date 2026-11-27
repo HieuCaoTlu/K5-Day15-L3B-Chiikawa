@@ -55,7 +55,7 @@ export function Shell({ title, actions, children }: { title: string; actions?: R
         ))}
         <div className="mt-auto flex flex-col gap-0.5 border-t border-line-soft pt-3.5">
           <Link href="/chat" className="d-nav"><Icon name="chat" />Mở khung chat</Link>
-          <Link href="/" className="d-nav"><Icon name="home" />Trang giới thiệu</Link>
+          <a href="/" className="d-nav"><Icon name="home" />Trang giới thiệu</a>
         </div>
       </aside>
       <main className="d-main">

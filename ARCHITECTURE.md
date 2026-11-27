@@ -6,7 +6,7 @@
 Trình duyệt
    │ HTTPS (Caddy tự cấp chứng chỉ)
    ▼
-web — Caddy ─┬─ /, /chat, /admin/*        → HTML tĩnh Next.js (build sẵn trong image, VPS không chạy Node)
+web — Caddy ─┬─ /, /chat, /admin/*        → file tĩnh từ frontend (build sẵn trong image, VPS không chạy Node)
              └─ /api/*, /health, /docs    → backend:8000
                                               │
 backend — FastAPI ── LangGraph agent ── Gemini (Flash / Pro) qua agent/llm.py
@@ -65,8 +65,9 @@ Tạo bảng bằng `create_all` khi khởi động (không Alembic). Đổi c�
 
 ## Frontend
 
-- Next.js App Router, **xuất HTML tĩnh** (`output: 'export'`): mọi trang là client component gọi API cùng domain.
+- Next.js App Router, **xuất HTML tĩnh** (`output: 'export'`): chat và admin gọi API cùng domain từ trình duyệt.
   Không dùng Server Actions / route handler / SSR động.
+- `/` phục vụ `frontend/public/index.html`, trang giới thiệu và workstation Tầng. CSS và JavaScript nằm trong `frontend/public/tang/`.
 - Dev: `npm run dev` chuyển `/api`, `/health`, `/docs` sang `API_URL` (mặc định `127.0.0.1:8000`).
 - Trang: `/` landing · `/chat` khung chat nối agent · `/admin` tổng quan · `/admin/usage` chi phí & token ·
   `/admin/sessions` phiên chat · `/admin/review` hàng chờ duyệt · `/admin/runs` lượt chạy · `/admin/items` CRUD mẫu.
