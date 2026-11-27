@@ -56,10 +56,15 @@
 #landing.xmas .orbit-agent h3,#landing.xmas .orbit-agent p{grid-column:2}
 #landing.xmas .orbit-core{background:var(--pine);outline-color:#dcefe4}
 
-#landing.xmas .art-cta{width:min(440px,100%);margin:0 auto 24px}
+#landing.xmas .art-cta{width:min(560px,100%);margin:0 auto 32px}
 
-/* Bốn bạn ngồi cạnh tòa nhà ở hero */
-#landing.xmas .art-hero{position:absolute;z-index:2;right:14px;bottom:0;width:clamp(230px,21vw,340px)}
+/* Bữa tối Giáng Sinh nằm ở khoảng trống dưới hai nút của hero, không che tòa nhà */
+#landing.xmas .art-hero{position:absolute;z-index:2;left:var(--pad);bottom:6px;height:clamp(130px,calc(54% - 205px),300px);width:auto;max-width:min(520px,40vw);object-fit:contain;object-position:left bottom}
+
+/* Cuối trang: bốn bạn xếp một hàng ngay ngắn, đều ô, cùng đứng trên một vạch */
+#landing.xmas .art-line{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));align-items:end;gap:18px;border-bottom:3px solid #c9d8ee}
+#landing.xmas .art-line img{width:100%}
+#landing.xmas .art-line img+img{margin-left:0}
 
 /* Mỗi vai có một bạn ló đầu trên mép card, bay cùng card */
 #landing.xmas .art-member{position:absolute;right:18px;bottom:100%;width:96px;max-height:78px;object-fit:contain;object-position:bottom}
@@ -81,7 +86,7 @@
 @media (max-width:820px){
   #landing.xmas #features .card{grid-template-columns:minmax(0,1fr);grid-template-rows:none}
   #landing.xmas .art-card{grid-column:1;grid-row:1;justify-self:start;width:132px;max-height:132px}
-  #landing.xmas .art-hero{position:relative;right:auto;bottom:auto;order:2;width:min(300px,82%);margin:-16px auto 12px}
+  #landing.xmas .art-hero{position:relative;left:auto;bottom:auto;order:2;height:auto;width:min(340px,92%);max-width:none;margin:-16px auto 12px}
   #landing.xmas .art-peek{right:8px;width:128px}
 }
 @media (max-width:560px){
@@ -96,3 +101,4 @@
   #landing.xmas .art-card{transition:none}
   #landing.xmas #features .card:hover .art-card{transform:none}
 }
+@media (max-width:560px){#landing.xmas .art-line{gap:8px}}

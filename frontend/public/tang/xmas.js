@@ -11,12 +11,13 @@
   const calm = matchMedia('(prefers-reduced-motion: reduce)');
 
   // Bốn bạn lông xù tượng trưng cho bốn thành viên trong đội
-  const FRIENDS = ['purple', 'green', 'pink', 'yellow'];
+  // Thứ tự theo vai: Product owner, AI engineer, Full-stack, UX và pitching
+  const FRIENDS = ['purple', 'green', 'yellow', 'pink'];
   const SWEETS = ['cupcake', 'donut', 'slice', 'shortcake', 'donut-soft'];
 
   // [nơi gắn, các ảnh, kiểu]. Nhiều ảnh thì gom thành một nhóm đứng cạnh nhau.
   const ART = [
-    ['.hero', FRIENDS, 'art-crew art-hero'],
+    ['.hero', ['dinner'], 'art-hero'],
     ['#features .card:nth-child(1)', ['cupcake'], 'art-card'],
     ['#features .card:nth-child(2)', ['donut'], 'art-card'],
     ['#features .card:nth-child(3)', ['slice'], 'art-card'],
@@ -27,7 +28,7 @@
     ['#roles .o3', ['yellow'], 'art-member'],
     ['#roles .o4', ['pink'], 'art-member'],
     ['#roles .orbit-agent', ['donut-soft'], 'art-agent'],
-    ['.cta .wrap', FRIENDS, 'art-crew art-cta']
+    ['.cta .wrap', FRIENDS, 'art-crew art-line art-cta']
   ];
 
   function picture(name) {
