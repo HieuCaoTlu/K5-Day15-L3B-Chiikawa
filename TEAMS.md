@@ -6,7 +6,7 @@
 
 - Tên nhóm: Chiikawa
 - Lớp: L3B
-- Track: F
+- Track: A
 - Link repo: https://github.com/HieuCaoTlu/K5-Day15-L3B-Chiikawa
 
 | STT | Họ và tên          | Mã học viên | Vai trò    | Phần việc chính                                                                                               |
