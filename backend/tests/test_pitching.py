@@ -294,6 +294,7 @@ def test_pitch_deck_overview_and_ads_flow(client):
     assert len(assets["ads"]) == 1
     assert assets["ads"][0]["placeholders"]
     assert assets["ads"][0]["body"]
+    assert "[Tên sản phẩm]" not in assets["ads"][0]["body"]
     assert assets["script"] == ""
 
     pub = client.post(

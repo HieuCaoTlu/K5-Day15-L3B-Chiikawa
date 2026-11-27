@@ -84,6 +84,85 @@ class BoardInput(Input):
     revenue: str = Field(max_length=1000)
 
 
+ItemId = Annotated[str, StringConstraints(pattern=r"^[A-Za-z0-9_-]{1,40}$")]
+Measure = Annotated[float, Field(ge=-1e12, le=1e12, allow_inf_nan=False)]
+Count = Annotated[int, Field(ge=0, le=1_000_000_000)]
+
+
+class Metric(Input):
+    id: ItemId
+    name: str = Field(max_length=60)
+    baseline: Measure | None = None
+    target: Measure
+    unit: str = Field(max_length=12)
+    direction: Literal["up", "down"]
+    kind: Literal["value", "ai", "feasibility"]
+    method: str = Field(default="", max_length=200)
+    rule: str = Field(default="", max_length=200)
+    origin: Literal["agent", "tu", "tay"] = Field(default="tay", alias="from")
+
+
+class QualityRun(Input):
+    id: ItemId
+    at: str = Field(pattern=r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$")
+    model: str = Field(min_length=1, max_length=80)
+    values: dict[ItemId, Measure] = Field(max_length=20)
+    passed: Count | None = None
+    total: Count | None = None
+    estTok: Count | None = None  # noqa: N815
+    actTok: Count | None = None  # noqa: N815
+    note: str = Field(default="", max_length=300)
+
+    @model_validator(mode="after")
+    def passed_within_total(self):
+        if self.passed is not None and self.total is not None and self.passed > self.total:
+            raise ValueError("Số test pass không được lớn hơn tổng số test.")
+        return self
+
+
+class QualityCost(Input):
+    pricePerM: Amount | None = None  # noqa: N815
+    apiCalls: Amount | None = None  # noqa: N815
+    infra: Amount | None = None
+    price: Amount | None = None
+    teams: Amount | None = None
+    pricePerCall: Amount | None = None  # noqa: N815
+    setupFee: Amount | None = None  # noqa: N815
+    newCustomers: Amount | None = None  # noqa: N815
+
+
+class QualityInput(Input):
+    version: int = Field(ge=0)
+    metrics: list[Metric] = Field(max_length=20)
+    runs: list[QualityRun] = Field(max_length=200)
+    source: str = Field(max_length=2000)
+    nature: Literal["behavior", "productivity", "other"]
+    revenueModel: Literal["sub", "usage", "setup"]  # noqa: N815
+    cost: QualityCost
+
+
+class MaintenanceJob(Input):
+    id: ItemId
+    title: str = Field(min_length=1, max_length=120)
+    every: int = Field(ge=1, le=365)
+    next: date
+    owner: str = Field(default="", max_length=48)
+    runs: Count = 0
+
+
+class MaintenanceSuggestion(Input):
+    id: ItemId
+    title: str = Field(min_length=1, max_length=120)
+    every: int = Field(ge=1, le=365)
+    why: str = Field(max_length=240)
+
+
+class MaintainInput(Input):
+    version: int = Field(ge=0)
+    schedule: list[MaintenanceJob] = Field(max_length=100)
+    suggest: list[MaintenanceSuggestion] = Field(max_length=10)
+
+
 class RepoVersion(Input):
     repo_version: int = Field(ge=0)
 

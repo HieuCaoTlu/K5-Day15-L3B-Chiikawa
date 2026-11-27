@@ -3,7 +3,10 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+PitchSlideLayout = Literal["auto", "hero", "split", "cards", "compare", "metric", "steps"]
+_SLIDE_LAYOUTS = {"auto", "hero", "split", "cards", "compare", "metric", "steps"}
 
 
 class ItemIn(BaseModel):
@@ -178,6 +181,13 @@ class PitchSlide(BaseModel):
     title: str = Field(min_length=1, max_length=160)
     body: str = Field(min_length=1, max_length=800)
     highlight: str = Field(default="", max_length=140)
+    layout: PitchSlideLayout = "auto"
+
+    @field_validator("layout", mode="before")
+    @classmethod
+    def _clean_layout(cls, val: object) -> str:
+        s = str(val or "auto").strip().lower()
+        return s if s in _SLIDE_LAYOUTS else "auto"
 
 
 class PitchAdPost(BaseModel):

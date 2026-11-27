@@ -147,6 +147,7 @@ export type PitchSlide = {
   title: string;
   body: string;
   highlight: string;
+  layout?: string;
 };
 
 export type PitchAdPost = {

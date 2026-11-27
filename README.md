@@ -109,6 +109,8 @@ Chốt trước khi code, sửa ở đây khi đổi (FE đọc chi tiết ở `
 | POST | `/api/v1/planning/auth/demo` · `/api/v1/planning/auth/logout` | — | Tạo phiên demo hoặc kết thúc phiên (204) |
 | PUT | `/api/v1/planning/members` | `{members:[{github_id?,login,name,experience,tags,avatar}]}` | Lưu đội (204) |
 | PUT | `/api/v1/planning/board` | `{version,overview,stories,roles,links,stack,cost,revenue}` | Lưu nội dung tab (204); trưởng nhóm; 409 nếu `version` cũ. `GET /state` trả `board` và `invite_code` (chỉ trưởng nhóm) |
+| PUT | `/api/v1/planning/quality` | `{version,metrics,runs,source,nature,revenueModel,cost}` | Lưu tab Quality (204); mọi thành viên; 409 nếu `version` cũ. `GET /state` trả `quality` (`null` khi chưa vào đội; đội mới thì trống) |
+| PUT | `/api/v1/planning/maintain` | `{version,schedule,suggest}` | Lưu tab Maintaining (204); mọi thành viên; 409 nếu `version` cũ; người làm không thuộc đội thành chưa giao. `GET /state` trả `maintain` |
 | POST / DELETE | `/api/v1/planning/invite` | — | Tạo hoặc đổi mã, tắt mã (204); trưởng nhóm |
 | POST | `/api/v1/planning/join` | `{code,name,experience,tags,avatar}` | Vào đội (204); 404 sai mã, 409 đã có đội hoặc đội đủ 16 người, 429 sai 10 lần/10 phút |
 | DELETE | `/api/v1/planning/members/{github_id}` | — | Xóa thành viên (204); 409 nếu là trưởng nhóm hoặc còn task |
@@ -163,6 +165,7 @@ Các yêu cầu ghi Planning từ trình duyệt gửi header `X-Planning-Reques
 | `planning_pull_requests`, `planning_deliveries` | Metadata PR, liên kết task, ghi chú và mã lượt gửi webhook |
 | `planning_subscriptions` | Đăng ký Web Push của trình duyệt theo phiên |
 | `planning_boards` | Nội dung tab Planning (JSON) và phiên bản của từng đội |
+| `planning_workspaces` | Dữ liệu tab Quality và Maintaining của từng đội (mỗi phần một dòng JSON và phiên bản) |
 | `planning_logs` | Nhật ký task đổi tiến độ do pull request; `GET /state` trả `log` |
 | `planning_invites`, `planning_join_attempts` | Mã mời của đội, số lần nhập sai theo tài khoản |
 | `planning_github_app`, `planning_setup_states` | GitHub App tạo từ manifest (bí mật đã mã hóa), lượt tạo kết nối đang chờ |

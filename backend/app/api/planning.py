@@ -8,7 +8,20 @@ from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.db import get_session
-from app.planning import auth, board, github, github_app, invites, push, repos, setup, start_pr, webhooks, work
+from app.planning import (
+    auth,
+    board,
+    github,
+    github_app,
+    invites,
+    push,
+    repos,
+    setup,
+    start_pr,
+    webhooks,
+    work,
+    workspace,
+)
 from app.planning.access import team_for
 from app.planning.models import (
     PlanningLog,
@@ -26,6 +39,7 @@ for child in (
     auth.router,
     setup.router,
     board.router,
+    workspace.router,
     invites.router,
     start_pr.router,
     repos.router,
@@ -149,6 +163,8 @@ def read_state(request: Request, response: Response, db: Session = Depends(get_s
         "push_registered": False,
         "board": None,
         "invite_code": None,
+        "quality": None,
+        "maintain": None,
         "log": [],
     }
     session = auth.session_for(request, db)
@@ -168,6 +184,7 @@ def read_state(request: Request, response: Response, db: Session = Depends(get_s
     state["role"] = "leader" if member.leader else "member"
     state["board"] = board.board_state(db, team.id)
     state["log"] = _log(db, team.id)
+    state.update(workspace.workspace_state(db, team.id))
     if member.leader:
         state["invite_code"] = invites.invite_code(db, team.id)
     state["repo_version"] = team.repo_version

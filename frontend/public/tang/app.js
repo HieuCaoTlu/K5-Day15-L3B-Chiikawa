@@ -1,6 +1,6 @@
 /* Ứng dụng: điều hướng, bốn bước, agent, dữ liệu dùng chung và chuyển động. */
 (function () {
-  const { STEPS, FLOORS, CANVAS, CANVAS_TO_SCORE, SCORE, ROLES, STATUS, SAMPLE_SCORE, SEED, AGENT, inDays, iso } = window.DATA;
+  const { STEPS, FLOORS, CANVAS, CANVAS_TO_SCORE, SCORE, ROLES, STATUS, SAMPLE_SCORE, EMPTY, SEED, AGENT, inDays, iso } = window.DATA;
   const { RULES, PROFIT, NAMES: HNAMES, LEVELS } = window.HEALTH;
   const $ = (s, p = document) => p.querySelector(s);
   const $$ = (s, p = document) => [...p.querySelectorAll(s)];
@@ -20,52 +20,53 @@
   const wait = ms => new Promise(r => setTimeout(r, ms));
 
   /* ---------- Dữ liệu ---------- */
-  const KEY = 'tang-demo-v3';
-  let S = SEED();
-  const local = { me: 'minh', model: 'house', collapsed: false, chartMode: 'pie' };
+  /* Chế độ xem mock đầy đủ: /workstation?demo=full. Dữ liệu mẫu trong bộ nhớ, không đọc hay ghi trình duyệt. */
+  const mockMode = new URLSearchParams(location.search).get('demo') === 'full';
+  const BLANK = mockMode ? SEED : EMPTY;
+  const KEY = 'tang-v4';
+  const SERVER = ['quality', 'maintain']; // hai phần này đọc và ghi trên server theo đội
+  let S = BLANK();
+  const local = { me: mockMode ? 'minh' : '', model: 'house', collapsed: false, chartMode: 'pie' };
   let surveysCache = null, surveysLoading = false, surveysError = '', activeSurveyDetail = null, armedDeleteSlug = '';
   let dashStats = null, dashLoading = false, dashSlugSelected = '', lastDashJson = '', dashPollStarted = false;
   let editSurveyTarget = null, sideMode = '', sideSlug = '', sideTab = 'edit', selectedSurveySlug = '', deckSurveySlug = '', lastSavedSlug = '';
   let collapsedSecs = new Set(), activeSlideIdx = 0;
-  try {
-    const raw = JSON.parse(localStorage.getItem(KEY) || localStorage.getItem('tang-demo-v2') || 'null');
-    if (raw && raw.S) Object.assign(S, raw.S);
-    if (raw && raw.local) Object.assign(local, raw.local);
-    if (!localStorage.getItem(KEY)) {
-      S.pitch.deck = null;
-      S.pitch.deckShown = false;
-    }
-  } catch (e) { /* bộ nhớ trình duyệt không dùng được */ }
-  function migrate() {
-    const seed = SEED();
-    if (!S.plan || typeof S.plan !== 'object') S.plan = seed.plan;
-    if (!S.plan.cost || typeof S.plan.cost !== 'object') S.plan.cost = seed.plan.cost;
-    Object.entries(seed.plan.cost).forEach(([k, v]) => {
-      if (S.plan.cost[k] === undefined || S.plan.cost[k] === null) S.plan.cost[k] = v;
-    });
-    if (!S.quality || typeof S.quality !== 'object') S.quality = seed.quality;
-    if (!['sub', 'usage', 'setup'].includes(S.quality.revenueModel)) S.quality.revenueModel = seed.quality.revenueModel;
-    if (!Array.isArray(S.quality.runs)) S.quality.runs = seed.quality.runs;
-    S.quality.runs = S.quality.runs.filter(r => r && typeof r === 'object');
-    S.quality.runs.forEach((r, i) => {
-      if (!r.values || typeof r.values !== 'object') r.values = {};
-      if (r.id === undefined || r.id === null) r.id = 'r' + Date.now().toString(36) + i;
-      if (('inTok' in r || 'outTok' in r) && (r.actTok === undefined || r.actTok === null)) {
-        r.actTok = (+r.inTok || 0) + (+r.outTok || 0);
-        if (r.estTok === undefined) r.estTok = null;
+  /* Bản lưu của giao diện cũ trộn dữ liệu mẫu với phần đội tự nhập: chỉ giữ phần khác mẫu. Khóa cũ vẫn còn nguyên. */
+  function fromLegacy(old) {
+    const seed = SEED(), same = (a, b) => JSON.stringify(a) === JSON.stringify(b), out = {};
+    if (old.done) out.done = old.done;
+    if (old.meta && old.meta.name !== seed.meta.name) out.meta = { name: old.meta.name, members: [] };
+    if (old.score) out.score = Object.assign(EMPTY().score, Object.fromEntries(Object.entries(old.score).filter(([k, v]) => v && v.text !== (SAMPLE_SCORE[k] || [])[0])));
+    if (Array.isArray(old.chat)) out.chat = old.chat.filter(m => !seed.chat.some(x => same(x, m)));
+    if (old.pitch) out.pitch = Object.assign(EMPTY().pitch, Object.fromEntries(Object.entries(old.pitch).filter(([k, v]) => !same(v, seed.pitch[k]))), { deck: null, deckShown: false });
+    return out;
+  }
+  if (!mockMode) {
+    try {
+      let raw = JSON.parse(localStorage.getItem(KEY) || 'null');
+      if (!raw) {
+        const old = JSON.parse(localStorage.getItem('tang-demo-v3') || localStorage.getItem('tang-demo-v2') || 'null');
+        if (old) raw = { S: old.S && fromLegacy(old.S), local: Object.assign({}, old.local, { me: '' }) };
       }
-      delete r.inTok;
-      delete r.outTok;
-    });
-    if (!S.maintain || typeof S.maintain !== 'object') S.maintain = seed.maintain;
-    if (!Array.isArray(S.maintain.suggest)) S.maintain.suggest = seed.maintain.suggest;
-    if (!Array.isArray(S.maintain.schedule)) S.maintain.schedule = seed.maintain.schedule;
+      if (raw && raw.S) ['meta', 'done', 'score', 'chat', 'plan', 'tasks', 'pitch'].forEach(k => { if (raw.S[k]) S[k] = raw.S[k]; });
+      if (raw && raw.local) Object.assign(local, raw.local);
+    } catch (e) { /* bộ nhớ trình duyệt không dùng được */ }
+  }
+  /* Bổ sung các trường còn thiếu của dữ liệu đọc từ trình duyệt hoặc server. */
+  function migrate() {
+    const blank = EMPTY();
+    ['meta', 'plan', 'tasks', 'pitch', 'quality', 'maintain'].forEach(k => { S[k] = Object.assign(blank[k], S[k]); });
+    S.meta.members = Array.isArray(S.meta.members) ? S.meta.members : [];
+    if (!S.quality.cost || typeof S.quality.cost !== 'object') S.quality.cost = {};
+    if (!['sub', 'usage', 'setup'].includes(S.quality.revenueModel)) S.quality.revenueModel = 'sub';
+    ['metrics', 'runs'].forEach(k => { if (!Array.isArray(S.quality[k])) S.quality[k] = []; });
+    S.quality.runs = S.quality.runs.filter(r => r && typeof r === 'object');
+    S.quality.runs.forEach(r => { if (!r.values || typeof r.values !== 'object') r.values = {}; });
+    ['schedule', 'suggest'].forEach(k => { if (!Array.isArray(S.maintain[k])) S.maintain[k] = []; });
   }
   migrate();
   if (!local.think || !local.think.session) local.think = { session: 'th-' + Math.random().toString(36).slice(2, 10), msgs: [] };
   const tk = { run: null, busy: false, offline: false, loaded: false };
-  /* Chế độ xem mock đầy đủ: /workstation?demo=full. Dữ liệu mẫu trong bộ nhớ, không gọi backend, không lưu. */
-  const mockMode = new URLSearchParams(location.search).get('demo') === 'full';
   if (mockMode) {
     STEPS.forEach(x => { S.done[x.id] = true; });
     const cell = (content, who, when) => ({ content, who: who || '', when: when || '', quote: content, grounded: !!who, status: who ? 'evidence' : 'assumption' });
@@ -88,18 +89,20 @@
       } } };
     Object.keys(S.score).forEach(k => { if (!S.score[k].text) S.score[k].text = 'Dữ liệu mẫu'; });
   }
-  let db = null, canWrite = true, owner = true;
+  let db = null, canWrite = true;
   const synced = {}, dirty = new Set(), writing = new Set();
   let saveTimer;
   function persist() {
     if (mockMode) return;
-    try { localStorage.setItem(KEY, JSON.stringify({ S: db ? undefined : S, local })); } catch (e) { /* bỏ qua */ }
+    const kept = Object.fromEntries(Object.entries(S).filter(([k]) => !SERVER.includes(k)));
+    try { localStorage.setItem(KEY, JSON.stringify({ S: db ? undefined : kept, local })); } catch (e) { /* bỏ qua */ }
   }
   function save(...sections) {
     if (mockMode) return;
     persist();
+    sections.filter(k => SERVER.includes(k)).forEach(pushWorkspace);
     if (db && canWrite) {
-      sections.forEach(k => dirty.add(k));
+      sections.filter(k => !SERVER.includes(k)).forEach(k => dirty.add(k));
       clearTimeout(saveTimer);
       saveTimer = setTimeout(flush, 600);
     }
@@ -129,17 +132,15 @@
     if (user) {
       try {
         if ((await user.can('data.write')) === false) canWrite = false;
-        owner = !!(await user.isOwner());
-      } catch (e) { owner = false; }
+      } catch (e) { /* chưa đọc được quyền: thử ghi, bị từ chối thì chuyển sang chỉ xem */ }
     }
-    $('#resetBtn').hidden = !owner;
     db.collection('tang').onSnapshot(snap => {
       let changed = false;
       snap.docs.forEach(doc => {
         const k = doc.id, json = doc.data() && doc.data().json;
-        if (!(k in S) || typeof json !== 'string' || json === synced[k] || dirty.has(k) || writing.has(k)) return;
+        if (SERVER.includes(k) || !(k in S) || typeof json !== 'string' || json === synced[k] || dirty.has(k) || writing.has(k)) return;
         try {
-          const value = JSON.parse(json), seed = SEED()[k];
+          const value = JSON.parse(json), seed = BLANK()[k];
           if (!value || typeof value !== 'object' || Array.isArray(value) !== Array.isArray(seed)) return;
           S[k] = Array.isArray(seed) ? value : Object.assign(seed, value);
           synced[k] = json;
@@ -164,7 +165,10 @@
   const avatar = (id, cls = '') => {
     if (id === 'agent') return '<span class="av bot" title="Agent AI Builder">AI</span>';
     const m = member(id);
-    return m ? `<span class="av ${cls}" style="--m:${color(m.color)}" title="${esc(m.name)}">${esc(m.name[0])}</span>` : '<span class="av" title="Chưa giao">?</span>';
+    if (!m) return '<span class="av" title="Chưa giao">?</span>';
+    // Thành viên hiện bằng avatar 3D đã chọn trong hồ sơ ở Planning; dữ liệu demo không có hồ sơ thì lấy theo thứ tự.
+    const look = m.look ?? S.meta.members.indexOf(m) % window.TangAvatar.names.length;
+    return `<span class="member-face ${cls}" title="${esc(m.name)}" role="img" aria-label="${esc(m.name)}">${personAvatar({ avatar: look })}</span>`;
   };
   const options = (sel, empty = 'Chưa giao') => `<option value="">${empty}</option>` +
     S.meta.members.map(m => `<option value="${esc(m.id)}" ${m.id === sel ? 'selected' : ''}>${esc(m.name)}</option>`).join('');
@@ -196,6 +200,7 @@
     if (!force && (boardPending || editingBoard())) { boardStale = true; return; }
     boardStale = false;
     if (next === null && live) return;
+    const workspaceChanged = !mockMode && syncWorkspace(next);
     const same = live && next && live.profile && next.profile && live.profile.github_id === next.profile.github_id;
     const view_ = value => JSON.stringify(value && [value.profile, value.role, value.members, value.repo, value.sprints, value.webhook, value.push_key, value.push_registered]);
     const changed = force || live === undefined || view_(live) !== view_(next);
@@ -206,9 +211,85 @@
     if (hadState && !wasJoined && joined()) planningOpen = true;
     if (!joined()) planningOpen = false;
     updatePlanningPanel(tab === 'planning');
+    if (workspaceChanged || (changed && !mockMode)) showWorkspace();
     if (!changed) return;
     drawPlanning();
     syncProgress();
+  }
+
+  /* ---------- Thành viên, Quality và Maintaining: dữ liệu của đội trên server ---------- */
+  const MEMBER_COLORS = ['#ec4899', '#0fb5ae', '#a9672f', '#6d8f10', '#4d5bf0', '#ff8a1f', '#a24ce8', '#0a9cf0'];
+  let wsVersion = { quality: null, maintain: null }, wsPending = 0, wsStale = false, wsQueue = Promise.resolve();
+  /* Đang gõ trong form của hai tab này thì chưa vẽ lại, để không mất nội dung. */
+  const typingInView = () => {
+    const a = document.activeElement;
+    return Boolean(a && a.closest('#viewContent') && /INPUT|TEXTAREA|SELECT/.test(a.tagName));
+  };
+
+  /* Đưa dữ liệu server vào S. Trả về true khi Quality hoặc Maintaining đổi. */
+  function syncWorkspace(state) {
+    const team = state && state.role ? state.members : [];
+    S.meta.members = team.map((m, i) => ({ id: m.github_id, name: m.name || m.login, look: Number(m.avatar) || 0, color: MEMBER_COLORS[i % MEMBER_COLORS.length] }));
+    local.me = (state && state.profile && state.role && state.profile.github_id) || '';
+    if (wsPending) { wsStale = true; return false; }
+    let changed = false;
+    SERVER.forEach(k => {
+      const remote = state && state.role ? state[k] : null;
+      const version = remote ? remote.version : null;
+      if (version === wsVersion[k]) return;
+      const { version: _, ...data } = remote || EMPTY()[k];
+      S[k] = JSON.parse(JSON.stringify(data));
+      wsVersion[k] = version;
+      changed = true;
+    });
+    if (changed) { migrate(); runEdit = null; lastLevel = null; }
+    return changed;
+  }
+
+  function showWorkspace() {
+    if (!inApp) return;
+    renderTeam();
+    renderChat();
+    if (tab !== 'planning' && tab !== 'product' && !typingInView()) render();
+    syncProgress();
+  }
+
+  /* Lưu nối tiếp nhau để mỗi lần gửi đúng phiên bản vừa nhận. */
+  function pushWorkspace(section) {
+    if (wsVersion[section] === null) return;
+    wsPending++;
+    wsQueue = wsQueue.then(async () => {
+      let failed = '';
+      try {
+        const response = await fetch(`${PLANNING_API}/${section}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', 'X-Planning-Request': '1' },
+          body: JSON.stringify({ ...S[section], version: wsVersion[section] })
+        });
+        if (response.ok) wsVersion[section]++;
+        else if (response.status === 409) failed = 'Đội vừa sửa phần này ở nơi khác. Đã tải bản mới, bạn sửa lại nhé.';
+        else if (response.status === 401 || response.status === 403) failed = 'Chưa lưu được. Đăng nhập lại ở tab Planning.';
+        else failed = 'Chưa lưu được: kiểm tra lại giá trị vừa nhập.';
+      } catch (e) { failed = 'Chưa kết nối được server nên chưa lưu. Thử lại sau ít phút.'; }
+      wsPending--;
+      if (failed) {
+        toast(failed);
+        wsVersion[section] = -1; // ép lấy lại bản trên server
+        wsStale = true;
+      }
+      if (wsStale && !wsPending) { wsStale = false; loadPlanning(true); }
+    });
+  }
+
+  /* Quality và Maintaining chỉ dùng được khi đã ở trong một đội; trả về hướng dẫn nếu chưa. */
+  function teamGate(what) {
+    if (mockMode || joined()) return '';
+    const [title, text, action] = live === undefined
+      ? ['Đang tải dữ liệu của đội', 'Chờ trong giây lát.', '']
+      : live === null
+        ? ['Chưa kết nối được server', `${what} được lưu trên server của đội. Kiểm tra backend rồi thử lại.`, btn('ws-retry', 'Thử lại', 'tone small')]
+        : ['Cần vào đội trước', `${what} được lưu theo đội để mọi người cùng thấy. Mở tab Planning, đăng nhập GitHub rồi lập đội hoặc nhập mã mời.`, btn('tab', 'Mở Planning', 'tone small', 'data-id="planning"')];
+    return `<div class="panel">${panelHead(title)}<p class="muted">${text}</p>${action ? `<p style="margin-top:12px">${action}</p>` : ''}</div>`;
   }
 
   function drawPlanning() {
@@ -673,12 +754,13 @@
     }
     if (i === 2) {
       const p = S.pitch;
-      return !p.form ? 'Tạo form khảo sát' : !pitchHasResponses() ? 'Thu phản hồi cho form' : !p.overview ? 'Tạo AI overview' : !(p.deckShown && p.deck) ? 'Tạo slide pitching' : !p.ads ? 'Viết bài quảng cáo' : 'Bộ pitching đã đủ';
+      return !(p.form && p.form.length) && !pitchHasResponses() ? 'Tạo form khảo sát' : !pitchHasResponses() ? 'Thu phản hồi cho form' : !p.overview ? 'Tạo AI overview' : !(p.deckShown && p.deck) ? 'Tạo slide pitching' : !p.ads ? 'Viết bài quảng cáo' : 'Bộ pitching đã đủ';
     }
+    if (i > 2 && !mockMode && !joined()) return 'Vào đội ở tab Planning để bắt đầu';
     if (i === 3) {
       const q = S.quality;
       if (!q.metrics.length) return 'Để agent lấy chỉ số từ Canvas';
-      if (q.source !== S.score.metric.text) return 'Canvas đã đổi, lấy lại chỉ số';
+      if (S.score.metric.text && q.source !== S.score.metric.text) return 'Canvas đã đổi, lấy lại chỉ số';
       if (!q.runs.length) return 'Ghi lần chạy thử đầu tiên';
       return q.runs.some(r => !r.sample) ? `Đã ghi ${q.runs.length} lần chạy` : 'Mới có dữ liệu mẫu, ghi lần chạy thật';
     }
@@ -735,16 +817,17 @@
     return Number.isInteger(r) ? String(r) : r.toFixed(1).replace('.', ',');
   }
   const runCost = (r, c) => ((+r.actTok || 0) * (+c.pricePerM || 0)) / 1e6;
+  const COST_KEYS = ['pricePerM', 'apiCalls', 'infra', 'price', 'teams', 'pricePerCall', 'setupFee', 'newCustomers'];
   /* Chi phí và doanh thu tính bằng code từ token thực tế và giả định do đội nhập; không dùng bảng giá của nhà cung cấp nào. */
   function money() {
-    const c = Object.fromEntries(Object.entries(S.plan.cost).map(([k, v]) => [k, +v || 0]));
+    const c = Object.fromEntries(COST_KEYS.map(k => [k, +S.quality.cost[k] || 0]));
     const runs = sortedRuns(), priced = c.pricePerM > 0;
     // Chi phí mỗi lượt gọi: trung bình tối đa 3 lần chạy gần nhất có token thực tế và tổng số test.
     const valid = runs.filter(r => +r.total > 0 && num(r.actTok) !== null).slice(-3);
     const perCase = priced && valid.length ? valid.reduce((a, r) => a + runCost(r, c) / +r.total, 0) / valid.length : null;
     const lastKnown = runs.filter(r => num(r.actTok) !== null).pop();
     const lastRun = priced && lastKnown ? runCost(lastKnown, c) : null;
-    const aiMonthly = c.apiCalls === 0 ? 0 : perCase === null ? null : perCase * c.apiCalls;
+    const aiMonthly = c.apiCalls === 0 && priced ? 0 : perCase === null ? null : perCase * c.apiCalls;
     const totalCost = aiMonthly === null ? null : aiMonthly + c.infra;
     const model = ['sub', 'usage', 'setup'].includes(S.quality.revenueModel) ? S.quality.revenueModel : 'sub';
     const revenue = model === 'usage' ? c.apiCalls * c.pricePerCall : model === 'setup' ? c.setupFee * c.newCustomers : c.teams * c.price;
@@ -770,11 +853,15 @@
       passDrop: a !== null && b !== null ? Math.max(0, b - a) : null,
       metricMiss: last ? S.quality.metrics.filter(k => num(last.values[k.id]) !== null && !meets(k, +last.values[k.id])).length : null,
       margin: m ? m.margin : null,
-      overdueDays: late.length ? Math.max(...late) : 0,
+      overdueDays: late.length ? Math.max(...late) : S.maintain.schedule.length ? 0 : null,
       staleDays: last ? Math.max(0, Math.floor((Date.now() - new Date(last.at)) / 864e5)) : null
     };
   }
   const health = () => window.HEALTH.evaluate(signals());
+  /* Chưa có số liệu nào thì không được báo "Bình thường". */
+  const noData = h => h.missing.length === Object.keys(RULES).length;
+  const healthName = h => (noData(h) ? 'Chưa có dữ liệu' : HNAMES[h.level]);
+  const healthColor = h => (noData(h) ? 'var(--mute)' : HCOLOR[h.level]);
   const HCOLOR = { ok: 'var(--green)', warn: 'var(--yellow)', rescue: 'var(--orange)', collapse: 'var(--orange)' };
   const fmtRule = (fmt, v) => (fmt === 'pct' ? Math.round(v * 100) + '%' : fmt === 'days' ? v + ' ngày' : String(v));
   const reasonText = r => `${r.label}: ${fmtRule(r.fmt, r.value)} (ngưỡng ${HNAMES[r.level].toLowerCase()} là ${r.dir === 'below' ? 'dưới' : 'từ'} ${fmtRule(r.fmt, r.threshold)})`;
@@ -783,7 +870,7 @@
     const h = health(), level = preview || h.level;
     if (site && site.health) site.health(level);
     const chip = $('#healthChip');
-    if (chip) { chip.dataset.level = level; chip.style.setProperty('--c', HCOLOR[level]); chip.innerHTML = `<i></i>${preview ? 'Xem thử' : 'Sức khỏe'}: ${HNAMES[level]}`; }
+    if (chip) { chip.dataset.level = level; chip.style.setProperty('--c', preview ? HCOLOR[level] : healthColor(h)); chip.innerHTML = `<i></i>${preview ? 'Xem thử' : 'Sức khỏe'}: ${preview ? HNAMES[level] : healthName(h)}`; }
     if (lastLevel && LEVELS.indexOf(h.level) > LEVELS.indexOf(lastLevel)) toast(`Sức khỏe sản phẩm chuyển sang ${HNAMES[h.level].toLowerCase()}. Xem lý do ở tab Maintaining.`);
     lastLevel = h.level;
   }
@@ -792,7 +879,7 @@
   function lineChart(xs, series, label) {
     const W = 640, H = 230, L = 50, R = 26, T = 22, B = 30;
     const vals = series.flatMap(s => [...s.values, s.target]).filter(v => v !== null && v !== undefined && isFinite(v));
-    if (!xs.length || !vals.length) return '<p class="muted">Chưa có lần chạy nào để vẽ.</p>';
+    if (!xs.length || !vals.length) return '<p class="muted">Chưa có số liệu để vẽ. Biểu đồ hiện sau khi ghi lần chạy thử.</p>';
     const hi = Math.max(...vals, 0), mag = hi > 0 ? 10 ** Math.floor(Math.log10(hi)) : 1, max = Math.ceil(hi * 1.08 / mag) * mag || 1, min = Math.min(0, ...vals);
     const x = i => L + (xs.length === 1 ? (W - L - R) / 2 : i * (W - L - R) / (xs.length - 1));
     const y = v => T + (H - T - B) * (1 - (v - min) / (max - min || 1));
@@ -911,6 +998,40 @@
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => { t.style.opacity = 0; }, 3200);
   }
+  async function copyTextWithFeedback(text, b, okMsg = 'Đã copy link') {
+    let copied = false;
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(text);
+        copied = true;
+      }
+    } catch (e) { /* thử fallback textarea */ }
+    if (!copied) {
+      try {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.cssText = 'position:fixed;left:-9999px;top:-9999px;opacity:0';
+        document.body.append(ta);
+        ta.select();
+        copied = document.execCommand('copy');
+        ta.remove();
+      } catch (e) { copied = false; }
+    }
+    if (!copied) return toast('Trình duyệt chặn sao chép.');
+    toast(okMsg);
+    if (b && b.isConnected) {
+      if (!b.dataset.origLabel) b.dataset.origLabel = b.textContent;
+      b.textContent = '✓ ' + okMsg;
+      b.classList.add('copied');
+      clearTimeout(b._copyTimer);
+      b._copyTimer = setTimeout(() => {
+        if (b.isConnected && b.dataset.origLabel) {
+          b.textContent = b.dataset.origLabel;
+          b.classList.remove('copied');
+        }
+      }, 2200);
+    }
+  }
 
   /* ---------- Claude ---------- */
   let sample = null, downloads = null;
@@ -922,7 +1043,7 @@
     project: S.meta.name,
     scorecard: Object.fromEntries(SCORE.map(([k, l]) => [l, S.score[k].text])),
     overview: S.plan.overview,
-    tasks: S.tasks.list.map(t => `${t.id} ${t.title} (${(STATUS[t.status] || ['?'])[0]})`),
+    tasks: teamTasks().map(t => `${t.id} ${t.title} (${t.done ? 'Xong' : t.review ? 'Chờ review' : 'Chưa xong'})`),
     quality: {
       metrics: S.quality.metrics.map(m => `${m.name} (${(KIND[m.kind] || KIND.value)[0]}): hiện trạng ${num(m.baseline) === null ? 'chưa đo' : m.baseline + m.unit}, mục tiêu ${m.target}${m.unit}, cách đo: ${m.method || 'chưa ghi'}`),
       metricTips: checkMetrics(),
@@ -934,16 +1055,16 @@
   function why(e) {
     return e && e.code === 'rate_limited' ? 'Claude đang bận.' : e && e.code === 'not_granted' ? 'Bạn chưa cho phép trang gọi Claude.' : 'Chưa gọi được Claude.';
   }
-  /* Gọi Claude lấy JSON; nếu không được thì dùng bản mẫu và nói rõ. */
+  /* Gọi Claude lấy JSON; nếu không được thì dùng bản dự phòng (luật trong app) và nói rõ. */
   async function generate(task, shape, valid, fallback) {
     await ready;
     if (sample) {
       try {
         const out = await sample.json(`${AGENT}\n\nDữ liệu dự án:\n${context()}\n\nNhiệm vụ: ${task}\nChỉ trả về JSON đúng dạng: ${shape}`, { cache: false });
         if (valid(out)) return out;
-        toast('Claude trả về sai định dạng, đang dùng bản mẫu.');
-      } catch (e) { toast(why(e) + ' Đang dùng bản mẫu.'); }
-    } else toast('Chưa kết nối Claude, đang dùng bản mẫu.');
+        toast('Claude trả về sai định dạng, đang dùng bản dự phòng.');
+      } catch (e) { toast(why(e) + ' Đang dùng bản dự phòng.'); }
+    } else toast('Chưa kết nối Claude, đang dùng bản dự phòng.');
     await wait(500);
     return fallback();
   }
@@ -959,9 +1080,10 @@
     const box = $('.msgs', chat);
     box.innerHTML = S.chat.map(m => {
       const who = member(m.who);
-      return `<div class="msg" style="--m:${who ? color(who.color) : 'var(--yellow)'}">${avatar(m.who)}<div class="bubble"><small>${esc(who ? who.name : 'Agent AI Builder')}</small>${esc(m.text)}</div></div>`;
+      return `<div class="msg" style="--m:${who ? color(who.color) : 'var(--yellow)'}">${avatar(m.who)}<div class="bubble"><small>${esc(who ? who.name : m.who === 'agent' ? 'Agent AI Builder' : 'Bạn')}</small>${esc(m.text)}</div></div>`;
     }).join('') + (typing ? `<div class="msg" id="typing">${avatar('agent')}<div class="bubble">Đang suy nghĩ...</div></div>` : '');
-    $('.speak', chat).innerHTML = '<span>Bạn đang nói với tư cách</span>' + S.meta.members.map(m =>
+    // Luồng thật nói bằng tài khoản đã đăng nhập; chỉ chế độ xem demo mới đổi vai.
+    $('.speak', chat).innerHTML = !mockMode ? '' : '<span>Bạn đang nói với tư cách</span>' + S.meta.members.map(m =>
       `<button class="av ${m.id === local.me ? 'me' : ''}" style="--m:${color(m.color)}" data-act="me" data-id="${esc(m.id)}" title="${esc(m.name)}" aria-pressed="${m.id === local.me}">${esc(m.name[0])}</button>`).join('');
     $('.quick', chat).innerHTML = ['Phạm vi MVP này có quá rộng không?', 'Đo thành công bằng gì?', 'Rủi ro lớn nhất là gì?']
       .map(q => `<button class="btn soft small" data-act="quick">${q}</button>`).join('');
@@ -1160,6 +1282,135 @@
   const panelHead = (t, extra = '') => `<div class="panel-head"><h3>${t}</h3>${extra}</div>`;
   const btn = (act, label, cls = 'tone', data = '') => `<button class="btn ${cls}" data-act="${act}" ${data}>${label}</button>`;
 
+  const SLIDE_LAYOUTS = [
+    ['auto', 'Tự động'],
+    ['hero', 'Bìa mở đầu'],
+    ['split', '2 cột điểm nhấn'],
+    ['cards', 'Thẻ ngang'],
+    ['compare', 'Đối chiếu 2 cột'],
+    ['metric', 'Số liệu lớn'],
+    ['steps', 'Lộ trình bước']
+  ];
+  function resolveSlideLayout(s, i, total) {
+    const raw = String((s && s.layout) || 'auto').trim().toLowerCase();
+    if (['hero', 'split', 'cards', 'compare', 'metric', 'steps'].includes(raw)) return raw;
+    if (i === 0) return 'hero';
+    const k = String((s && s.kicker) || '').toLowerCase();
+    if (i === total - 1 || /bước|kế hoạch|lộ trình|pilot/.test(k)) return 'steps';
+    if (/bằng chứng|khảo sát|đo|số liệu/.test(k)) return 'metric';
+    if (/mvp|phạm vi|so sánh/.test(k)) return 'compare';
+    if (/ai|đòn bẩy|giải pháp|tính năng/.test(k)) return 'cards';
+    return ['split', 'cards', 'metric', 'compare', 'steps'][i % 5];
+  }
+  function parseSlideItems(body) {
+    const lines = String(body || '').split(/\r?\n/).map(x => x.trim()).filter(Boolean);
+    const paras = [];
+    const items = [];
+    lines.forEach(line => {
+      if (/^(?:[-•*]|\d+[.)])\s+/.test(line)) {
+        const clean = line.replace(/^(?:[-•*]|\d+[.)])\s+/, '');
+        const idx = clean.indexOf(':');
+        if (idx > 0 && idx <= 34 && clean.slice(idx + 1).trim()) {
+          items.push({ label: clean.slice(0, idx).trim(), text: clean.slice(idx + 1).trim() });
+        } else {
+          items.push({ label: '', text: clean });
+        }
+      } else {
+        paras.push(line);
+      }
+    });
+    return { paras, items };
+  }
+  function renderSlideLayoutBody(s, layout) {
+    const { paras, items } = parseSlideItems(s.body || '');
+    const hl = String(s.highlight || '').trim();
+    const listHtml = items.length
+      ? `<ul class="slide-list">${items.map(it => `<li>${it.label ? `<b>${esc(it.label)}:</b> ` : ''}${esc(it.text)}</li>`).join('')}</ul>`
+      : '';
+    const leadHtml = paras.map(p => `<p>${esc(p)}</p>`).join('');
+
+    if (layout === 'hero') {
+      const pills = items.slice(0, 3).map(it => `<div class="slide-pill">${it.label ? `<small>${esc(it.label)}</small>` : ''}<span>${esc(it.text)}</span></div>`).join('');
+      return `<div class="slide-main"><h3>${esc(s.title)}</h3>${leadHtml}${pills ? `<div class="slide-pills">${pills}</div>` : ''}${hl ? `<div class="slide-callout" style="margin-top:4px"><small>Trọng tâm</small><b>${esc(hl)}</b></div>` : ''}</div>`;
+    }
+    if (layout === 'cards') {
+      const cards = items.length ? items : paras.map(p => ({ label: '', text: p }));
+      return `<div class="slide-main"><h3>${esc(s.title)}</h3>${leadHtml && items.length ? leadHtml : ''}
+        <div class="slide-cards">${cards.slice(0, 4).map((it, n) => `<div class="slide-card"><span class="slide-card-no">${String(n + 1).padStart(2, '0')}</span>${it.label ? `<b>${esc(it.label)}</b>` : ''}<span>${esc(it.text)}</span></div>`).join('')}</div>
+        ${hl ? `<div class="slide-callout"><small>Điểm nhấn</small><b>${esc(hl)}</b></div>` : ''}</div>`;
+    }
+    if (layout === 'compare') {
+      const src = items.length >= 2 ? items : [{ label: 'Hiện trạng / Trọng tâm', text: paras[0] || s.body || '' }, { label: 'Hướng tiếp cận', text: paras[1] || hl || 'Tập trung kiểm chứng thực tế' }];
+      const mid = Math.ceil(src.length / 2);
+      const colA = src.slice(0, mid), colB = src.slice(mid);
+      const renderCol = (arr, accent, fallbackLbl) => `<div class="slide-col${accent ? ' accent' : ''}">${arr.map(it => `<small>${esc(it.label || fallbackLbl)}</small><b>${esc(it.text)}</b>`).join('')}</div>`;
+      return `<div class="slide-main"><h3>${esc(s.title)}</h3><div class="slide-compare">${renderCol(colA, false, 'Vế 1')}${renderCol(colB, true, 'Vế 2')}</div>${hl && items.length >= 2 ? `<div class="slide-callout"><small>Chốt phạm vi</small><b>${esc(hl)}</b></div>` : ''}</div>`;
+    }
+    if (layout === 'metric') {
+      const statVal = hl || (items[0] ? items[0].text : s.title);
+      return `<div class="slide-metric-grid">
+        <aside class="slide-stat"><small>${esc(s.kicker || 'Chỉ số chính')}</small><b>${esc(statVal)}</b></aside>
+        <div class="slide-main"><h3>${esc(s.title)}</h3><div class="slide-body-slot">${leadHtml}${listHtml}</div></div>
+      </div>`;
+    }
+    if (layout === 'steps') {
+      const steps = items.length ? items : paras.map(p => ({ label: '', text: p }));
+      return `<div class="slide-main"><h3>${esc(s.title)}</h3>${leadHtml && items.length ? leadHtml : ''}
+        <div class="slide-steps">${steps.slice(0, 4).map((it, n) => `<div class="slide-step"><span class="slide-step-no">${n + 1}</span>${it.label ? `<b>${esc(it.label)}</b>` : ''}<span>${esc(it.text)}</span></div>`).join('')}</div>
+        ${hl ? `<div class="slide-callout"><small>Mục tiêu</small><b>${esc(hl)}</b></div>` : ''}</div>`;
+    }
+    return `<div class="${hl ? 'slide-grid' : 'slide-main'}">
+      <div class="slide-main"><h3>${esc(s.title)}</h3><div class="slide-body-slot">${leadHtml}${listHtml}</div></div>
+      ${hl ? `<aside class="slide-callout"><small>Điểm nhấn</small><b>${esc(hl)}</b></aside>` : ''}
+    </div>`;
+  }
+  function renderSlideCard(s, i, total, slideTitle) {
+    const tone = STEPS[i % STEPS.length].hex;
+    const pctW = Math.round(((i + 1) / (total || 1)) * 100);
+    const layout = resolveSlideLayout(s, i, total);
+    return `<section class="slide is-${layout}" style="--s:${tone}">
+      <div class="slide-prog"><span style="width:${pctW}%"></span></div>
+      <div class="slide-top">
+        <span class="slide-kicker">${esc(s.kicker || ('Slide ' + (i + 1)))}</span>
+        <span class="slide-num">${String(i + 1).padStart(2, '0')} / ${String(total).padStart(2, '0')}</span>
+      </div>
+      ${renderSlideLayoutBody(s, layout)}
+      <div class="slide-foot"><span>${esc(slideTitle)}</span><span>${esc(STEPS[i % STEPS.length].name)}</span></div>
+    </section>`;
+  }
+  function renderSlideEditorBox() {
+    const p = S.pitch;
+    if (!(p.deckShown && p.deck && p.deck.length)) return '';
+    if (activeSlideIdx >= p.deck.length) activeSlideIdx = Math.max(0, p.deck.length - 1);
+    const curSlide = p.deck[activeSlideIdx];
+    const curLayout = String(curSlide.layout || 'auto');
+    const deckBadge = p.deckSource === 'llm'
+      ? '<span class="tag" style="--c:var(--green)">AI Gemini</span>'
+      : p.deckSource === 'fallback'
+        ? '<span class="tag">Từ dữ liệu bài toán</span>'
+        : '';
+    return `<div class="slide-editor" id="slideEditorBox">
+      <div class="row" style="justify-content:space-between;gap:8px">
+        <span style="font-size:13px;font-weight:500">Chỉnh slide ${activeSlideIdx + 1}/${p.deck.length} ${deckBadge}</span>
+        <div class="row" style="gap:6px">
+          <select data-bind="slideLayout" data-id="${activeSlideIdx}" aria-label="Dạng bố cục slide">${SLIDE_LAYOUTS.map(([val, lbl]) => `<option value="${val}" ${curLayout === val ? 'selected' : ''}>Dạng: ${lbl}</option>`).join('')}</select>
+          ${p.deck.length < 10 ? btn('addSlide', '+ Thêm slide', 'soft small') : ''}
+          ${p.deck.length > 1 ? btn('delSlide', 'Xóa slide này', 'danger small') : ''}
+        </div>
+      </div>
+      <div class="row" style="gap:8px">
+        <input style="flex:1 1 160px" data-bind="slideKicker" data-id="${activeSlideIdx}" value="${esc(curSlide.kicker || '')}" placeholder="Nhãn slide">
+        <input style="flex:2 1 240px" data-bind="slideTitle" data-id="${activeSlideIdx}" value="${esc(curSlide.title || '')}" placeholder="Tiêu đề slide">
+      </div>
+      <textarea rows="3" data-bind="slideBody" data-id="${activeSlideIdx}" placeholder="Nội dung slide (dùng '- Nhãn: nội dung' để chia thẻ/bước)">${esc(curSlide.body || '')}</textarea>
+      <input data-bind="slideHighlight" data-id="${activeSlideIdx}" value="${esc(curSlide.highlight || '')}" placeholder="Điểm nhấn / số liệu chính (tùy chọn)">
+    </div>`;
+  }
+  /* Task của đội: lấy từ sprint đã giao ở Planning; chế độ xem demo dùng danh sách mẫu. */
+  const teamTasks = () => (mockMode
+    ? S.tasks.list.map(t => ({ id: t.id, title: t.title, owner: t.owner, done: t.status === 'done', review: t.status === 'review' }))
+    : liveTasks().map(t => ({ id: t.code, title: t.title, owner: t.assignee_id, done: t.progress === 'done', review: t.progress === 'review' })));
+
   const views = {
     overview() {
       const cards = STEPS.map((s, i) => {
@@ -1172,9 +1423,10 @@
       }).join('');
       const curIdx = progress().findIndex(x => !x), cur = Math.max(0, curIdx);
       const goLabel = curIdx < 0 ? 'Xem lại: Thinking' : cur === 0 && !started(0) ? 'Bắt đầu: Thinking' : `Làm tiếp: ${STEPS[cur].name}`;
+      const roleMap = mockMode ? S.plan.roles : (joined() && live.board.roles) || {};
       const team = S.meta.members.map(m => {
-        const open = S.tasks.list.filter(t => t.owner === m.id && t.status !== 'done').length;
-        const roles = ROLES.filter(r => S.plan.roles[r] === m.id).join(', ') || 'Chưa có vai';
+        const open = teamTasks().filter(t => t.owner === m.id && !t.done).length;
+        const roles = ROLES.filter(r => roleMap[r] === m.id).join(', ') || 'Chưa có vai';
         return `<div>${avatar(m.id)}<span>${esc(m.name)}<br><span class="muted">${esc(roles)}, ${open} task mở</span></span></div>`;
       }).join('');
       if (mobile.matches) {
@@ -1182,7 +1434,7 @@
         return `<div class="stack"><div class="view-head"><div><h2>Tổng quan</h2><p>${esc(S.meta.name)}</p></div></div>
           <div class="ov-cards">${cards}</div>
           <div class="panel">${panelHead('Ai đang làm gì')}<div class="ov-team">${team}</div></div>
-          <div class="panel">${panelHead('Việc cần để ý')}${health().reasons.slice(0, 2).map(r => `<p>Sức khỏe ${esc(HNAMES[r.level].toLowerCase())}: ${esc(reasonText(r))}</p>`).join('')}${S.tasks.list.filter(t => t.status === 'review').map(t => `<p>${esc(t.id)} đang chờ review: ${esc(t.title)}</p>`).join('')}${late.map(x => `<p>Bảo trì đến hạn: ${esc(x.title)}</p>`).join('') || ''}${!late.length && !S.tasks.list.some(t => t.status === 'review') && !health().reasons.length ? '<p class="muted">Không có việc gấp.</p>' : ''}</div></div>`;
+          <div class="panel">${panelHead('Việc cần để ý')}${health().reasons.slice(0, 2).map(r => `<p>Sức khỏe ${esc(HNAMES[r.level].toLowerCase())}: ${esc(reasonText(r))}</p>`).join('')}${teamTasks().filter(t => t.review).map(t => `<p>${esc(t.id)} đang chờ review: ${esc(t.title)}</p>`).join('')}${late.map(x => `<p>Bảo trì đến hạn: ${esc(x.title)}</p>`).join('') || ''}${!late.length && !teamTasks().some(t => t.review) && !health().reasons.length ? '<p class="muted">Không có việc gấp.</p>' : ''}</div></div>`;
       }
       return `<div class="ov-title"><h2>${STEPS[cur].name}</h2><p>${STEP_HINT[STEPS[cur].id]}</p>${btn('tab', goLabel, 'primary big', `data-id="${STEPS[cur].id}"`)}</div>
         <div class="ov-team">${team}</div>`;
@@ -1212,64 +1464,43 @@
       const hasSurveys = list.length > 0;
       const curDeckSlug = activeDeckSurveySlug();
       const selSurvey = list.find(x => x.slug === curDeckSlug);
-      const deckSourceBox = `<div class="deck-source">
-        <div class="row" style="justify-content:space-between;gap:8px">
-          <label for="deckSurveySel" style="font-size:13px;font-weight:500">Chọn khảo sát đưa vào slide</label>
-          ${hasSurveys ? `<select id="deckSurveySel" data-bind="deckSurveySlug" aria-label="Chọn khảo sát đưa vào slide">
-            ${list.map(s => `<option value="${esc(s.slug)}" ${curDeckSlug === s.slug ? 'selected' : ''}>${esc(s.title)} (${+s.response_count || 0} phản hồi)</option>`).join('')}
-            <option value="__none__" ${curDeckSlug === '__none__' ? 'selected' : ''}>Chỉ dùng Product thinking (không kèm khảo sát)</option>
-          </select>` : ''}
-        </div>
-        <div class="muted" style="font-size:13px">${hasSurveys
-          ? (selSurvey ? `Sẽ tổng hợp từ "${esc(selSurvey.title)}" (${+selSurvey.response_count || 0} phản hồi) cùng Product thinking.` : 'Chỉ dùng dữ liệu từ Product thinking & Scorecard.')
-          : 'Chưa có khảo sát nào được lưu. Lưu một khảo sát ở trên để chọn đưa số liệu thật vào slide, hoặc bấm Tạo slide theo Product thinking.'}</div>
-      </div>`;
+      const deckSourceBox = hasSurveys ? `<div class="deck-source">
+        <label for="deckSurveySel" style="font-size:13px;font-weight:500">Dữ liệu khảo sát đưa vào slide</label>
+        <select id="deckSurveySel" data-bind="deckSurveySlug" aria-label="Chọn khảo sát đưa vào slide">
+          ${list.map(s => `<option value="${esc(s.slug)}" ${curDeckSlug === s.slug ? 'selected' : ''}>${esc(s.title)} (${+s.response_count || 0} phản hồi)</option>`).join('')}
+          <option value="__none__" ${curDeckSlug === '__none__' ? 'selected' : ''}>Chỉ dùng Product thinking</option>
+        </select>
+      </div>` : '';
       const deckVisible = !!(p.deckShown && p.deck && p.deck.length);
       if (deckVisible && activeSlideIdx >= p.deck.length) activeSlideIdx = Math.max(0, p.deck.length - 1);
-      const curSlide = deckVisible ? p.deck[activeSlideIdx] : null;
-      const deckBadge = p.deckSource === 'llm'
-        ? '<span class="tag" style="--c:var(--green)">AI Gemini</span>'
-        : p.deckSource === 'fallback'
-          ? '<span class="tag">Từ dữ liệu bài toán</span>'
-          : '';
-      const deck = deckVisible ? `<div class="deck" tabindex="0">${p.deck.map((s, i) => `<section class="slide" style="--s:${STEPS[i % STEPS.length].hex}">${s.kicker ? `<span class="slide-kicker">${esc(s.kicker)}</span>` : ''}<h3>${esc(s.title)}</h3><p>${esc(s.body)}</p>${s.highlight ? `<span class="slide-hl" style="--s:${STEPS[i % STEPS.length].hex}">${esc(s.highlight)}</span>` : ''}</section>`).join('')}</div>
-        <div class="slide-editor">
-          <div class="row" style="justify-content:space-between;gap:8px">
-            <span style="font-size:13px;font-weight:500">Chỉnh nhanh slide ${activeSlideIdx + 1}/${p.deck.length} ${deckBadge}</span>
-            <div class="row" style="gap:6px">
-              <select data-bind="activeSlidePick" aria-label="Chọn slide để sửa">${p.deck.map((s, i) => `<option value="${i}" ${i === activeSlideIdx ? 'selected' : ''}>Slide ${i + 1}: ${esc((s.title || '').slice(0, 32))}</option>`).join('')}</select>
-              ${p.deck.length < 10 ? btn('addSlide', '+ Thêm slide', 'soft small') : ''}
-              ${p.deck.length > 1 ? btn('delSlide', 'Xóa slide này', 'danger small') : ''}
-            </div>
-          </div>
-          <div class="row" style="gap:8px">
-            <input style="flex:1 1 160px" data-bind="slideKicker" data-id="${activeSlideIdx}" value="${esc(curSlide.kicker || '')}" placeholder="Nhãn slide (vd: Bằng chứng)">
-            <input style="flex:2 1 240px" data-bind="slideTitle" data-id="${activeSlideIdx}" value="${esc(curSlide.title || '')}" placeholder="Tiêu đề slide">
-          </div>
-          <textarea rows="2" data-bind="slideBody" data-id="${activeSlideIdx}" placeholder="Nội dung súc tích (tối đa ~45 từ)">${esc(curSlide.body || '')}</textarea>
-          <input data-bind="slideHighlight" data-id="${activeSlideIdx}" value="${esc(curSlide.highlight || '')}" placeholder="Điểm nhấn số liệu / ghi chú ngắn (tùy chọn)">
+      const slideTitle = (p.deckTitle || S.meta.name || 'Pitching Deck').trim();
+      const deck = deckVisible ? `<div class="deck" tabindex="0">${p.deck.map((s, i) => renderSlideCard(s, i, p.deck.length, slideTitle)).join('')}</div>
+        ${renderSlideEditorBox()}
+        <div class="slide-nav">
+          <div class="row" style="gap:6px">${btn('slide', '← Trang trước', 'soft small', 'data-n="-1"')}${btn('slide', 'Trang sau →', 'soft small', 'data-n="1"')}${btn('fullDeck', 'Toàn màn hình', 'soft small')}</div>
+          <div class="row" style="gap:8px">${btn('saveDeck', p.deckSlug ? 'Lưu cập nhật' : 'Lưu & lấy link', 'primary small')}${btn('copy', 'Sao chép HTML', 'soft small', 'data-id="html"')}${btn('download', 'Tải HTML', 'soft small')}</div>
         </div>
-        <div class="row" style="margin-top:10px">${btn('slide', 'Trang trước', 'soft small', 'data-n="-1"')}${btn('slide', 'Trang sau', 'soft small', 'data-n="1"')}${btn('saveDeck', p.deckSlug ? 'Lưu cập nhật slide' : 'Lưu & lấy link slide', 'primary small')}${btn('copy', 'Sao chép HTML', 'soft small', 'data-id="html"')}${btn('download', 'Tải file HTML', 'soft small')}</div>
-        ${p.deckSlug ? `<div class="pub-box" style="margin-top:10px"><div><strong>Link trình chiếu công khai:</strong> <code>/pitch?slug=${esc(p.deckSlug)}</code></div><div class="row"><input readonly value="${esc(location.origin + '/pitch?slug=' + p.deckSlug)}" aria-label="Link slide">${btn('copyDeckLink', 'Sao chép link', 'tone small')}<a class="btn soft small" style="text-decoration:none" href="/pitch?slug=${encodeURIComponent(p.deckSlug)}" target="_blank" rel="noopener">Mở trang trình chiếu</a></div></div>` : ''}`
-        : '<p class="muted">Chưa tạo slide. Chọn dữ liệu khảo sát ở trên rồi bấm “Tạo slide” để tạo tối đa 10 slide.</p>';
+        ${p.deckSlug ? `<div class="pub-box" style="margin-top:12px"><div class="row"><input readonly value="${esc(location.origin + '/pitch?slug=' + p.deckSlug)}" aria-label="Link slide">${btn('copyDeckLink', 'Sao chép link', 'tone small')}<a class="btn soft small" style="text-decoration:none" href="/pitch?slug=${encodeURIComponent(p.deckSlug)}" target="_blank" rel="noopener">Mở</a></div></div>` : ''}`
+        : '<div class="empty-note">Chưa có slide. Bấm <b>Tạo slide</b> để bắt đầu.</div>';
       const mainAd = Array.isArray(p.adPosts) && p.adPosts.length ? p.adPosts[0] : null;
       const linkSurveySlug = activeTileSlug();
-      const adsCard = `<div class="panel">${panelHead('Bài quảng cáo', btn('ads', mainAd || p.ads ? 'Tạo lại' : 'Tạo', 'tone small'))}${mainAd
+      const adsCard = `<div class="panel">${panelHead('Bài quảng cáo', btn('ads', mainAd || p.ads ? 'Tạo lại' : 'Tạo', 'primary small'))}${mainAd
         ? `<div class="stack" style="gap:10px">
-            ${Array.isArray(mainAd.placeholders) && mainAd.placeholders.length ? `<div class="ph-row"><span class="muted">Placeholder:</span>${mainAd.placeholders.map(ph => `<span class="tag">${esc(ph)}</span>`).join('')}</div>` : ''}
-            <textarea class="script-edit" data-bind="adFull" data-id="0" aria-label="Nội dung bài quảng cáo dùng chung">${esc(adFullText(mainAd))}</textarea>
+            ${Array.isArray(mainAd.placeholders) && mainAd.placeholders.length ? `<div class="ph-row">${mainAd.placeholders.map(ph => `<span class="tag">${esc(ph)}</span>`).join('')}</div>` : ''}
+            <textarea class="script-edit" data-bind="adFull" data-id="0" aria-label="Nội dung bài quảng cáo">${esc(adFullText(mainAd))}</textarea>
             <div class="row" style="gap:8px">${linkSurveySlug ? btn('insertSurveyInAd', 'Chèn link khảo sát', 'soft small', 'data-id="0"') : ''}${btn('copyAd', 'Sao chép', 'soft small', 'data-id="0"')}</div>
+            <p class="muted" style="font-size:13px">Điền các phần còn thiếu trong ngoặc [...] trước khi sao chép và đăng bài lên diễn đàn.</p>
           </div>`
         : p.ads
-          ? `<textarea class="script-edit" data-bind="pitchAdsPlain" aria-label="Nội dung bài quảng cáo">${esc(p.ads)}</textarea><p style="margin-top:10px">${btn('copy', 'Sao chép', 'soft small', 'data-id="ads"')}</p>`
-          : '<p class="muted">Một bài giới thiệu dùng chung kèm placeholder để bạn điền link và copy đăng qua các kênh.</p>'}</div>`;
+          ? `<textarea class="script-edit" data-bind="pitchAdsPlain" aria-label="Nội dung bài quảng cáo">${esc(p.ads)}</textarea><p style="margin-top:10px">${btn('copy', 'Sao chép', 'soft small', 'data-id="ads"')}</p><p class="muted" style="font-size:13px;margin-top:6px">Điền các phần còn thiếu trong ngoặc [...] trước khi sao chép và đăng bài lên diễn đàn.</p>`
+          : '<div class="empty-note">Bấm <b>Tạo</b> để soạn bài đăng kèm placeholder.</div>'}</div>`;
       const topActions = hasSurveys
-        ? `<div class="row" style="gap:8px">${btn('reloadSurveys', 'Tải lại', 'soft small')}${btn('openSelectedEdit', 'Xem khảo sát', 'soft small')}${btn('openSelectedStats', 'Dashboard', 'soft small')}${btn('copySelectedLink', 'Publish link', 'soft small')}</div>`
-        : `<div class="row" style="gap:8px">${btn('reloadSurveys', 'Tải lại', 'soft small')}${btn('openCreateSurvey', 'Tạo khảo sát', 'primary small')}</div>`;
-      const bottomBar = hasSurveys ? `<div class="survey-bottom">${btn('openCreateSurvey', 'Tạo khảo sát', 'primary small')}</div>` : '';
+        ? `<div class="row" style="gap:6px">${btn('openSelectedEdit', 'Xem khảo sát', 'tone small')}${btn('openSelectedStats', 'Dashboard', 'soft small')}${btn('copySelectedLink', 'Publish link', 'soft small')}${btn('reloadSurveys', 'Làm mới', 'ghost small')}</div>`
+        : `<div class="row" style="gap:6px">${btn('reloadSurveys', 'Làm mới', 'ghost small')}${btn('openCreateSurvey', 'Tạo khảo sát', 'primary small')}</div>`;
+      const bottomBar = hasSurveys ? `<div class="survey-bottom">${btn('openCreateSurvey', '+ Tạo khảo sát', 'primary small')}</div>` : '';
       const hasDeck = !!(p.deck && p.deck.length) || !!p.deckSlug;
-      const deckActs = `<div class="row">${deckVisible ? btn('hideDeck', 'Thu gọn slide', 'soft small') : (hasDeck ? btn('showDeck', 'Mở slide', 'soft small') : '')}${hasDeck ? btn('clearDeck', 'Xóa slide', 'danger small') : ''}${btn('deck', hasDeck ? 'Tạo lại slide' : 'Tạo slide', 'tone small')}</div>`;
-      return head(2, 'Thu bằng chứng trước, kể chuyện sau. Dashboard tự dựng từ câu trả lời.') + `<div class="stack">
+      const deckActs = `<div class="row" style="gap:6px">${deckVisible ? btn('hideDeck', 'Thu gọn slide', 'soft small') : (hasDeck ? btn('showDeck', 'Mở slide', 'soft small') : '')}${hasDeck ? btn('clearDeck', 'Xóa slide', 'danger small') : ''}${btn('deck', hasDeck ? 'Tạo lại slide' : 'Tạo slide', 'primary small')}</div>`;
+      return head(2, 'Thu bằng chứng trước, kể chuyện sau.') + `<div class="stack">
         <div class="panel survey-panel">${panelHead('Khảo sát', topActions)}${publishedPanel()}${bottomBar}</div>
         <div class="panel">${panelHead('Pitching HTML', deckActs)}${deckSourceBox}${deck}</div>
         ${adsCard}</div>`;
@@ -1277,7 +1508,7 @@
 
     quality() {
       const q = S.quality, runs = sortedRuns(), src = S.score.metric.text.trim(), m = money();
-      const stale = q.metrics.length && q.source !== S.score.metric.text, editing = q.runs.find(r => r.id === runEdit);
+      const stale = q.metrics.length && src && q.source !== S.score.metric.text.trim(), editing = q.runs.find(r => r.id === runEdit);
       const xs = runs.map(r => shortDate(r.at));
       const series = [{ id: 'pass', name: 'Tỉ lệ test pass (%)', color: PALETTE[0], values: runs.map(r => (rate(r) === null ? null : +(rate(r) * 100).toFixed(1))) },
         ...q.metrics.map((k, i) => ({ id: k.id, name: `${k.name}${k.unit ? ' (' + k.unit + ')' : ''}`, color: PALETTE[1 + (i % 6)], values: runs.map(r => num(r.values[k.id])), target: num(k.target) }))];
@@ -1287,7 +1518,7 @@
       const samples = q.runs.filter(r => r.sample).length;
       const val = (r, k) => (editing ? r[k] ?? '' : '');
       const field = (name, label, value, attrs = 'type="number" min="0" step="any"') => `<label>${label}<input name="${esc(name)}" ${attrs} value="${esc(value)}"></label>`;
-      const c = S.plan.cost, unit = { pricePerM: +c.pricePerM || 0 }, priced = unit.pricePerM > 0;
+      const c = q.cost, unit = { pricePerM: +c.pricePerM || 0 }, priced = unit.pricePerM > 0;
       const latestId = runs.length ? runs[runs.length - 1].id : null;
       const revModel = ['sub', 'usage', 'setup'].includes(q.revenueModel) ? q.revenueModel : 'sub';
       const numField = (k, l, step = 'any') => `<label>${l}<input type="number" min="0" step="${step}" data-bind="cost" data-id="${k}" value="${+c[k] || 0}"></label>`;
@@ -1313,7 +1544,9 @@
         : revModel === 'setup'
           ? `${(+c.newCustomers || 0).toLocaleString('vi-VN')} khách mới × ${usd(+c.setupFee || 0)} = ${usd(m.revenue)}/tháng.`+costPart
           : `${(+c.teams || 0).toLocaleString('vi-VN')} khách × ${usd(+c.price || 0)} = ${usd(m.revenue)}/tháng.`+costPart;
-      return head(3, 'Mỗi lần đổi model hay prompt là một lần chạy thử. Ghi lại để thấy chất lượng, token và chi phí đi về đâu.') + `<div class="stack">
+      const intro = head(3, 'Mỗi lần đổi model hay prompt là một lần chạy thử. Ghi lại để thấy chất lượng, token và chi phí đi về đâu.'), gate = teamGate('Chỉ số và lần chạy thử');
+      if (gate) return intro + gate;
+      return intro + `<div class="stack">
         <div class="panel">${panelHead('Chỉ số cần đạt', btn('metrics', q.metrics.length ? 'Lấy lại chỉ số' : 'Lấy chỉ số', 'tone small'))}
           <p class="muted">Agent đọc mục Metric trong scorecard và tách thành từng chỉ số. Mỗi lần chạy thử, đội nhập con số đo được để so với mục tiêu ở đây.</p>
           <div class="prose" style="margin:8px 0">${src ? esc(src) : 'Mục Metric đang trống. Điền ở tab Thinking trước.'}</div>
@@ -1324,7 +1557,7 @@
               <input class="goal-num" type="number" step="any" ${b('target')} value="${esc(k.target)}" aria-label="Mục tiêu"><input class="goal-unit" ${b('unit')} value="${esc(k.unit)}" placeholder="đơn vị" aria-label="Đơn vị"></div>
             <details><summary class="muted">Thêm thông tin (${extra ? 'đã điền' : 'không bắt buộc'})</summary><div class="stack" style="gap:8px;margin-top:8px">
               <label class="field">Con số trước khi có AI<input type="number" step="any" ${b('baseline')} value="${num(k.baseline) === null ? '' : +k.baseline}" placeholder="Ví dụ 12. Để trống nếu chưa đo"></label>
-              <label class="field">Đo bằng cách nào<input ${b('method')} value="${esc(k.method || '')}" placeholder="Ví dụ: đếm trong log chat mỗi tuần"></label></div></details></div>`; }).join('') || '<p class="muted">Chưa có chỉ số nào.</p>'}</div>
+              <label class="field">Đo bằng cách nào<input ${b('method')} value="${esc(k.method || '')}" placeholder="Ví dụ: đếm trong log chat mỗi tuần"></label></div></details></div>`; }).join('') || '<p class="muted">Chưa có chỉ số nào. Bấm “Lấy chỉ số” sau khi Thinking đã có mục Metric, hoặc bấm “Thêm chỉ số” để nhập tay.</p>'}</div>
           ${(() => { const tips = checkMetrics(); return tips.length ? `<div class="tips"><h4>Gợi ý cho bộ chỉ số</h4><ul>${tips.map(t => `<li>${esc(t)}</li>`).join('')}</ul></div>` : ''; })()}
           <p style="margin-top:10px">${btn('addmetric', 'Thêm chỉ số', 'soft small')}</p></div>
         <div class="panel">${panelHead(editing ? 'Lịch sử AI: đang sửa một lần chạy' : 'Lịch sử AI', samples ? `<span class="muted">${samples} lần chạy là dữ liệu mẫu</span>` : '')}
@@ -1348,7 +1581,7 @@
             ${q.metrics.map(k => { const v = num(r.values[k.id]); return `<td>${v === null ? '<span class="muted">Chưa khai</span>' : `${+v.toFixed(2)}${esc(k.unit)}${meets(k, v) ? '' : ' <span class="tag" style="--c:var(--orange)">Chưa đạt</span>'}`}</td>`; }).join('')}
             <td>${rate(r) === null ? '<span class="muted">Chưa khai</span>' : `${+r.passed}/${+r.total}<br><span class="muted">${pct(rate(r))}</span>`}</td>
             <td>${num(r.estTok) === null ? '—' : fmtK(num(r.estTok))} / ${num(r.actTok) === null ? '—' : fmtK(num(r.actTok))}</td><td>${!priced ? '<span class="muted">Cần đơn giá</span>' : num(r.actTok) === null ? '—' : usd(runCost(r, unit))}</td>
-            <td><span class="muted">${esc(r.note)}</span></td><td><div class="row" style="gap:6px;flex-wrap:nowrap">${btn('editrun', 'Sửa', 'soft small', `data-id="${esc(r.id)}"`)}${btn('delrun', 'Xóa', 'soft small', `data-id="${esc(r.id)}"`)}</div></td></tr>`).join('') || `<tr><td colspan="${7 + q.metrics.length}" class="muted">Chưa có lần chạy nào.</td></tr>`}</tbody></table></div></div>
+            <td><span class="muted">${esc(r.note)}</span></td><td><div class="row" style="gap:6px;flex-wrap:nowrap">${btn('editrun', 'Sửa', 'soft small', `data-id="${esc(r.id)}"`)}${btn('delrun', 'Xóa', 'soft small', `data-id="${esc(r.id)}"`)}</div></td></tr>`).join('') || `<tr><td colspan="${7 + q.metrics.length}" class="muted">Chưa có lần chạy nào. Điền form ở mục Lịch sử AI rồi bấm “Thêm lần chạy”.</td></tr>`}</tbody></table></div></div>
         <div class="panel">${panelHead('Chi phí', '<span class="muted">Đơn giá và hạ tầng là giả định của đội</span>')}<div class="cost">${numField('pricePerM', 'USD / 1 triệu token')}${numField('apiCalls', 'Số lượt gọi API/tháng', '1')}<div class="cost-field"><div class="label-row"><label for="q-infra">Hạ tầng USD/tháng</label><span class="tip-wrap"><button type="button" class="tip-btn" aria-label="Hạ tầng là gì?" aria-describedby="tip-infra">?</button><span class="tip-pop" id="tip-infra" role="tooltip">Chi phí chạy sản phẩm ngoài tiền token, ví dụ VPS, tên miền, GPU, cơ sở dữ liệu.</span></span></div><input id="q-infra" type="number" min="0" step="any" data-bind="cost" data-id="infra" value="${+c.infra || 0}"></div></div>
           <div class="kpis">${[['Chi phí lần chạy gần nhất', m.lastRun], ['Chi phí mỗi lượt gọi', m.perCase], ['Chi phí AI/tháng', m.aiMonthly], ['Tổng chi/tháng', m.totalCost]].map(([l, v]) => `<div class="kpi"><b>${v === null ? '—' : usd(v)}</b><span>${l}</span></div>`).join('')}</div>
           ${m.known ? '' : `<p class="muted" style="margin-top:8px">${m.priced ? 'Cần ít nhất một lần chạy có tổng số test và token thực tế.' : 'Cần đơn giá token để tính chi phí.'}</p>`}
@@ -1372,16 +1605,18 @@
     maintaining() {
       const m = S.maintain, today = iso(new Date()), h = health(), suggest = m.suggest || [];
       const rules = Object.values(RULES).map(r => `<tr><td>${esc(r.label)}</td>${LEVELS.slice(1).map(l => `<td>${r.dir === 'below' ? 'Dưới' : 'Từ'} ${fmtRule(r.fmt, r[l])}</td>`).join('')}</tr>`).join('');
-      return head(4, 'Sản phẩm AI cần được canh chừng. Việc đến hạn nằm trên cùng, mô hình 3D báo khi sản phẩm xuống cấp.') + `<div class="stack">
-        <div class="panel">${panelHead('Sức khỏe sản phẩm', `<span class="tag" style="--c:${HCOLOR[h.level]}">${HNAMES[h.level]}</span>`)}
+      const intro = head(4, 'Sản phẩm AI cần được canh chừng. Việc đến hạn nằm trên cùng, mô hình 3D báo khi sản phẩm xuống cấp.'), gate = teamGate('Lịch bảo trì');
+      if (gate) return intro + gate;
+      return intro + `<div class="stack">
+        <div class="panel">${panelHead('Sức khỏe sản phẩm', `<span class="tag" style="--c:${healthColor(h)}">${healthName(h)}</span>`)}
           <p class="muted">Tính từ số liệu ở Quality và lịch bảo trì. Mô hình 3D đổi theo trạng thái này: xuống cấp thì nghiêng và nứt, cần cứu hộ thì xe cứu thương tới, sập thì các tầng trên đổ xuống.</p>
-          <div style="margin-top:8px">${h.reasons.map(r => `<div class="reason"><span class="tag" style="--c:${HCOLOR[r.level]}">${HNAMES[r.level]}</span><span>${esc(reasonText(r))}</span></div>`).join('') || '<div class="reason"><span class="muted">Chưa chạm ngưỡng nào.</span></div>'}</div>
+          <div style="margin-top:8px">${h.reasons.map(r => `<div class="reason"><span class="tag" style="--c:${HCOLOR[r.level]}">${HNAMES[r.level]}</span><span>${esc(reasonText(r))}</span></div>`).join('') || `<div class="reason"><span class="muted">${noData(h) ? 'Ghi một lần chạy thử ở tab Quality hoặc thêm việc vào lịch bảo trì để bắt đầu theo dõi.' : 'Chưa chạm ngưỡng nào.'}</span></div>`}</div>
           ${h.missing.length ? `<p class="muted" style="margin-top:8px">Chưa đủ dữ liệu cho: ${h.missing.map(k => esc(RULES[k].label.toLowerCase())).join('; ')}.</p>` : ''}
           <div class="row" style="margin-top:12px"><span class="muted">Xem thử mô hình 3D</span><div class="seg" role="group" aria-label="Xem thử trạng thái">${[['real', 'Theo số liệu'], ...LEVELS.map(l => [l, HNAMES[l]])].map(([id, n]) => `<button data-act="preview" data-id="${id}" class="${(preview || 'real') === id ? 'on' : ''}">${n}</button>`).join('')}</div></div>
           <details style="margin-top:12px"><summary class="muted">Bảng ngưỡng (sửa trong file tang/health.js)</summary><div class="scroll"><table><thead><tr><th>Luật</th>${LEVELS.slice(1).map(l => `<th>${HNAMES[l]}</th>`).join('')}</tr></thead><tbody>${rules}</tbody></table></div></details></div>
         <div class="panel">${panelHead('Lịch bảo trì', btn('cadence', 'Agent gợi ý lịch', 'soft small'))}
           ${suggest.length ? `<div class="suggest-list">${suggest.map((x, i) => `<div class="suggest-row"><div class="suggest-info"><div class="row" style="gap:8px"><span>${esc(x.title)}</span><span class="tag" style="--c:var(--violet)">Mỗi ${+x.every} ngày</span></div><span class="muted">${esc(x.why)}</span></div><div class="row" style="gap:6px">${btn('addsuggest', 'Thêm vào lịch', 'soft small', `data-id="${esc(x.id || '')}" data-n="${i}"`)}${btn('dismisssuggest', 'Bỏ qua', 'soft small', `data-id="${esc(x.id || '')}" data-n="${i}"`)}</div></div>`).join('')}</div>` : ''}
-          <div class="scroll"><table><thead><tr><th>Việc</th><th>Chu kỳ</th><th>Hạn tới</th><th>Người làm</th><th></th></tr></thead><tbody>${m.schedule.slice().sort((a, b) => a.next.localeCompare(b.next)).map(x => `<tr data-row="${esc(x.id)}"><td>${esc(x.title)}<br><span class="muted">Đã làm ${+x.runs || 0} lần</span></td><td>${+x.every} ngày</td><td><span class="tag" style="--c:var(${x.next <= today ? '--orange' : '--violet'})">${x.next <= today ? 'Đến hạn ' : ''}${esc(x.next.split('-').reverse().join('/'))}</span></td><td><select data-bind="mowner" data-id="${esc(x.id)}" aria-label="Người làm">${options(x.owner)}</select></td><td><div class="row" style="gap:6px;flex-wrap:nowrap">${btn('ran', 'Đã làm', 'tone small', `data-id="${esc(x.id)}"`)}${btn('delmaint', 'Xóa', 'soft small danger', `data-id="${esc(x.id)}"`)}</div></td></tr>`).join('') || '<tr><td colspan="5" class="muted">Chưa có việc nào trong lịch bảo trì.</td></tr>'}</tbody></table></div>
+          <div class="scroll"><table><thead><tr><th>Việc</th><th>Chu kỳ</th><th>Hạn tới</th><th>Người làm</th><th></th></tr></thead><tbody>${m.schedule.slice().sort((a, b) => a.next.localeCompare(b.next)).map(x => `<tr data-row="${esc(x.id)}"><td>${esc(x.title)}<br><span class="muted">Đã làm ${+x.runs || 0} lần</span></td><td>${+x.every} ngày</td><td><span class="tag" style="--c:var(${x.next <= today ? '--orange' : '--violet'})">${x.next <= today ? 'Đến hạn ' : ''}${esc(x.next.split('-').reverse().join('/'))}</span></td><td><select data-bind="mowner" data-id="${esc(x.id)}" aria-label="Người làm">${options(x.owner)}</select></td><td><div class="row" style="gap:6px;flex-wrap:nowrap">${btn('ran', 'Đã làm', 'tone small', `data-id="${esc(x.id)}"`)}${btn('delmaint', 'Xóa', 'soft small danger', `data-id="${esc(x.id)}"`)}</div></td></tr>`).join('') || '<tr><td colspan="5" class="muted">Chưa có việc nào. Thêm việc bằng form bên dưới hoặc bấm “Agent gợi ý lịch”.</td></tr>'}</tbody></table></div>
           <form class="maint-form stack" style="gap:10px" data-form="maint" novalidate><div class="cost">
             <label>Việc cần làm<input name="title" required maxlength="120" placeholder="Ví dụ: Rà lại câu trả lời sai chính sách"></label>
             <label>Chu kỳ (ngày)<input name="every" type="number" min="1" max="365" step="1" value="7" required></label>
@@ -1414,15 +1649,14 @@
     const ctx = pitchCtx();
     return `<div class="role-pick">
       <div class="row" style="justify-content:space-between">
-        <span><b>Ý tưởng nhóm (từ Product thinking):</b> ${esc(ctx.project_name)}</span>
+        <span><b>${esc(ctx.project_name)}</b></span>
         ${btn('tab', 'Sửa ở Product thinking', 'soft small', 'data-id="product"')}
       </div>
-      <div class="muted">${esc(ctx.problem || ctx.overview || 'Chưa điền Problem ở tab Product thinking — AI sẽ dùng tên dự án và chat nhóm để gợi ý.')}</div>
-      <span class="muted" style="margin-top:4px">Chọn 1 đối tượng nhận form (1 Form = 1 Vai chính)</span>
+      ${ctx.problem || ctx.overview ? `<div class="muted">${esc(ctx.problem || ctx.overview)}</div>` : ''}
+      <span class="muted" style="margin-top:2px">Đối tượng nhận form</span>
       <div class="row">${roleOptions.map(r => `<button type="button" class="btn small ${curRole === r ? 'tone' : 'soft'}" data-act="pickRole" data-id="${esc(r)}">${esc(r)}</button>`).join('')}</div>
-      <input data-bind="targetRole" value="${esc(curRole)}" placeholder="Hoặc nhập 1 đối tượng cụ thể (vd: Học viên lớp L3B, Người dùng thử)">
-      <div class="row" style="justify-content:space-between;gap:8px;margin-top:4px">
-        <span class="muted">AI lấy ý tưởng từ Product thinking + đối tượng trên để gợi ý sẵn câu hỏi.</span>
+      <input data-bind="targetRole" value="${esc(curRole)}" placeholder="Hoặc nhập đối tượng khác">
+      <div class="row" style="justify-content:flex-end;margin-top:4px">
         ${btn('form', target.draftSource ? 'AI gợi ý lại' : 'AI gợi ý câu hỏi', 'tone small')}
       </div>
     </div>`;
@@ -1456,12 +1690,12 @@
     const sections = ensureSections(target);
     const questions = target.form || [];
     const sourceBadge = isEdit
-      ? `<span class="tag">Đang sửa form: /survey?slug=${esc(target.slug)}</span>`
+      ? '<span class="tag">Đang sửa</span>'
       : target.draftSource === 'llm'
-        ? '<span class="tag" style="--c:var(--green)">AI Gemini gợi ý theo Product thinking</span>'
+        ? '<span class="tag" style="--c:var(--green)">AI Gemini</span>'
         : target.draftSource === 'fallback'
-          ? '<span class="tag">Gợi ý theo ngữ cảnh dự phòng</span>'
-          : '<span class="tag">Bản nháp — bấm “AI gợi ý câu hỏi” để tạo theo ý mới</span>';
+          ? '<span class="tag">Theo Product thinking</span>'
+          : '<span class="tag">Bản nháp</span>';
     const allCollapsed = sections.every(s => collapsedSecs.has(secKey(target, s.id)));
     const secNav = `<div class="sec-nav">
       <div class="row" style="gap:6px">${sections.map((s, si) => {
@@ -1547,12 +1781,11 @@
       <button type="button" class="gf-rail-btn" data-act="form" title="AI gợi ý câu hỏi theo đối tượng & Product thinking" aria-label="AI gợi ý câu hỏi"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 5.2L19 10l-5.1 1.8L12 17l-1.9-5.2L5 10l5.1-1.8z"/></svg></button>
     </aside>`;
 
-    const footerBtns = isEdit
-      ? `${btn('addSec', '+ Thêm section', 'soft small')}${btn('addQ', '+ Thêm câu hỏi', 'soft small')}${btn('saveEdit', 'Lưu', 'primary small')}`
-      : `${btn('addSec', '+ Thêm section', 'soft small')}${btn('addQ', '+ Thêm câu hỏi', 'soft small')}${btn('publishSurvey', 'Lưu', 'primary small')}`;
+    const leftFootBtns = `${btn('addSec', '+ Thêm section', 'soft small')}${btn('addQ', '+ Thêm câu hỏi', 'soft small')}`;
+    const saveFootBtn = isEdit ? btn('saveEdit', 'Lưu thay đổi', 'primary') : btn('publishSurvey', 'Lưu khảo sát', 'primary');
     const showSlug = isEdit && (lastSavedSlug === target.slug || target.slug);
     const linkBox = isEdit && showSlug && lastSavedSlug === target.slug
-      ? `<div class="pub-box"><div><strong>Đã lưu &amp; có link khảo sát:</strong> <code>/survey?slug=${esc(target.slug)}</code></div><div class="row"><input readonly value="${esc(location.origin + '/survey?slug=' + target.slug)}" aria-label="Link công khai">${btn('copySlug', 'Sao chép link', 'tone small', `data-id="${esc(target.slug)}"`)}<a class="btn soft small" style="text-decoration:none" href="/survey?slug=${encodeURIComponent(target.slug)}" target="_blank" rel="noopener">Mở trang khảo sát</a></div></div>`
+      ? `<div class="pub-box"><div class="row"><input readonly value="${esc(location.origin + '/survey?slug=' + target.slug)}" aria-label="Link khảo sát">${btn('copySlug', 'Sao chép link', 'tone small', `data-id="${esc(target.slug)}"`)}<a class="btn soft small" style="text-decoration:none" href="/survey?slug=${encodeURIComponent(target.slug)}" target="_blank" rel="noopener">Mở</a></div></div>`
       : '';
 
     return `<div class="stack" style="gap:10px;margin-top:10px">
@@ -1568,7 +1801,7 @@
         </div>
         ${rail}
       </div>
-      <div class="gf-foot-bar"><div class="row">${footerBtns}</div></div>
+      <div class="gf-foot-bar"><div class="row" style="gap:8px">${leftFootBtns}</div>${saveFootBtn}</div>
       ${linkBox}
     </div>`;
   }
@@ -1576,10 +1809,13 @@
   const CHART_COLORS = ['#ff8a1f', '#0a9cf0', '#14b86a', '#4d5bf0', '#a24ce8', '#ff4d5e'];
   function pitchCtx() {
     const t = activeEditorTarget();
-    const role = (t.targetRole || S.pitch.targetRole || '').trim();
+    const list = Array.isArray(surveysCache) ? surveysCache : [];
+    const selSlug = activeDeckSurveySlug();
+    const selSurvey = selSlug && selSlug !== '__none__' ? list.find(x => x.slug === selSlug) : null;
+    const role = (t.targetRole || S.pitch.targetRole || (selSurvey && selSurvey.target_role) || '').trim();
     const chatNotes = (S.chat || []).filter(m => m.who !== 'agent').slice(-4).map(m => m.text).join(' | ');
     return {
-      project_name: (sideMode === 'survey' && editSurveyTarget && editSurveyTarget.project_name) || S.meta.name || 'Sản phẩm mới',
+      project_name: (sideMode === 'survey' && editSurveyTarget && editSurveyTarget.project_name) || (S.meta.name || '').trim() || (selSurvey && selSurvey.project_name) || 'Sản phẩm AI',
       target_role: role,
       persona: score('persona') || role,
       problem: score('problem'),
@@ -1668,15 +1904,15 @@
   }
   function publishedPanel() {
     const list = surveysCache;
-    if (surveysLoading && !list) return '<div class="survey-box"><p class="muted">Đang tải danh sách khảo sát…</p></div>';
-    if (surveysError) return `<div class="survey-box"><p class="muted">${esc(surveysError)}</p></div>`;
-    if (!list || !list.length) return '<div class="survey-box survey-empty"><p class="muted">Chưa có khảo sát nào được tạo. Bấm “Tạo khảo sát” để bắt đầu.</p></div>';
+    if (surveysLoading && !list) return '<div class="empty-note">Đang tải danh sách khảo sát…</div>';
+    if (surveysError) return `<div class="empty-note">${esc(surveysError)}</div>`;
+    if (!list || !list.length) return '<div class="empty-note">Chưa có khảo sát nào. Bấm <b>Tạo khảo sát</b> để bắt đầu.</div>';
     const curSel = activeTileSlug();
     return `<div class="survey-grid">${list.map(s => `<button type="button" class="survey-tile${(sideSlug || curSel) === s.slug ? ' on' : ''}" data-act="openSurveySide" data-id="${esc(s.slug)}">
       <span class="survey-tile-title">${esc(s.title)}</span>
       <span class="survey-tile-meta">
         ${s.target_role ? `<span class="tag" style="--c:var(--orange)">${esc(s.target_role)}</span>` : ''}
-        <span class="muted"><b data-resp-count="${esc(s.slug)}">${+s.response_count || 0}</b> phản hồi</span>
+        <span class="tag" style="--c:var(--ink)"><b data-resp-count="${esc(s.slug)}">${+s.response_count || 0}</b> phản hồi</span>
       </span>
     </button>`).join('')}</div>`;
   }
@@ -1808,8 +2044,10 @@
     return selector + `<div class="kpis" style="margin:0 0 8px"><div class="kpi" style="--c:var(--orange)"><b>${data.total_responses}</b><span>Tổng phản hồi ${sampleNote}</span></div></div>` + charts;
   }
   function deckHTML() {
-    const slides = (S.pitch.deck || []).map((s, i) => `<section style="--s:${STEPS[i % STEPS.length].hex}">${s.kicker ? `<small>${esc(s.kicker)}</small>` : ''}<h1>${esc(s.title)}</h1><p>${esc(s.body)}</p>${s.highlight ? `<div class="hl">${esc(s.highlight)}</div>` : ''}</section>`).join('\n');
-    return `<!DOCTYPE html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${esc(S.pitch.deckTitle || S.meta.name)}</title><style>*{box-sizing:border-box;font-style:normal}body{margin:0;font-family:"Familjen Grotesk","Be Vietnam Pro",Arial,sans-serif;color:#121a33;background:#fff;scroll-snap-type:y mandatory;overflow-y:auto;height:100vh}section{height:100vh;scroll-snap-align:start;display:flex;flex-direction:column;justify-content:center;gap:14px;padding:8vw;border-bottom:6px solid var(--s)}small{font-size:13px;letter-spacing:.14em;text-transform:uppercase;color:#626d8c}h1{font-weight:400;font-size:clamp(30px,5vw,60px);margin:0;letter-spacing:-0.03em}p{font-size:clamp(17px,2vw,26px);font-weight:300;line-height:1.6;max-width:32em;white-space:pre-wrap;margin:0}.hl{align-self:flex-start;background:#eef2ff;padding:6px 14px;border-radius:999px;font-size:14px}</style></head><body>\n${slides}\n</body></html>`;
+    const list = S.pitch.deck || [];
+    const title = (S.pitch.deckTitle || S.meta.name || 'Pitching Deck').trim();
+    const slides = list.map((s, i) => renderSlideCard(s, i, list.length, title)).join('\n');
+    return `<!DOCTYPE html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${esc(title)}</title><style>*{box-sizing:border-box;font-style:normal}:root{--ink:#121a33;--mute:#626d8c;--line:#e7ebf5;--soft:#f4f6fc}body{margin:0;font-family:"Be Vietnam Pro",system-ui,Arial,sans-serif;color:var(--ink);background:#fff;scroll-snap-type:y mandatory;overflow-y:auto;height:100vh}.slide{height:100vh;scroll-snap-align:start;display:flex;flex-direction:column;justify-content:space-between;gap:24px;padding:clamp(28px,6vw,72px);background:radial-gradient(circle at 95% 6%,color-mix(in srgb,var(--s) 13%,#fff),#fff 56%);border-bottom:1px solid var(--line)}.slide.is-hero{background:radial-gradient(circle at 88% 12%,color-mix(in srgb,var(--s) 24%,#fff),#fff 64%)}.slide-prog{height:4px;background:var(--line);border-radius:99px;overflow:hidden}.slide-prog>span{display:block;height:100%;background:var(--s)}.slide-top{display:flex;justify-content:space-between;align-items:center}.slide-kicker{display:inline-flex;align-items:center;gap:8px;font-size:13px;letter-spacing:.08em;text-transform:uppercase;font-weight:500;background:color-mix(in srgb,var(--s) 14%,#fff);padding:5px 14px;border-radius:99px}.slide-kicker::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--s)}.slide-num{font-size:14px;color:var(--mute);font-variant-numeric:tabular-nums}.slide-grid{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(240px,.85fr);gap:32px;align-items:center}.slide-main{display:grid;gap:16px}h3{font-weight:500;font-size:clamp(26px,4vw,48px);margin:0;letter-spacing:-0.025em;line-height:1.15}.is-hero h3{font-size:clamp(32px,4.8vw,56px)}p{font-size:clamp(16px,1.7vw,22px);color:#475569;line-height:1.6;max-width:48ch;margin:0}.slide-list{margin:0;padding:0;list-style:none;display:grid;gap:12px}.slide-list li{position:relative;padding-left:22px;font-size:clamp(16px,1.7vw,22px);line-height:1.55}.slide-list li::before{content:"";position:absolute;left:0;top:.62em;width:8px;height:8px;border-radius:50%;background:var(--s)}.slide-callout{border-left:4px solid var(--s);background:color-mix(in srgb,var(--s) 8%,#fff);border-radius:0 16px 16px 0;padding:20px 24px;display:grid;gap:6px}.slide-callout small,.slide-stat small,.slide-col small,.slide-pill small{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--mute)}.slide-callout b,.slide-stat b{font-size:clamp(18px,2vw,26px);font-weight:500;line-height:1.35}.slide-pills{display:flex;flex-wrap:wrap;gap:12px}.slide-pill{background:#fff;border:1px solid var(--line);border-radius:14px;padding:12px 16px;font-size:16px;display:grid;gap:3px}.slide-cards,.slide-steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px}.slide-card,.slide-step{background:#fff;border:1px solid var(--line);border-radius:16px;padding:18px;display:grid;gap:8px;align-content:start}.slide-card{border-top:4px solid var(--s)}.slide-card-no{font-size:12px;font-weight:600;color:var(--s)}.slide-step-no{width:30px;height:30px;border-radius:50%;background:var(--s);color:#fff;font-size:14px;font-weight:600;display:grid;place-items:center}.slide-card b,.slide-step b{font-size:18px;font-weight:500}.slide-card span,.slide-step span{font-size:16px;color:var(--mute);line-height:1.5}.slide-compare{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}.slide-col{border:1px solid var(--line);border-radius:16px;padding:22px;background:var(--soft);display:grid;gap:8px;align-content:start}.slide-col.accent{background:color-mix(in srgb,var(--s) 8%,#fff);border-color:color-mix(in srgb,var(--s) 35%,var(--line))}.slide-col b{font-size:19px;font-weight:500;line-height:1.45}.slide-metric-grid{display:grid;grid-template-columns:minmax(220px,.8fr) minmax(0,1.4fr);gap:28px;align-items:center}.slide-stat{background:color-mix(in srgb,var(--s) 10%,#fff);border:1px solid color-mix(in srgb,var(--s) 35%,var(--line));border-radius:18px;padding:26px;display:grid;gap:8px}.slide-stat b{font-size:clamp(26px,3.2vw,42px)}.slide-foot{display:flex;justify-content:space-between;font-size:13px;color:var(--mute);border-top:1px solid var(--line);padding-top:14px}@media(max-width:760px){.slide-grid,.slide-compare,.slide-metric-grid{grid-template-columns:1fr}}</style></head><body>\n${slides}\n<script>const s=[...document.querySelectorAll('.slide')];let i=0;document.addEventListener('keydown',e=>{if(['ArrowRight','ArrowDown',' '].includes(e.key)){e.preventDefault();i=Math.min(s.length-1,i+1);s[i]?.scrollIntoView({behavior:'smooth'});}else if(['ArrowLeft','ArrowUp'].includes(e.key)){e.preventDefault();i=Math.max(0,i-1);s[i]?.scrollIntoView({behavior:'smooth'});}});</script></body></html>`;
   }
 
   /* ---------- Hành động của agent ---------- */
@@ -2025,7 +2263,8 @@
           kicker: String(s.kicker || '').trim(),
           title: String(s.title || '').trim() || `Slide ${i + 1}`,
           body: String(s.body || '').trim() || 'Cần bổ sung nội dung.',
-          highlight: String(s.highlight || '').trim()
+          highlight: String(s.highlight || '').trim(),
+          layout: s.layout || 'auto'
         })),
         script: '',
         ads: (S.pitch.adPosts || []).map((ad, i) => ({
@@ -2112,7 +2351,7 @@ nature là bản chất problem: "behavior" nếu là problem hành vi (duy trì
         return x;
       });
       S.quality.metrics = [...next, ...old.filter(o => o.from === 'tay' && !used.has(o.id))];
-      S.quality.source = S.score.metric.text;
+      S.quality.source = src;
       S.quality.nature = NATURE[out.nature] ? out.nature : natureOf(S.score.problem.text);
       save('quality');
       toast(`Đã lấy ${next.length} chỉ số từ scorecard${out.rule ? ' bằng luật tách số' : ''}.`);
@@ -2211,10 +2450,41 @@ nature là bản chất problem: "behavior" nếu là problem hành vi (duy trì
 
   function renderTeam() {
     $('#teamBar').innerHTML = S.meta.members.map(m => avatar(m.id)).join('');
+    $('#projectName').placeholder = 'Đặt tên dự án';
     if (document.activeElement !== $('#projectName')) $('#projectName').value = S.meta.name;
   }
   function renderNav() {
     $('#nav').innerHTML = TABS.map(t => `<button class="nav-item ${t.id === tab ? 'on' : ''}" style="--c:${t.hex}" data-act="tab" data-id="${t.id}" aria-current="${t.id === tab}"><span class="long">${t.name}</span><span class="short">${t.short}</span></button>`).join('');
+  }
+  let deckScrollTimer = null, ignoreDeckScrollUntil = 0;
+  function syncSlideEditorBox() {
+    const box = $('#slideEditorBox', view);
+    if (box) box.outerHTML = renderSlideEditorBox();
+  }
+  function bindDeckScroll() {
+    const d = $('.deck', view);
+    const list = S.pitch.deck || [];
+    if (!d || !list.length) return;
+    const step = (d.clientWidth || 0) + 12;
+    if (step > 12 && activeSlideIdx > 0) {
+      ignoreDeckScrollUntil = Date.now() + 120;
+      d.scrollLeft = activeSlideIdx * step;
+    }
+    const updateFromScroll = () => {
+      if (Date.now() < ignoreDeckScrollUntil) return;
+      const curStep = (d.clientWidth || 0) + 12;
+      if (curStep <= 12) return;
+      const nextIdx = Math.max(0, Math.min(list.length - 1, Math.round(d.scrollLeft / curStep)));
+      if (nextIdx !== activeSlideIdx) {
+        activeSlideIdx = nextIdx;
+        syncSlideEditorBox();
+      }
+    };
+    d.addEventListener('scroll', () => {
+      clearTimeout(deckScrollTimer);
+      deckScrollTimer = setTimeout(updateFromScroll, 65);
+    }, { passive: true });
+    d.addEventListener('scrollend', updateFromScroll, { passive: true });
   }
   function render() {
     const t = TABS.find(x => x.id === tab);
@@ -2226,7 +2496,7 @@ nature là bản chất problem: "behavior" nếu là problem hành vi (duy trì
     else { viewContent.innerHTML = views[tab](); overlay.innerHTML = ''; }
     if (tab === 'product') thinkMount();
     if (tab === 'planning') fitBoard();
-    if (tab === 'pitching') { loadPublishedSurveys(); renderSidePanel(); }
+    if (tab === 'pitching') { loadPublishedSurveys(); renderSidePanel(); bindDeckScroll(); }
   }
   function layout(animate) {
     const over = tab === 'overview', isMobile = mobile.matches;
@@ -2385,13 +2655,12 @@ nature là bản chất problem: "behavior" nếu là problem hành vi (duy trì
       sidePanel.innerHTML = `<div class="side-head">
         <div style="min-width:0;flex:1 1 220px">
           <h3>Tạo khảo sát mới</h3>
-          <div class="muted" style="font-size:13px;margin-top:4px">Chọn đối tượng từ Product thinking, AI gợi ý sẵn rồi chỉnh theo kiểu Google Forms và bấm Lưu.</div>
         </div>
-        <div class="row" style="gap:6px">${btn('form', p.draftSource ? 'AI gợi ý lại' : 'AI gợi ý câu hỏi', 'tone small')}${btn('closeSurveySide', 'Đóng', 'soft small')}</div>
+        <div class="row" style="gap:6px">${btn('form', p.draftSource ? 'AI gợi ý lại' : 'AI gợi ý câu hỏi', 'tone small')}${btn('publishSurvey', 'Lưu', 'primary small')}${btn('closeSurveySide', 'Đóng', 'soft small')}</div>
       </div>
       <div class="side-body">
         ${renderRolePick(p)}
-        ${p.form ? renderSurveyEditor(p, false) : '<p class="muted">Chọn đối tượng ở trên rồi bấm “AI gợi ý câu hỏi”.</p>'}
+        ${p.form ? renderSurveyEditor(p, false) : '<div class="empty-note">Chọn đối tượng rồi bấm <b>AI gợi ý câu hỏi</b>.</div>'}
       </div>`;
       const newBody = $('.side-body', sidePanel);
       if (newBody && sy) newBody.scrollTop = sy;
@@ -2414,13 +2683,13 @@ nature là bản chất problem: "behavior" nếu là problem hành vi (duy trì
       bodyHtml = `${renderRolePick(editSurveyTarget)}${renderSurveyEditor(editSurveyTarget, true)}`;
     } else if (sideTab === 'stats') {
       bodyHtml = `<div class="panel">${panelHead('Dashboard', `<div class="row">${dashToggle}${btn('seed', 'Thêm 8 phản hồi mẫu', 'soft small')}</div>`)}<div id="dashBody">${dashboard()}</div></div>
-        <div class="panel">${panelHead('AI overview từ form', hasResp ? btn('summary', S.pitch.overview ? 'Phân tích lại' : 'Phân tích phản hồi', 'tone small') : '')}${S.pitch.overview ? `<div class="prose">${esc(S.pitch.overview)}</div>` : `<p class="muted">${hasResp ? 'Bấm phân tích để agent tóm tắt tín hiệu và việc nên làm tiếp.' : 'Cần ít nhất một phản hồi.'}</p>`}</div>`;
+        <div class="panel">${panelHead('AI overview từ form', hasResp ? btn('summary', S.pitch.overview ? 'Phân tích lại' : 'Phân tích phản hồi', 'tone small') : '')}${S.pitch.overview ? `<div class="prose">${esc(S.pitch.overview)}</div>` : `<div class="empty-note">${hasResp ? 'Bấm phân tích để tóm tắt tín hiệu.' : 'Cần ít nhất một phản hồi.'}</div>`}</div>`;
     } else {
       const rows = activeSurveyDetail && activeSurveyDetail.slug === sideSlug ? activeSurveyDetail.responses : null;
       bodyHtml = !rows
-        ? '<p class="muted">Đang tải phản hồi…</p>'
+        ? '<p class="muted">Đang tải…</p>'
         : !rows.length
-          ? '<p class="muted">Chưa có phản hồi nào cho khảo sát này. Sao chép link gửi thử hoặc vào tab Dữ liệu để thêm dữ liệu mẫu.</p>'
+          ? '<div class="empty-note">Chưa có phản hồi nào.</div>'
           : `<div class="resp-drawer">${rows.map(r => `<div class="resp-item"><div class="row" style="justify-content:space-between"><strong>${esc(r.respondent_role || editSurveyTarget.targetRole || 'Ẩn danh')}</strong><span class="muted">${esc((r.created_at || '').slice(0, 16).replace('T', ' '))}${r.is_sample ? ' · Mẫu' : ''}</span></div>
             ${(editSurveyTarget.form || []).map(q => { const a = (r.answers || {})[q.id]; return `<div><span class="muted">${esc(q.q)}:</span> ${esc(Array.isArray(a) ? a.join(' · ') : (a || '—'))}</div>`; }).join('')}</div>`).join('')}</div>`;
     }
@@ -2428,7 +2697,7 @@ nature là bản chất problem: "behavior" nếu là problem hành vi (duy trì
     sidePanel.innerHTML = `<div class="side-head">
       <div style="min-width:0;flex:1 1 220px">
         <h3>${esc(editSurveyTarget.formTitle || surveyObj.title || sideSlug)}</h3>
-        <div class="row" style="margin-top:6px;gap:6px">${editSurveyTarget.targetRole ? `<span class="tag" style="--c:var(--orange)">${esc(editSurveyTarget.targetRole)}</span>` : ''}<span class="muted">/survey?slug=${esc(sideSlug)}</span></div>
+        ${editSurveyTarget.targetRole ? `<div class="row" style="margin-top:6px"><span class="tag" style="--c:var(--orange)">${esc(editSurveyTarget.targetRole)}</span></div>` : ''}
       </div>
       <div class="row" style="gap:6px">
         ${btn('copySlug', 'Publish link', 'soft small', `data-id="${esc(sideSlug)}"`)}
@@ -2473,12 +2742,9 @@ nature là bản chất problem: "behavior" nếu là problem hành vi (duy trì
   /* Vẽ lại tab hiện tại, giữ vị trí cuộn */
   function rerender() { const y = view.scrollTop; render(); view.scrollTop = y; syncProgress(); }
   /* ---------- Sự kiện ---------- */
-  let resetArmed = 0;
   const actions = {
     enter: () => enter(),
     home,
-    replay: () => replay(),
-    flow: () => $('#flow').scrollIntoView({ behavior: reduced ? 'auto' : 'smooth' }),
     tab: b => go(b.dataset.id),
     'planning-live': () => setPlanningOpen(true),
     'repo-open': openRepo,
@@ -2513,12 +2779,10 @@ nature là bản chất problem: "behavior" nếu là problem hành vi (duy trì
     },
     openSelectedEdit() { openSideForSlug(activeTileSlug(), 'edit'); },
     openSelectedStats() { openSideForSlug(activeTileSlug(), 'stats'); },
-    async copySelectedLink() {
+    async copySelectedLink(b) {
       const slug = activeTileSlug();
       if (!slug) return toast('Chưa có khảo sát nào để sao chép link.');
-      const url = location.origin + '/survey?slug=' + slug;
-      try { await navigator.clipboard.writeText(url); toast('Đã sao chép link khảo sát: /survey?slug=' + slug); }
-      catch (e) { toast('Link khảo sát: /survey?slug=' + slug); }
+      await copyTextWithFeedback(location.origin + '/survey?slug=' + slug, b, 'Đã copy link');
     },
     async openSurveySide(b) { openSideForSlug(b.dataset.id, 'edit'); },
     closeSurveySide() { closeSurveySide(false); },
@@ -2676,14 +2940,12 @@ nature là bản chất problem: "behavior" nếu là problem hành vi (duy trì
       t.form.splice(+b.dataset.id, 1); persistActiveEditor(); rerender();
     },
     reloadSurveys() { loadPublishedSurveys(true); },
-    async copySurveyLink() {
+    async copySurveyLink(b) {
       if (!S.pitch.publishedSlug) return;
-      try { await navigator.clipboard.writeText(location.origin + '/survey?slug=' + S.pitch.publishedSlug); toast('Đã sao chép link khảo sát'); }
-      catch (e) { toast('Trình duyệt chặn sao chép, hãy copy trực tiếp trong ô link.'); }
+      await copyTextWithFeedback(location.origin + '/survey?slug=' + S.pitch.publishedSlug, b, 'Đã copy link');
     },
     async copySlug(b) {
-      try { await navigator.clipboard.writeText(location.origin + '/survey?slug=' + b.dataset.id); toast('Đã sao chép link khảo sát'); }
-      catch (e) { toast('Trình duyệt chặn sao chép, link: /survey?slug=' + b.dataset.id); }
+      await copyTextWithFeedback(location.origin + '/survey?slug=' + b.dataset.id, b, 'Đã copy link');
     },
     async toggleResponses(b) {
       const slug = b.dataset.id, survey = (surveysCache || []).find(x => x.slug === slug);
@@ -2720,11 +2982,7 @@ nature là bản chất problem: "behavior" nếu là problem hành vi (duy trì
         rerender(); refreshDashStats(true); toast('Đã xóa link khảo sát');
       } catch (e) { toast('Không xóa được link khảo sát.'); }
     },
-    reset(b) {
-      if (Date.now() - resetArmed > 4000) { resetArmed = Date.now(); b.textContent = db ? 'Bấm lần nữa: đặt lại cho cả đội' : 'Bấm lần nữa để đặt lại'; setTimeout(() => { b.textContent = 'Đặt lại demo'; }, 4000); return; }
-      S = SEED(); resetArmed = 0; b.textContent = 'Đặt lại demo';
-      save(...Object.keys(S)); renderTeam(); renderChat(); rerender(); enterContent(); toast('Đã đặt lại dữ liệu demo');
-    },
+    'ws-retry': () => loadPlanning(true),
     dot(b) { const s = S.score[b.dataset.id], n = +b.dataset.n; s.score = s.score === n ? n - 1 : n; save('score'); rerender(); anim($$(`.score[data-key="${b.dataset.id}"] .dots .on`, view), { scaleY: [2.2, 1] }, { type: 'spring', delay: canAnim ? M.stagger(0.04) : 0 }); },
     async seed(b) {
       const slug = activeDashSlug();
@@ -2762,10 +3020,17 @@ nature là bản chất problem: "behavior" nếu là problem hành vi (duy trì
       const len = (S.pitch.deck || []).length;
       if (!len) return;
       activeSlideIdx = Math.max(0, Math.min(len - 1, activeSlideIdx + (+b.dataset.n || 0)));
-      if (d) d.scrollBy({ left: +b.dataset.n * (d.clientWidth + 12), behavior: reduced ? 'auto' : 'smooth' });
-      rerender();
-      const d2 = $('.deck', view);
-      if (d2) d2.scrollLeft = activeSlideIdx * (d2.clientWidth + 12);
+      syncSlideEditorBox();
+      if (d) {
+        ignoreDeckScrollUntil = Date.now() + 450;
+        d.scrollTo({ left: activeSlideIdx * ((d.clientWidth || 0) + 12), behavior: reduced ? 'auto' : 'smooth' });
+      }
+    },
+    fullDeck() {
+      const d = $('.deck', view);
+      if (!d) return;
+      if (document.fullscreenElement) { document.exitFullscreen().catch(() => {}); return; }
+      if (d.requestFullscreen) d.requestFullscreen().then(() => { d.scrollLeft = activeSlideIdx * (d.clientWidth + 12); }).catch(() => toast('Trình duyệt không cho phép bật toàn màn hình.'));
     },
     addSlide() {
       if (!Array.isArray(S.pitch.deck) || S.pitch.deck.length >= 10) return toast('Tối đa 10 slide trong một bộ.');
@@ -2781,22 +3046,19 @@ nature là bản chất problem: "behavior" nếu là problem hành vi (duy trì
       activeSlideIdx = Math.max(0, Math.min(activeSlideIdx, S.pitch.deck.length - 1));
       save('pitch'); rerender();
     },
-    async copyDeckLink() {
+    async copyDeckLink(b) {
       if (!S.pitch.deckSlug) return;
-      try { await navigator.clipboard.writeText(location.origin + '/pitch?slug=' + S.pitch.deckSlug); toast('Đã sao chép link trình chiếu'); }
-      catch (e) { toast('Link slide: /pitch?slug=' + S.pitch.deckSlug); }
+      await copyTextWithFeedback(location.origin + '/pitch?slug=' + S.pitch.deckSlug, b, 'Đã copy link');
     },
     async copyAd(b) {
       const ad = S.pitch.adPosts && S.pitch.adPosts[+b.dataset.id];
       if (!ad) return;
-      try { await navigator.clipboard.writeText(adFullText(ad)); toast('Đã sao chép bài ' + ad.channel); }
-      catch (e) { toast('Trình duyệt chặn sao chép.'); }
+      await copyTextWithFeedback(adFullText(ad), b, 'Đã copy bài');
     },
-    async copyAllAds() {
+    async copyAllAds(b) {
       const text = (S.pitch.adPosts || []).map(ad => `【${ad.channel}】\n${adFullText(ad)}`).join('\n\n---\n\n');
       if (!text) return;
-      try { await navigator.clipboard.writeText(text); toast('Đã sao chép tất cả bài quảng cáo'); }
-      catch (e) { toast('Trình duyệt chặn sao chép.'); }
+      await copyTextWithFeedback(text, b, 'Đã copy tất cả');
     },
     insertSurveyInAd(b) {
       const slug = activeTileSlug();
@@ -2808,11 +3070,11 @@ nature là bản chất problem: "behavior" nếu là problem hành vi (duy trì
         ? txt.replace(/\/survey\?slug=\S+|\[[^\]]*(link|khảo sát|dùng thử)[^\]]*\]/gi, url)
         : txt + '\n\n' + url;
       ad.text = txt;
-      save('pitch'); rerender(); toast('Đã chèn link khảo sát vào bài ' + ad.channel);
+      save('pitch'); rerender(); toast('Đã chèn link khảo sát vào bài');
     },
     async copy(b) {
       const text = b.dataset.id === 'html' ? deckHTML() : S.pitch[b.dataset.id];
-      try { await navigator.clipboard.writeText(text); toast('Đã sao chép'); } catch (e) { toast('Trình duyệt chặn sao chép. Hãy bôi đen văn bản để chép tay.'); }
+      await copyTextWithFeedback(text, b, 'Đã copy');
     },
     async download() {
       const html = deckHTML();
@@ -2998,8 +3260,8 @@ nature là bản chất problem: "behavior" nếu là problem hành vi (duy trì
         const deckCards = $$('#view .deck .slide');
         const card = deckCards[+id];
         if (card) {
-          if (field === 'title' && $('h3', card)) $('h3', card).textContent = v;
-          if (field === 'body' && $('p', card)) $('p', card).textContent = v;
+          const slideTitle = (S.pitch.deckTitle || S.meta.name || 'Pitching Deck').trim();
+          card.outerHTML = renderSlideCard(s, +id, S.pitch.deck.length, slideTitle);
         }
       }
       return true;
@@ -3018,7 +3280,7 @@ nature là bản chất problem: "behavior" nếu là problem hành vi (duy trì
     const v = t.value;
     if (k === 'score') { S.score[id].text = v; if (!v.trim()) S.score[id].score = 0; save('score'); }
     if (k === 'cost') {
-      S.plan.cost[id] = Math.max(0, +v || 0); save('plan'); rerender();
+      S.quality.cost[id] = Math.max(0, +v || 0); save('quality'); rerender();
     }
     if (k === 'revmodel') {
       S.quality.revenueModel = ['sub', 'usage', 'setup'].includes(v) ? v : 'sub';
@@ -3046,11 +3308,14 @@ nature là bản chất problem: "behavior" nếu là problem hành vi (duy trì
     if (k === 'qReq') { const target = activeEditorTarget(); const q = target.form && target.form[+id]; if (q) { q.required = t.checked; persistActiveEditor(); } }
     if (k === 'dashSlug') { dashSlugSelected = v; dashStats = null; lastDashJson = ''; refreshDashStats(true); }
     if (k === 'deckSurveySlug') { deckSurveySlug = v; rerender(); }
-    if (k === 'activeSlidePick') {
-      activeSlideIdx = +v || 0;
-      rerender();
-      const d2 = $('.deck', view);
-      if (d2) d2.scrollLeft = activeSlideIdx * (d2.clientWidth + 12);
+    if (k === 'slideLayout') {
+      const s = S.pitch.deck && S.pitch.deck[+id];
+      if (s) {
+        s.layout = v;
+        save('pitch');
+        const card = $$('#view .deck .slide')[+id];
+        if (card) card.outerHTML = renderSlideCard(s, +id, S.pitch.deck.length, (S.pitch.deckTitle || S.meta.name || 'Pitching Deck').trim());
+      }
     }
   });
   document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeDrawer(); setPlanningOpen(false); closeSurveySide(); } });
@@ -3069,28 +3334,37 @@ nature là bản chất problem: "behavior" nếu là problem hành vi (duy trì
     intro = M.animate(0, 1, { duration: 5.2, delay: 0.35, ease: [0.55, 0, 0.15, 1], onUpdate: v => { heroScene.state.p = v; } });
   }
   function landing() {
-    $('#flowList').innerHTML = STEPS.map((s, i) => `<li><button class="step" style="--c:${s.hex}" data-step="${s.id}"><span class="step-no">${i + 1}</span><span class="step-body"><span class="step-title">${s.name}</span><span>${s.lead}</span>
-      <span class="shift"><span><small>Engineer thường nghĩ</small>${s.from}</span><span><small>AI builder hỏi</small>${s.to}</span></span><span class="chips">${s.out.map(o => `<span class="chip">${o}</span>`).join('')}</span></span></button></li>`).join('');
-    $$('.step').forEach(b => b.addEventListener('click', () => enter(b.dataset.step)));
+    initSteps();
+    pickModel('house');
+    initModelViewer();
     if (window.Scenes) {
       try {
-        let tipAnim;
-        heroScene = window.Scenes.hero($('#heroCanvas'), FLOORS, (i, group) => {
-          const f = FLOORS[i], tip = $('#floorTip');
-          tip.style.setProperty('--c', `var(--${f.color})`);
-          $('span', tip).textContent = `Tầng ${i + 1}, ${f.name}: ${f.text}`;
-          anim(tip, { y: [14, 0], opacity: [0, 1] }, { type: 'spring' });
-          if (canAnim) { if (tipAnim) tipAnim.stop(); tipAnim = M.animate(0, 1, { duration: 0.7, onUpdate: v => { const s = 1 + Math.sin(v * Math.PI) * 0.12; group.scale.set(s, 1, s); } }); }
+        const card = $('#floorCard');
+        heroScene = window.Scenes.hero($('#heroCanvas'), FLOORS, i => {
+          card.classList.toggle('on', i >= 0);
+          if (i < 0) return;
+          const f = FLOORS[i];
+          card.style.setProperty('--c', `var(--${f.color})`);
+          $('.floor-no', card).textContent = `Tầng ${i + 1}`;
+          $('h2', card).textContent = f.name;
+          $('p', card).textContent = f.text;
+        }, (x, y) => {
+          // Card nằm bên trái tầng đang chọn, không tràn khỏi khung
+          const box = card.offsetParent;
+          if (!box) return;
+          const left = Math.max(16, Math.min(box.clientWidth - card.offsetWidth - 16, x - card.offsetWidth - 12));
+          const top = Math.max(16, Math.min(box.clientHeight - card.offsetHeight - 16, y - card.offsetHeight / 2));
+          card.style.setProperty('--x', `${Math.round(left)}px`);
+          card.style.setProperty('--y', `${Math.round(top)}px`);
         });
         replay();
-      } catch (e) { $('#floorTip span').textContent = 'Thiết bị này không hiển thị được 3D.'; }
-    }
-    rise($$('.hero-copy > *'), 0.5);
-    if (canAnim && M.inView) {
-      $$('.step, .flow-head, .flow-end').forEach(el => {
-        el.style.opacity = 0;
-        M.inView(el, () => { M.animate(el, { opacity: [0, 1], y: [40, 0] }, { duration: 0.7, ease: EASE }); }, { amount: 0.2 });
-      });
+      } catch (e) {
+        const card = $('#floorCard');
+        card.classList.add('on');
+        $('.floor-no', card).textContent = '';
+        $('h2', card).textContent = 'Chưa hiển thị được 3D';
+        $('p', card).textContent = 'Thiết bị này không chạy được mô hình. Bạn vẫn vào buồng lái được.';
+      }
     }
   }
 
