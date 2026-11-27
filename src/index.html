@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tầng: từ Engineer thành AI Builder</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@300;400;500;600&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- MÀN 1: LANDING PAGE -->
+<section id="landing">
+  <header class="land-nav">
+    <div class="brand"><span class="logo" aria-hidden="true"><i></i><i></i><i></i></span>Tầng</div>
+    <div class="row">
+      <button class="btn ghost" data-act="flow">Xem 4 bước</button>
+      <button class="btn primary" data-act="enter">Mở workstation</button>
+    </div>
+  </header>
+  <div class="hero">
+    <canvas id="heroCanvas" aria-label="Tòa nhà 7 tầng, mỗi tầng một màu"></canvas>
+    <div class="hero-copy">
+      <h1>Từ người viết code đến người xây sản phẩm AI</h1>
+      <p>Cả đội bàn ý tưởng cùng agent, lập kế hoạch, pitching và vận hành sản phẩm tại một nơi duy nhất.</p>
+      <div class="row">
+        <button class="btn primary big" data-act="enter">Mở workstation</button>
+        <button class="btn soft big" data-act="replay">Xem lại góc quay</button>
+      </div>
+    </div>
+    <div class="floor-tip" id="floorTip" role="status"><i></i><span>Bấm vào một tầng để xem tầng đó làm gì</span></div>
+  </div>
+  <div class="flow" id="flow">
+    <div class="flow-head">
+      <h2>Bốn bước, mỗi bước đổi một cách nghĩ</h2>
+      <p>Agent đóng vai chuyên gia AI Builder, hiểu cả cách phối hợp đồng đội lẫn cách vận hành một sản phẩm AI.</p>
+    </div>
+    <ol id="flowList"></ol>
+    <div class="flow-end">
+      <h2>Sẵn sàng đặt tầng đầu tiên?</h2>
+      <button class="btn primary big" data-act="enter">Mở workstation</button>
+    </div>
+  </div>
+</section>
+
+<!-- MÀN 2: WORKSTATION (tab nội dung do app.js render vào #view) -->
+<section id="app" hidden>
+  <header class="top">
+    <button class="brand linklike" data-act="home" title="Về trang giới thiệu"><span class="logo" aria-hidden="true"><i></i><i></i><i></i></span>Tầng</button>
+    <input id="projectName" aria-label="Tên dự án">
+    <nav id="nav" aria-label="Các tab"></nav>
+    <div class="team" id="teamBar"></div>
+    <button class="btn soft small" data-act="reset" id="resetBtn">Đặt lại demo</button>
+  </header>
+  <div class="workspace" id="workspace">
+    <aside id="stage" aria-label="Mô hình 3D tiến độ sản phẩm">
+      <canvas id="progressCanvas" aria-label="Công trình đang xây, kéo để xoay"></canvas>
+      <div id="pins"></div>
+      <div class="stage-head">
+        <div class="total"><span id="totalPct">0%</span><small>tiến độ sản phẩm</small></div>
+        <div class="seg" role="group" aria-label="Kiểu mô hình">
+          <button data-model="house" class="on">Nhà tầng</button>
+          <button data-model="rubik">Rubik</button>
+        </div>
+        <button class="btn soft small" data-act="collapse" id="collapseBtn">Ẩn mô hình</button>
+      </div>
+      <div id="floorInfo"></div>
+      <div id="overlay"></div>
+    </aside>
+    <button class="btn primary small" id="reveal" data-act="collapse" hidden>Hiện mô hình</button>
+    <main id="view" tabindex="-1"></main>
+  </div>
+  <!-- Agent: tạm dùng trả lời mẫu cục bộ (localReply trong app.js), nối API thật sau -->
+  <button class="agent-fab" id="fab" data-act="drawer">Hỏi agent</button>
+  <div class="drawer" id="drawer" hidden>
+    <div class="drawer-head"><span>Chat nhóm cùng agent</span><button class="btn soft small" data-act="drawer">Đóng</button></div>
+    <div id="drawerSlot"></div>
+  </div>
+</section>
+
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/motion@11.18.2/dist/motion.js"></script>
+<script src="scene.js"></script>
+<script src="data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
