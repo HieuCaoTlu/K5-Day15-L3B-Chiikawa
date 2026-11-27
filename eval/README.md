@@ -5,7 +5,7 @@
 
 ## 1. Dataset → xử lý
 
-Dataset nào, xử lý gì (từ `data/DATA_CARD.md`): (1) khảo sát Google Form, 16 phản hồi học viên AI20K, ẩn danh, dùng đào bằng chứng và lấy 8 câu thử; (2) bộ câu thử Thinking 23 câu do nhóm tự viết, dán nhãn `synthetic`, không dùng dữ liệu người thật; (3) dữ liệu mẫu cho demo, không dùng để đo.
+Dataset nào, xử lý gì (từ `data/DATA_CARD.md`): (1) khảo sát Google Form, 22 phản hồi học viên AI20K, ẩn danh, dùng đào bằng chứng và lấy 8 câu thử; (2) bộ câu thử Thinking 23 câu do nhóm tự viết, dán nhãn `synthetic`, không dùng dữ liệu người thật; (3) dữ liệu mẫu cho demo, không dùng để đo.
 
 ## 2. Bộ câu thử dựng ra sao
 

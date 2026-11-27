@@ -12,15 +12,15 @@ Data BTC cấp đã dùng (nếu có — không commit nguyên file): không dù
   2. Trưởng nhóm Engineer nghĩ ngay ra giải pháp (chatbot, RAG, LangGraph) và cố gắn AI vào.
   3. Nhóm chia việc rồi code.
   4. Làm xong mới đem hỏi người dùng thật.
-  5. Phát hiện sản phẩm không ai dùng hoặc sai hướng, làm lại. Khảo sát nhóm: cả 4/4 người trả lời câu mở đều kể một lần như vậy (3/4 nói thẳng "không ai dùng" hoặc "để không").
+  5. Phát hiện sản phẩm không ai dùng hoặc sai hướng, làm lại. Khảo sát nhóm: cả 7/7 người trả lời câu mở đều kể một lần như vậy (3/7 nói thẳng "không ai dùng" hoặc "để không").
 - Công cụ / AI đang được dùng cho việc này: người dùng tự hỏi ChatGPT hoặc Claude, và tài liệu Day 2 + 2 Workshop về tư duy sản phẩm. Chưa kiểm họ dùng công cụ nào và dùng thế nào (chưa có câu hỏi trong khảo sát).
 
 ## §1. Người dùng & bằng chứng *(guide 1.1, 1.2)*
 - Người dùng chính (một vai cụ thể): trưởng nhóm của một nhóm 3–5 Engineer, học viên AI20K Level 3–4 Khóa 5, vừa được yêu cầu làm một giải pháp AI.
 - Việc họ cố làm xong: chốt bài toán cần giải cho nhóm trước khi bắt đầu làm.
-- Hôm nay họ giải bằng gì, hỏng ở đâu, vì sao chưa bỏ: tự mày mò hoặc bỏ qua bước phân tích. Hỏng ở chỗ khi được gặp khách hàng 5 phút thì 11/16 (68,8%) chọn hỏi "muốn có tính năng gì" thay vì hỏi chuyện thật đã xảy ra. Chưa bỏ vì thói quen kỹ thuật, cả nhóm đều là Engineer nên không ai phản biện góc sản phẩm *(giả thuyết, chưa kiểm bằng phỏng vấn)*.
+- Hôm nay họ giải bằng gì, hỏng ở đâu, vì sao chưa bỏ: tự mày mò hoặc bỏ qua bước phân tích. Hỏng ở chỗ khi được gặp khách hàng 5 phút thì 16/22 (72,7%) chọn hỏi "muốn có tính năng gì" thay vì hỏi chuyện thật đã xảy ra. Chưa bỏ vì thói quen kỹ thuật, cả nhóm đều là Engineer nên không ai phản biện góc sản phẩm *(giả thuyết, chưa kiểm bằng phỏng vấn)*.
 - Pain (KHÔNG chữ AI): trưởng nhóm Engineer — phải chốt đề tài cho nhóm — vướng ở chỗ chưa có tư duy sản phẩm nên khó xác định vấn đề của khách hàng — hậu quả là xây xong không ai dùng, mất cả sprint.
-- Bằng chứng — số chính + kết luận (chi tiết: `canvas.md` dòng 4; `evidence/summary.md` làm ở CP3): khảo sát 16 phản hồi học viên AI20K: 11/16 (68,8%) chọn câu hỏi hướng tính năng; 4/4 kể một lần build xong không giải quyết đúng vấn đề, 3/4 nói thẳng không ai dùng ("Build 1 web đặt lịch sân bóng xong ko ai dùng"); bước khó nhất là chọn metric (4/16, 25%). **Kết luận:** giả thuyết đúng một phần. Khi tự nói thì 8/16 (50%) nghĩ đến "khách hàng gặp vấn đề gì" trước, nhưng khi chọn câu hỏi cụ thể thì nghiêng về giải pháp. Mẫu nhỏ (n=16), cùng khoá, chưa có phỏng vấn kiểm lại.
+- Bằng chứng — số chính + kết luận (chi tiết: `canvas.md` dòng 4; `evidence/summary.md` làm ở CP3): khảo sát 22 phản hồi học viên AI20K: 16/22 (72,7%) chọn câu hỏi hướng tính năng; 7/7 kể một lần build xong không giải quyết đúng vấn đề, 3/7 nói thẳng không ai dùng ("Build 1 web đặt lịch sân bóng xong ko ai dùng"); bước khó nhất là xác định đúng vấn đề và người dùng, cùng chốt phạm vi MVP (đều 6/22, 27,3%). **Kết luận:** giả thuyết đúng một phần. Khi tự nói thì 8/22 (36,4%) nghĩ đến "khách hàng gặp vấn đề gì" trước, nhưng khi chọn câu hỏi cụ thể thì nghiêng về giải pháp. Mẫu nhỏ (n=22), cùng khoá, chưa có phỏng vấn kiểm lại.
 
 ## §2. Impact & quyết định chọn *(guide 1.3)*
 
@@ -31,7 +31,7 @@ Data BTC cấp đã dùng (nếu có — không commit nguyên file): không dù
 | Pitching: tạo khảo sát và slide từ bằng chứng | ~175 trưởng nhóm | 1 *(tự ước tính)* | ~120 phút soạn *(tự ước tính)* | 175 × 1 × 120 = 21.000 phút *(tự ước tính)* | Một phần, có sẵn module | Không |
 
 - **Impact / tháng** của hướng chọn = 175 người × 1 lần × 60 phút = 10.500 phút (~175 giờ) — nguồn: 700 học viên L3 (`01-challenge-brief` / guide track A), chia 4 người / nhóm; số lần và số phút *(tự ước tính, chưa kiểm)*.
-- Hướng ĐÃ LOẠI + vì sao: Planning và Pitching có impact ước tính lớn hơn nhưng **chưa có bằng chứng từ người dùng** (khảo sát chỉ hỏi về bước phân tích bài toán), còn Thinking có số đếm được từ 16 phản hồi và là bước mọi bước sau phụ thuộc vào. Hai hướng này vẫn có module trong Workstation nhưng nằm ngoài benchmark.
+- Hướng ĐÃ LOẠI + vì sao: Planning và Pitching có impact ước tính lớn hơn nhưng **chưa có bằng chứng từ người dùng** (khảo sát chỉ hỏi về bước phân tích bài toán), còn Thinking có số đếm được từ 22 phản hồi và là bước mọi bước sau phụ thuộc vào. Hai hướng này vẫn có module trong Workstation nhưng nằm ngoài benchmark.
 - Số lần / tháng của từng kiểu người dùng (dùng cho persona ở §8): ít 1 lần (chốt một đề tài rồi làm) · vừa 2 lần (đổi hướng một lần) · nhiều 4 lần (đổi hướng nhiều lần) *(tự ước tính, sẽ kiểm bằng khảo sát)*.
 
 ## §3. Giải pháp tương tự *(guide 2.1)*

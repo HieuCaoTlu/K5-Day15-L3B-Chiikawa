@@ -11,10 +11,10 @@
 | Dùng để làm gì | đào bằng chứng pain (`canvas.md` dòng 4); lấy 8 trong 23 câu của bộ câu thử (cột `source` = `nguoi_dung` hoặc `data_that`) |
 | Từ đâu | nhóm tự thu qua Google Form, học viên AI20K Level 3–4 Khóa 5 (ngoài nhóm) |
 | Xử lý những bước gì | lọc: chưa lọc · làm sạch: không · ẩn danh: không thu tên · chia: không |
-| Số dòng / số đoạn | 16 phản hồi (đang thu thêm cho đủ ≥20); 4 câu trả lời mở |
+| Số dòng / số đoạn | 22 phản hồi; 7 câu trả lời mở |
 | Phiên bản / ngày lấy | bản chụp ngày 27/11/2026 |
 | Nhãn | thật |
-| Giới hạn | mẫu nhỏ (n=16), chỉ học viên cùng khoá nên lệch về người đã học Day 2; khảo sát chỉ cho biết người ta **làm gì**, chưa cho biết **vì sao**; chưa có phỏng vấn để kiểm lại |
+| Giới hạn | mẫu nhỏ (n=22), chỉ học viên cùng khoá nên lệch về người đã học Day 2; khảo sát chỉ cho biết người ta **làm gì**, chưa cho biết **vì sao**; chưa có phỏng vấn để kiểm lại |
 
 ## Dataset 2 · Bộ câu thử Thinking (`eval/benchmark.csv`)
 
