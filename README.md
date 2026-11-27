@@ -91,7 +91,7 @@ make eval         # backend/eval/cases.json → "agent đúng X%"
 ```
 backend/     FastAPI + LangGraph (app/agent: graph, nodes, mocks, llm, guardrails) · tests · eval · prompts
 frontend/    Next.js: landing, chat, admin · components/kit (bộ component nhóm) · globals.css (token)
-deploy/      Caddyfile · deploy.sh · bootstrap-vps.sh · setup-runner.sh · README (hướng dẫn VPS + runner)
+deploy/      Caddyfile · deploy.sh · bootstrap-vps.sh · README (hướng dẫn VPS + secrets cho GitHub Actions)
 .github/     workflows/ci-cd.yml · PR template
 ```
 

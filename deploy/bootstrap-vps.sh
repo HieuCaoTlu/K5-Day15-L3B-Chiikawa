@@ -50,5 +50,5 @@ Xong. Bước tiếp:
   1. Tạo $BASE/app/.env từ .env.example (SITE_ADDRESS=<tên miền>, POSTGRES_PASSWORD, GOOGLE_API_KEY, APP_ENV=production)
      chown $USER_NAME:$USER_NAME $BASE/app/.env && chmod 600 $BASE/app/.env
   2. Trỏ bản ghi A của tên miền về IP VPS này.
-  3. Cài runner: sudo bash deploy/setup-runner.sh <owner/repo> <registration-token>
+  3. Tạo key SSH + secrets VPS_HOST / VPS_SSH_KEY / VPS_KNOWN_HOSTS cho GitHub Actions (xem deploy/README.md, mục 3)
 EOF

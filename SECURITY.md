@@ -14,8 +14,8 @@
 - `APP_ENV=production` ẩn `/docs` và `/openapi.json`.
 - **`/admin` và `/api/v1/admin/*` CHƯA có đăng nhập.** Trước khi đưa link cho người ngoài: thêm xác thực (tối thiểu
   một token admin trong header) hoặc chặn bằng Cloudflare Access / Caddy `basic_auth`.
-- Runner self-hosted không chạy PR từ fork (điều kiện `if` trong workflow). Repo nên để private.
-- Key SSH dự phòng của Actions luôn có `command="…/deploy.sh"` trong `authorized_keys` — lộ cũng chỉ bấm được deploy.
+- CI chạy trên máy GitHub, không có runner tự dựng. Secrets `VPS_*` không được trao cho PR từ fork; deploy chỉ chạy trên `main`.
+- Key SSH của Actions luôn có `command="…/deploy.sh"` trong `authorized_keys` — lộ cũng chỉ bấm được deploy.
 
 ## Agent
 

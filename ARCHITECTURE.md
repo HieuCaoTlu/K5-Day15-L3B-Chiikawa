@@ -74,9 +74,9 @@ Tạo bảng bằng `create_all` khi khởi động (không Alembic). Đổi c�
 
 ## CI/CD
 
-`.github/workflows/ci-cd.yml` — PR: backend (ruff, pytest, eval) ‖ frontend (typecheck) trên runner riêng của nhóm.
-Push `main`: như trên → job `deploy` chạy trên runner nằm trong VPS → `deploy/deploy.sh` → `docker compose up -d --build --wait`.
-Dự phòng: `CI_RUNNER=ubuntu-latest` + deploy qua SSH. Chi tiết: [deploy/README.md](deploy/README.md).
+`.github/workflows/ci-cd.yml` — PR: backend (ruff, pytest, eval) ‖ frontend (typecheck) trên máy GitHub (`ubuntu-latest`).
+Push `main`: như trên → job `deploy` SSH vào VPS → `deploy/deploy.sh` → `docker compose up -d --build --wait`.
+Chi tiết: [deploy/README.md](deploy/README.md).
 
 ## Quyết định
 
@@ -87,5 +87,5 @@ Dự phòng: `CI_RUNNER=ubuntu-latest` + deploy qua SSH. Chi tiết: [deploy/REA
 | Frontend | Next.js export tĩnh + Caddy | VPS nhỏ không cần chạy Node; HTTPS tự động |
 | UI | Bộ component riêng (từ P-020), không UI kit | Một phong cách duy nhất, ít phụ thuộc |
 | Python | uv | Cài nhanh, lockfile chắc chắn, cache tốt trong Docker và CI |
-| Deploy | Runner trên VPS | Không SSH/nén code; tận dụng cache Docker → deploy nhanh |
+| Deploy | GitHub Actions → SSH vào VPS | Không phải cài/duy trì runner; build vẫn dùng cache Docker trên VPS |
 | Bảng | create_all | Hackathon 36h, không cần migration |

@@ -19,7 +19,7 @@
 | Hợp đồng API + schema DB (FE ↔ BE) | [README.md](README.md#hợp-đồng-api) · OpenAPI ở `/docs` |
 | Thêm/sửa agent node | `backend/app/agent/` + mục "Thêm agent node" bên dưới |
 | Prompt | `backend/prompts/*.md` (`{{placeholder}}`) — KHÔNG viết prompt dài trong Python |
-| Deploy, runner, VPS | [deploy/README.md](deploy/README.md) |
+| Deploy, VPS | [deploy/README.md](deploy/README.md) |
 | Biến môi trường | [.env.example](.env.example) (mọi biến có chú thích) |
 | Quy trình nhánh / PR | [CONTRIBUTING.md](CONTRIBUTING.md) |
 | Bảo mật, key | [SECURITY.md](SECURITY.md) |

@@ -3,9 +3,9 @@
 # script thoát mã lỗi (job đỏ), container cũ vẫn chạy nếu build hỏng.
 #
 # Hai cách gọi:
-#   1. Runner trên VPS (mặc định, nhanh): workflow chạy `bash deploy/deploy.sh` trong thư mục checkout.
-#   2. Dự phòng qua SSH: `git archive --format=tar.gz HEAD | ssh deploy@VPS <sha>`; authorized_keys có
+#   1. GitHub Actions qua SSH (mặc định): `git archive --format=tar.gz HEAD | ssh deploy@VPS <sha>`; authorized_keys có
 #      command="/opt/hackathon/app/deploy/deploy.sh",no-pty,... (xem deploy/README.md).
+#   2. Tay, trong thư mục git: `bash deploy/deploy.sh`.
 #
 # .env và data/ trong thư mục app là của VPS, KHÔNG bị ghi đè. Toàn bộ logic nằm trong main để bash đọc hết script
 # trước khi bản mới ghi đè chính file này.
