@@ -1,6 +1,6 @@
 /* Ứng dụng: điều hướng, bốn bước, agent, dữ liệu dùng chung và chuyển động. */
 (function () {
-  const { STEPS, FLOORS, CANVAS, CANVAS_TO_SCORE, SCORE, ROLES, STATUS, SAMPLE_SCORE, SEED, AGENT, inDays, iso } = window.DATA;
+  const { STEPS, FLOORS, CANVAS, CANVAS_TO_SCORE, SCORE, ROLES, STATUS, SAMPLE_SCORE, EMPTY, SEED, AGENT, inDays, iso } = window.DATA;
   const { RULES, PROFIT, NAMES: HNAMES, LEVELS } = window.HEALTH;
   const $ = (s, p = document) => p.querySelector(s);
   const $$ = (s, p = document) => [...p.querySelectorAll(s)];
@@ -20,52 +20,53 @@
   const wait = ms => new Promise(r => setTimeout(r, ms));
 
   /* ---------- Dữ liệu ---------- */
-  const KEY = 'tang-demo-v3';
-  let S = SEED();
-  const local = { me: 'minh', model: 'house', collapsed: false, chartMode: 'pie' };
+  /* Chế độ xem mock đầy đủ: /workstation?demo=full. Dữ liệu mẫu trong bộ nhớ, không đọc hay ghi trình duyệt. */
+  const mockMode = new URLSearchParams(location.search).get('demo') === 'full';
+  const BLANK = mockMode ? SEED : EMPTY;
+  const KEY = 'tang-v4';
+  const SERVER = ['quality', 'maintain']; // hai phần này đọc và ghi trên server theo đội
+  let S = BLANK();
+  const local = { me: mockMode ? 'minh' : '', model: 'house', collapsed: false, chartMode: 'pie' };
   let surveysCache = null, surveysLoading = false, surveysError = '', activeSurveyDetail = null, armedDeleteSlug = '';
   let dashStats = null, dashLoading = false, dashSlugSelected = '', lastDashJson = '', dashPollStarted = false;
   let editSurveyTarget = null, sideMode = '', sideSlug = '', sideTab = 'edit', selectedSurveySlug = '', deckSurveySlug = '', lastSavedSlug = '';
   let collapsedSecs = new Set(), activeSlideIdx = 0;
-  try {
-    const raw = JSON.parse(localStorage.getItem(KEY) || localStorage.getItem('tang-demo-v2') || 'null');
-    if (raw && raw.S) Object.assign(S, raw.S);
-    if (raw && raw.local) Object.assign(local, raw.local);
-    if (!localStorage.getItem(KEY)) {
-      S.pitch.deck = null;
-      S.pitch.deckShown = false;
-    }
-  } catch (e) { /* bộ nhớ trình duyệt không dùng được */ }
-  function migrate() {
-    const seed = SEED();
-    if (!S.plan || typeof S.plan !== 'object') S.plan = seed.plan;
-    if (!S.plan.cost || typeof S.plan.cost !== 'object') S.plan.cost = seed.plan.cost;
-    Object.entries(seed.plan.cost).forEach(([k, v]) => {
-      if (S.plan.cost[k] === undefined || S.plan.cost[k] === null) S.plan.cost[k] = v;
-    });
-    if (!S.quality || typeof S.quality !== 'object') S.quality = seed.quality;
-    if (!['sub', 'usage', 'setup'].includes(S.quality.revenueModel)) S.quality.revenueModel = seed.quality.revenueModel;
-    if (!Array.isArray(S.quality.runs)) S.quality.runs = seed.quality.runs;
-    S.quality.runs = S.quality.runs.filter(r => r && typeof r === 'object');
-    S.quality.runs.forEach((r, i) => {
-      if (!r.values || typeof r.values !== 'object') r.values = {};
-      if (r.id === undefined || r.id === null) r.id = 'r' + Date.now().toString(36) + i;
-      if (('inTok' in r || 'outTok' in r) && (r.actTok === undefined || r.actTok === null)) {
-        r.actTok = (+r.inTok || 0) + (+r.outTok || 0);
-        if (r.estTok === undefined) r.estTok = null;
+  /* Bản lưu của giao diện cũ trộn dữ liệu mẫu với phần đội tự nhập: chỉ giữ phần khác mẫu. Khóa cũ vẫn còn nguyên. */
+  function fromLegacy(old) {
+    const seed = SEED(), same = (a, b) => JSON.stringify(a) === JSON.stringify(b), out = {};
+    if (old.done) out.done = old.done;
+    if (old.meta && old.meta.name !== seed.meta.name) out.meta = { name: old.meta.name, members: [] };
+    if (old.score) out.score = Object.assign(EMPTY().score, Object.fromEntries(Object.entries(old.score).filter(([k, v]) => v && v.text !== (SAMPLE_SCORE[k] || [])[0])));
+    if (Array.isArray(old.chat)) out.chat = old.chat.filter(m => !seed.chat.some(x => same(x, m)));
+    if (old.pitch) out.pitch = Object.assign(EMPTY().pitch, Object.fromEntries(Object.entries(old.pitch).filter(([k, v]) => !same(v, seed.pitch[k]))), { deck: null, deckShown: false });
+    return out;
+  }
+  if (!mockMode) {
+    try {
+      let raw = JSON.parse(localStorage.getItem(KEY) || 'null');
+      if (!raw) {
+        const old = JSON.parse(localStorage.getItem('tang-demo-v3') || localStorage.getItem('tang-demo-v2') || 'null');
+        if (old) raw = { S: old.S && fromLegacy(old.S), local: Object.assign({}, old.local, { me: '' }) };
       }
-      delete r.inTok;
-      delete r.outTok;
-    });
-    if (!S.maintain || typeof S.maintain !== 'object') S.maintain = seed.maintain;
-    if (!Array.isArray(S.maintain.suggest)) S.maintain.suggest = seed.maintain.suggest;
-    if (!Array.isArray(S.maintain.schedule)) S.maintain.schedule = seed.maintain.schedule;
+      if (raw && raw.S) ['meta', 'done', 'score', 'chat', 'plan', 'tasks', 'pitch'].forEach(k => { if (raw.S[k]) S[k] = raw.S[k]; });
+      if (raw && raw.local) Object.assign(local, raw.local);
+    } catch (e) { /* bộ nhớ trình duyệt không dùng được */ }
+  }
+  /* Bổ sung các trường còn thiếu của dữ liệu đọc từ trình duyệt hoặc server. */
+  function migrate() {
+    const blank = EMPTY();
+    ['meta', 'plan', 'tasks', 'pitch', 'quality', 'maintain'].forEach(k => { S[k] = Object.assign(blank[k], S[k]); });
+    S.meta.members = Array.isArray(S.meta.members) ? S.meta.members : [];
+    if (!S.quality.cost || typeof S.quality.cost !== 'object') S.quality.cost = {};
+    if (!['sub', 'usage', 'setup'].includes(S.quality.revenueModel)) S.quality.revenueModel = 'sub';
+    ['metrics', 'runs'].forEach(k => { if (!Array.isArray(S.quality[k])) S.quality[k] = []; });
+    S.quality.runs = S.quality.runs.filter(r => r && typeof r === 'object');
+    S.quality.runs.forEach(r => { if (!r.values || typeof r.values !== 'object') r.values = {}; });
+    ['schedule', 'suggest'].forEach(k => { if (!Array.isArray(S.maintain[k])) S.maintain[k] = []; });
   }
   migrate();
   if (!local.think || !local.think.session) local.think = { session: 'th-' + Math.random().toString(36).slice(2, 10), msgs: [] };
   const tk = { run: null, busy: false, offline: false, loaded: false };
-  /* Chế độ xem mock đầy đủ: /workstation?demo=full. Dữ liệu mẫu trong bộ nhớ, không gọi backend, không lưu. */
-  const mockMode = new URLSearchParams(location.search).get('demo') === 'full';
   if (mockMode) {
     STEPS.forEach(x => { S.done[x.id] = true; });
     const cell = (content, who, when) => ({ content, who: who || '', when: when || '', quote: content, grounded: !!who, status: who ? 'evidence' : 'assumption' });
@@ -88,18 +89,20 @@
       } } };
     Object.keys(S.score).forEach(k => { if (!S.score[k].text) S.score[k].text = 'Dữ liệu mẫu'; });
   }
-  let db = null, canWrite = true, owner = true;
+  let db = null, canWrite = true;
   const synced = {}, dirty = new Set(), writing = new Set();
   let saveTimer;
   function persist() {
     if (mockMode) return;
-    try { localStorage.setItem(KEY, JSON.stringify({ S: db ? undefined : S, local })); } catch (e) { /* bỏ qua */ }
+    const kept = Object.fromEntries(Object.entries(S).filter(([k]) => !SERVER.includes(k)));
+    try { localStorage.setItem(KEY, JSON.stringify({ S: db ? undefined : kept, local })); } catch (e) { /* bỏ qua */ }
   }
   function save(...sections) {
     if (mockMode) return;
     persist();
+    sections.filter(k => SERVER.includes(k)).forEach(pushWorkspace);
     if (db && canWrite) {
-      sections.forEach(k => dirty.add(k));
+      sections.filter(k => !SERVER.includes(k)).forEach(k => dirty.add(k));
       clearTimeout(saveTimer);
       saveTimer = setTimeout(flush, 600);
     }
@@ -129,17 +132,15 @@
     if (user) {
       try {
         if ((await user.can('data.write')) === false) canWrite = false;
-        owner = !!(await user.isOwner());
-      } catch (e) { owner = false; }
+      } catch (e) { /* chưa đọc được quyền: thử ghi, bị từ chối thì chuyển sang chỉ xem */ }
     }
-    $('#resetBtn').hidden = !owner;
     db.collection('tang').onSnapshot(snap => {
       let changed = false;
       snap.docs.forEach(doc => {
         const k = doc.id, json = doc.data() && doc.data().json;
-        if (!(k in S) || typeof json !== 'string' || json === synced[k] || dirty.has(k) || writing.has(k)) return;
+        if (SERVER.includes(k) || !(k in S) || typeof json !== 'string' || json === synced[k] || dirty.has(k) || writing.has(k)) return;
         try {
-          const value = JSON.parse(json), seed = SEED()[k];
+          const value = JSON.parse(json), seed = BLANK()[k];
           if (!value || typeof value !== 'object' || Array.isArray(value) !== Array.isArray(seed)) return;
           S[k] = Array.isArray(seed) ? value : Object.assign(seed, value);
           synced[k] = json;
@@ -164,7 +165,10 @@
   const avatar = (id, cls = '') => {
     if (id === 'agent') return '<span class="av bot" title="Agent AI Builder">AI</span>';
     const m = member(id);
-    return m ? `<span class="av ${cls}" style="--m:${color(m.color)}" title="${esc(m.name)}">${esc(m.name[0])}</span>` : '<span class="av" title="Chưa giao">?</span>';
+    if (!m) return '<span class="av" title="Chưa giao">?</span>';
+    // Thành viên hiện bằng avatar 3D đã chọn trong hồ sơ ở Planning; dữ liệu demo không có hồ sơ thì lấy theo thứ tự.
+    const look = m.look ?? S.meta.members.indexOf(m) % window.TangAvatar.names.length;
+    return `<span class="member-face ${cls}" title="${esc(m.name)}" role="img" aria-label="${esc(m.name)}">${personAvatar({ avatar: look })}</span>`;
   };
   const options = (sel, empty = 'Chưa giao') => `<option value="">${empty}</option>` +
     S.meta.members.map(m => `<option value="${esc(m.id)}" ${m.id === sel ? 'selected' : ''}>${esc(m.name)}</option>`).join('');
@@ -196,6 +200,7 @@
     if (!force && (boardPending || editingBoard())) { boardStale = true; return; }
     boardStale = false;
     if (next === null && live) return;
+    const workspaceChanged = !mockMode && syncWorkspace(next);
     const same = live && next && live.profile && next.profile && live.profile.github_id === next.profile.github_id;
     const view_ = value => JSON.stringify(value && [value.profile, value.role, value.members, value.repo, value.sprints, value.webhook, value.push_key, value.push_registered]);
     const changed = force || live === undefined || view_(live) !== view_(next);
@@ -206,9 +211,85 @@
     if (hadState && !wasJoined && joined()) planningOpen = true;
     if (!joined()) planningOpen = false;
     updatePlanningPanel(tab === 'planning');
+    if (workspaceChanged || (changed && !mockMode)) showWorkspace();
     if (!changed) return;
     drawPlanning();
     syncProgress();
+  }
+
+  /* ---------- Thành viên, Quality và Maintaining: dữ liệu của đội trên server ---------- */
+  const MEMBER_COLORS = ['#ec4899', '#0fb5ae', '#a9672f', '#6d8f10', '#4d5bf0', '#ff8a1f', '#a24ce8', '#0a9cf0'];
+  let wsVersion = { quality: null, maintain: null }, wsPending = 0, wsStale = false, wsQueue = Promise.resolve();
+  /* Đang gõ trong form của hai tab này thì chưa vẽ lại, để không mất nội dung. */
+  const typingInView = () => {
+    const a = document.activeElement;
+    return Boolean(a && a.closest('#viewContent') && /INPUT|TEXTAREA|SELECT/.test(a.tagName));
+  };
+
+  /* Đưa dữ liệu server vào S. Trả về true khi Quality hoặc Maintaining đổi. */
+  function syncWorkspace(state) {
+    const team = state && state.role ? state.members : [];
+    S.meta.members = team.map((m, i) => ({ id: m.github_id, name: m.name || m.login, look: Number(m.avatar) || 0, color: MEMBER_COLORS[i % MEMBER_COLORS.length] }));
+    local.me = (state && state.profile && state.role && state.profile.github_id) || '';
+    if (wsPending) { wsStale = true; return false; }
+    let changed = false;
+    SERVER.forEach(k => {
+      const remote = state && state.role ? state[k] : null;
+      const version = remote ? remote.version : null;
+      if (version === wsVersion[k]) return;
+      const { version: _, ...data } = remote || EMPTY()[k];
+      S[k] = JSON.parse(JSON.stringify(data));
+      wsVersion[k] = version;
+      changed = true;
+    });
+    if (changed) { migrate(); runEdit = null; lastLevel = null; }
+    return changed;
+  }
+
+  function showWorkspace() {
+    if (!inApp) return;
+    renderTeam();
+    renderChat();
+    if (tab !== 'planning' && tab !== 'product' && !typingInView()) render();
+    syncProgress();
+  }
+
+  /* Lưu nối tiếp nhau để mỗi lần gửi đúng phiên bản vừa nhận. */
+  function pushWorkspace(section) {
+    if (wsVersion[section] === null) return;
+    wsPending++;
+    wsQueue = wsQueue.then(async () => {
+      let failed = '';
+      try {
+        const response = await fetch(`${PLANNING_API}/${section}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', 'X-Planning-Request': '1' },
+          body: JSON.stringify({ ...S[section], version: wsVersion[section] })
+        });
+        if (response.ok) wsVersion[section]++;
+        else if (response.status === 409) failed = 'Đội vừa sửa phần này ở nơi khác. Đã tải bản mới, bạn sửa lại nhé.';
+        else if (response.status === 401 || response.status === 403) failed = 'Chưa lưu được. Đăng nhập lại ở tab Planning.';
+        else failed = 'Chưa lưu được: kiểm tra lại giá trị vừa nhập.';
+      } catch (e) { failed = 'Chưa kết nối được server nên chưa lưu. Thử lại sau ít phút.'; }
+      wsPending--;
+      if (failed) {
+        toast(failed);
+        wsVersion[section] = -1; // ép lấy lại bản trên server
+        wsStale = true;
+      }
+      if (wsStale && !wsPending) { wsStale = false; loadPlanning(true); }
+    });
+  }
+
+  /* Quality và Maintaining chỉ dùng được khi đã ở trong một đội; trả về hướng dẫn nếu chưa. */
+  function teamGate(what) {
+    if (mockMode || joined()) return '';
+    const [title, text, action] = live === undefined
+      ? ['Đang tải dữ liệu của đội', 'Chờ trong giây lát.', '']
+      : live === null
+        ? ['Chưa kết nối được server', `${what} được lưu trên server của đội. Kiểm tra backend rồi thử lại.`, btn('ws-retry', 'Thử lại', 'tone small')]
+        : ['Cần vào đội trước', `${what} được lưu theo đội để mọi người cùng thấy. Mở tab Planning, đăng nhập GitHub rồi lập đội hoặc nhập mã mời.`, btn('tab', 'Mở Planning', 'tone small', 'data-id="planning"')];
+    return `<div class="panel">${panelHead(title)}<p class="muted">${text}</p>${action ? `<p style="margin-top:12px">${action}</p>` : ''}</div>`;
   }
 
   function drawPlanning() {
@@ -673,12 +754,13 @@
     }
     if (i === 2) {
       const p = S.pitch;
-      return !p.form ? 'Tạo form khảo sát' : !pitchHasResponses() ? 'Thu phản hồi cho form' : !p.overview ? 'Tạo AI overview' : !(p.deckShown && p.deck) ? 'Tạo slide pitching' : !p.ads ? 'Viết bài quảng cáo' : 'Bộ pitching đã đủ';
+      return !(p.form && p.form.length) && !pitchHasResponses() ? 'Tạo form khảo sát' : !pitchHasResponses() ? 'Thu phản hồi cho form' : !p.overview ? 'Tạo AI overview' : !(p.deckShown && p.deck) ? 'Tạo slide pitching' : !p.ads ? 'Viết bài quảng cáo' : 'Bộ pitching đã đủ';
     }
+    if (i > 2 && !mockMode && !joined()) return 'Vào đội ở tab Planning để bắt đầu';
     if (i === 3) {
       const q = S.quality;
       if (!q.metrics.length) return 'Để agent lấy chỉ số từ Canvas';
-      if (q.source !== S.score.metric.text) return 'Canvas đã đổi, lấy lại chỉ số';
+      if (S.score.metric.text && q.source !== S.score.metric.text) return 'Canvas đã đổi, lấy lại chỉ số';
       if (!q.runs.length) return 'Ghi lần chạy thử đầu tiên';
       return q.runs.some(r => !r.sample) ? `Đã ghi ${q.runs.length} lần chạy` : 'Mới có dữ liệu mẫu, ghi lần chạy thật';
     }
@@ -735,16 +817,17 @@
     return Number.isInteger(r) ? String(r) : r.toFixed(1).replace('.', ',');
   }
   const runCost = (r, c) => ((+r.actTok || 0) * (+c.pricePerM || 0)) / 1e6;
+  const COST_KEYS = ['pricePerM', 'apiCalls', 'infra', 'price', 'teams', 'pricePerCall', 'setupFee', 'newCustomers'];
   /* Chi phí và doanh thu tính bằng code từ token thực tế và giả định do đội nhập; không dùng bảng giá của nhà cung cấp nào. */
   function money() {
-    const c = Object.fromEntries(Object.entries(S.plan.cost).map(([k, v]) => [k, +v || 0]));
+    const c = Object.fromEntries(COST_KEYS.map(k => [k, +S.quality.cost[k] || 0]));
     const runs = sortedRuns(), priced = c.pricePerM > 0;
     // Chi phí mỗi lượt gọi: trung bình tối đa 3 lần chạy gần nhất có token thực tế và tổng số test.
     const valid = runs.filter(r => +r.total > 0 && num(r.actTok) !== null).slice(-3);
     const perCase = priced && valid.length ? valid.reduce((a, r) => a + runCost(r, c) / +r.total, 0) / valid.length : null;
     const lastKnown = runs.filter(r => num(r.actTok) !== null).pop();
     const lastRun = priced && lastKnown ? runCost(lastKnown, c) : null;
-    const aiMonthly = c.apiCalls === 0 ? 0 : perCase === null ? null : perCase * c.apiCalls;
+    const aiMonthly = c.apiCalls === 0 && priced ? 0 : perCase === null ? null : perCase * c.apiCalls;
     const totalCost = aiMonthly === null ? null : aiMonthly + c.infra;
     const model = ['sub', 'usage', 'setup'].includes(S.quality.revenueModel) ? S.quality.revenueModel : 'sub';
     const revenue = model === 'usage' ? c.apiCalls * c.pricePerCall : model === 'setup' ? c.setupFee * c.newCustomers : c.teams * c.price;
@@ -770,11 +853,15 @@
       passDrop: a !== null && b !== null ? Math.max(0, b - a) : null,
       metricMiss: last ? S.quality.metrics.filter(k => num(last.values[k.id]) !== null && !meets(k, +last.values[k.id])).length : null,
       margin: m ? m.margin : null,
-      overdueDays: late.length ? Math.max(...late) : 0,
+      overdueDays: late.length ? Math.max(...late) : S.maintain.schedule.length ? 0 : null,
       staleDays: last ? Math.max(0, Math.floor((Date.now() - new Date(last.at)) / 864e5)) : null
     };
   }
   const health = () => window.HEALTH.evaluate(signals());
+  /* Chưa có số liệu nào thì không được báo "Bình thường". */
+  const noData = h => h.missing.length === Object.keys(RULES).length;
+  const healthName = h => (noData(h) ? 'Chưa có dữ liệu' : HNAMES[h.level]);
+  const healthColor = h => (noData(h) ? 'var(--mute)' : HCOLOR[h.level]);
   const HCOLOR = { ok: 'var(--green)', warn: 'var(--yellow)', rescue: 'var(--orange)', collapse: 'var(--orange)' };
   const fmtRule = (fmt, v) => (fmt === 'pct' ? Math.round(v * 100) + '%' : fmt === 'days' ? v + ' ngày' : String(v));
   const reasonText = r => `${r.label}: ${fmtRule(r.fmt, r.value)} (ngưỡng ${HNAMES[r.level].toLowerCase()} là ${r.dir === 'below' ? 'dưới' : 'từ'} ${fmtRule(r.fmt, r.threshold)})`;
@@ -783,7 +870,7 @@
     const h = health(), level = preview || h.level;
     if (site && site.health) site.health(level);
     const chip = $('#healthChip');
-    if (chip) { chip.dataset.level = level; chip.style.setProperty('--c', HCOLOR[level]); chip.innerHTML = `<i></i>${preview ? 'Xem thử' : 'Sức khỏe'}: ${HNAMES[level]}`; }
+    if (chip) { chip.dataset.level = level; chip.style.setProperty('--c', preview ? HCOLOR[level] : healthColor(h)); chip.innerHTML = `<i></i>${preview ? 'Xem thử' : 'Sức khỏe'}: ${preview ? HNAMES[level] : healthName(h)}`; }
     if (lastLevel && LEVELS.indexOf(h.level) > LEVELS.indexOf(lastLevel)) toast(`Sức khỏe sản phẩm chuyển sang ${HNAMES[h.level].toLowerCase()}. Xem lý do ở tab Maintaining.`);
     lastLevel = h.level;
   }
@@ -792,7 +879,7 @@
   function lineChart(xs, series, label) {
     const W = 640, H = 230, L = 50, R = 26, T = 22, B = 30;
     const vals = series.flatMap(s => [...s.values, s.target]).filter(v => v !== null && v !== undefined && isFinite(v));
-    if (!xs.length || !vals.length) return '<p class="muted">Chưa có lần chạy nào để vẽ.</p>';
+    if (!xs.length || !vals.length) return '<p class="muted">Chưa có số liệu để vẽ. Biểu đồ hiện sau khi ghi lần chạy thử.</p>';
     const hi = Math.max(...vals, 0), mag = hi > 0 ? 10 ** Math.floor(Math.log10(hi)) : 1, max = Math.ceil(hi * 1.08 / mag) * mag || 1, min = Math.min(0, ...vals);
     const x = i => L + (xs.length === 1 ? (W - L - R) / 2 : i * (W - L - R) / (xs.length - 1));
     const y = v => T + (H - T - B) * (1 - (v - min) / (max - min || 1));
@@ -956,7 +1043,7 @@
     project: S.meta.name,
     scorecard: Object.fromEntries(SCORE.map(([k, l]) => [l, S.score[k].text])),
     overview: S.plan.overview,
-    tasks: S.tasks.list.map(t => `${t.id} ${t.title} (${(STATUS[t.status] || ['?'])[0]})`),
+    tasks: teamTasks().map(t => `${t.id} ${t.title} (${t.done ? 'Xong' : t.review ? 'Chờ review' : 'Chưa xong'})`),
     quality: {
       metrics: S.quality.metrics.map(m => `${m.name} (${(KIND[m.kind] || KIND.value)[0]}): hiện trạng ${num(m.baseline) === null ? 'chưa đo' : m.baseline + m.unit}, mục tiêu ${m.target}${m.unit}, cách đo: ${m.method || 'chưa ghi'}`),
       metricTips: checkMetrics(),
@@ -968,16 +1055,16 @@
   function why(e) {
     return e && e.code === 'rate_limited' ? 'Claude đang bận.' : e && e.code === 'not_granted' ? 'Bạn chưa cho phép trang gọi Claude.' : 'Chưa gọi được Claude.';
   }
-  /* Gọi Claude lấy JSON; nếu không được thì dùng bản mẫu và nói rõ. */
+  /* Gọi Claude lấy JSON; nếu không được thì dùng bản dự phòng (luật trong app) và nói rõ. */
   async function generate(task, shape, valid, fallback) {
     await ready;
     if (sample) {
       try {
         const out = await sample.json(`${AGENT}\n\nDữ liệu dự án:\n${context()}\n\nNhiệm vụ: ${task}\nChỉ trả về JSON đúng dạng: ${shape}`, { cache: false });
         if (valid(out)) return out;
-        toast('Claude trả về sai định dạng, đang dùng bản mẫu.');
-      } catch (e) { toast(why(e) + ' Đang dùng bản mẫu.'); }
-    } else toast('Chưa kết nối Claude, đang dùng bản mẫu.');
+        toast('Claude trả về sai định dạng, đang dùng bản dự phòng.');
+      } catch (e) { toast(why(e) + ' Đang dùng bản dự phòng.'); }
+    } else toast('Chưa kết nối Claude, đang dùng bản dự phòng.');
     await wait(500);
     return fallback();
   }
@@ -993,9 +1080,10 @@
     const box = $('.msgs', chat);
     box.innerHTML = S.chat.map(m => {
       const who = member(m.who);
-      return `<div class="msg" style="--m:${who ? color(who.color) : 'var(--yellow)'}">${avatar(m.who)}<div class="bubble"><small>${esc(who ? who.name : 'Agent AI Builder')}</small>${esc(m.text)}</div></div>`;
+      return `<div class="msg" style="--m:${who ? color(who.color) : 'var(--yellow)'}">${avatar(m.who)}<div class="bubble"><small>${esc(who ? who.name : m.who === 'agent' ? 'Agent AI Builder' : 'Bạn')}</small>${esc(m.text)}</div></div>`;
     }).join('') + (typing ? `<div class="msg" id="typing">${avatar('agent')}<div class="bubble">Đang suy nghĩ...</div></div>` : '');
-    $('.speak', chat).innerHTML = '<span>Bạn đang nói với tư cách</span>' + S.meta.members.map(m =>
+    // Luồng thật nói bằng tài khoản đã đăng nhập; chỉ chế độ xem demo mới đổi vai.
+    $('.speak', chat).innerHTML = !mockMode ? '' : '<span>Bạn đang nói với tư cách</span>' + S.meta.members.map(m =>
       `<button class="av ${m.id === local.me ? 'me' : ''}" style="--m:${color(m.color)}" data-act="me" data-id="${esc(m.id)}" title="${esc(m.name)}" aria-pressed="${m.id === local.me}">${esc(m.name[0])}</button>`).join('');
     $('.quick', chat).innerHTML = ['Phạm vi MVP này có quá rộng không?', 'Đo thành công bằng gì?', 'Rủi ro lớn nhất là gì?']
       .map(q => `<button class="btn soft small" data-act="quick">${q}</button>`).join('');
@@ -1286,6 +1374,10 @@
       <input data-bind="slideHighlight" data-id="${activeSlideIdx}" value="${esc(curSlide.highlight || '')}" placeholder="Điểm nhấn / số liệu chính (tùy chọn)">
     </div>`;
   }
+  /* Task của đội: lấy từ sprint đã giao ở Planning; chế độ xem demo dùng danh sách mẫu. */
+  const teamTasks = () => (mockMode
+    ? S.tasks.list.map(t => ({ id: t.id, title: t.title, owner: t.owner, done: t.status === 'done', review: t.status === 'review' }))
+    : liveTasks().map(t => ({ id: t.code, title: t.title, owner: t.assignee_id, done: t.progress === 'done', review: t.progress === 'review' })));
 
   const views = {
     overview() {
@@ -1299,9 +1391,10 @@
       }).join('');
       const curIdx = progress().findIndex(x => !x), cur = Math.max(0, curIdx);
       const goLabel = curIdx < 0 ? 'Xem lại: Thinking' : cur === 0 && !started(0) ? 'Bắt đầu: Thinking' : `Làm tiếp: ${STEPS[cur].name}`;
+      const roleMap = mockMode ? S.plan.roles : (joined() && live.board.roles) || {};
       const team = S.meta.members.map(m => {
-        const open = S.tasks.list.filter(t => t.owner === m.id && t.status !== 'done').length;
-        const roles = ROLES.filter(r => S.plan.roles[r] === m.id).join(', ') || 'Chưa có vai';
+        const open = teamTasks().filter(t => t.owner === m.id && !t.done).length;
+        const roles = ROLES.filter(r => roleMap[r] === m.id).join(', ') || 'Chưa có vai';
         return `<div>${avatar(m.id)}<span>${esc(m.name)}<br><span class="muted">${esc(roles)}, ${open} task mở</span></span></div>`;
       }).join('');
       if (mobile.matches) {
@@ -1309,7 +1402,7 @@
         return `<div class="stack"><div class="view-head"><div><h2>Tổng quan</h2><p>${esc(S.meta.name)}</p></div></div>
           <div class="ov-cards">${cards}</div>
           <div class="panel">${panelHead('Ai đang làm gì')}<div class="ov-team">${team}</div></div>
-          <div class="panel">${panelHead('Việc cần để ý')}${health().reasons.slice(0, 2).map(r => `<p>Sức khỏe ${esc(HNAMES[r.level].toLowerCase())}: ${esc(reasonText(r))}</p>`).join('')}${S.tasks.list.filter(t => t.status === 'review').map(t => `<p>${esc(t.id)} đang chờ review: ${esc(t.title)}</p>`).join('')}${late.map(x => `<p>Bảo trì đến hạn: ${esc(x.title)}</p>`).join('') || ''}${!late.length && !S.tasks.list.some(t => t.status === 'review') && !health().reasons.length ? '<p class="muted">Không có việc gấp.</p>' : ''}</div></div>`;
+          <div class="panel">${panelHead('Việc cần để ý')}${health().reasons.slice(0, 2).map(r => `<p>Sức khỏe ${esc(HNAMES[r.level].toLowerCase())}: ${esc(reasonText(r))}</p>`).join('')}${teamTasks().filter(t => t.review).map(t => `<p>${esc(t.id)} đang chờ review: ${esc(t.title)}</p>`).join('')}${late.map(x => `<p>Bảo trì đến hạn: ${esc(x.title)}</p>`).join('') || ''}${!late.length && !teamTasks().some(t => t.review) && !health().reasons.length ? '<p class="muted">Không có việc gấp.</p>' : ''}</div></div>`;
       }
       return `<div class="ov-title"><h2>${STEPS[cur].name}</h2><p>${STEP_HINT[STEPS[cur].id]}</p>${btn('tab', goLabel, 'primary big', `data-id="${STEPS[cur].id}"`)}</div>
         <div class="ov-team">${team}</div>`;
@@ -1383,7 +1476,7 @@
 
     quality() {
       const q = S.quality, runs = sortedRuns(), src = S.score.metric.text.trim(), m = money();
-      const stale = q.metrics.length && q.source !== S.score.metric.text, editing = q.runs.find(r => r.id === runEdit);
+      const stale = q.metrics.length && src && q.source !== S.score.metric.text.trim(), editing = q.runs.find(r => r.id === runEdit);
       const xs = runs.map(r => shortDate(r.at));
       const series = [{ id: 'pass', name: 'Tỉ lệ test pass (%)', color: PALETTE[0], values: runs.map(r => (rate(r) === null ? null : +(rate(r) * 100).toFixed(1))) },
         ...q.metrics.map((k, i) => ({ id: k.id, name: `${k.name}${k.unit ? ' (' + k.unit + ')' : ''}`, color: PALETTE[1 + (i % 6)], values: runs.map(r => num(r.values[k.id])), target: num(k.target) }))];
@@ -1393,7 +1486,7 @@
       const samples = q.runs.filter(r => r.sample).length;
       const val = (r, k) => (editing ? r[k] ?? '' : '');
       const field = (name, label, value, attrs = 'type="number" min="0" step="any"') => `<label>${label}<input name="${esc(name)}" ${attrs} value="${esc(value)}"></label>`;
-      const c = S.plan.cost, unit = { pricePerM: +c.pricePerM || 0 }, priced = unit.pricePerM > 0;
+      const c = q.cost, unit = { pricePerM: +c.pricePerM || 0 }, priced = unit.pricePerM > 0;
       const latestId = runs.length ? runs[runs.length - 1].id : null;
       const revModel = ['sub', 'usage', 'setup'].includes(q.revenueModel) ? q.revenueModel : 'sub';
       const numField = (k, l, step = 'any') => `<label>${l}<input type="number" min="0" step="${step}" data-bind="cost" data-id="${k}" value="${+c[k] || 0}"></label>`;
@@ -1419,7 +1512,9 @@
         : revModel === 'setup'
           ? `${(+c.newCustomers || 0).toLocaleString('vi-VN')} khách mới × ${usd(+c.setupFee || 0)} = ${usd(m.revenue)}/tháng.`+costPart
           : `${(+c.teams || 0).toLocaleString('vi-VN')} khách × ${usd(+c.price || 0)} = ${usd(m.revenue)}/tháng.`+costPart;
-      return head(3, 'Mỗi lần đổi model hay prompt là một lần chạy thử. Ghi lại để thấy chất lượng, token và chi phí đi về đâu.') + `<div class="stack">
+      const intro = head(3, 'Mỗi lần đổi model hay prompt là một lần chạy thử. Ghi lại để thấy chất lượng, token và chi phí đi về đâu.'), gate = teamGate('Chỉ số và lần chạy thử');
+      if (gate) return intro + gate;
+      return intro + `<div class="stack">
         <div class="panel">${panelHead('Chỉ số cần đạt', btn('metrics', q.metrics.length ? 'Lấy lại chỉ số' : 'Lấy chỉ số', 'tone small'))}
           <p class="muted">Agent đọc mục Metric trong scorecard và tách thành từng chỉ số. Mỗi lần chạy thử, đội nhập con số đo được để so với mục tiêu ở đây.</p>
           <div class="prose" style="margin:8px 0">${src ? esc(src) : 'Mục Metric đang trống. Điền ở tab Thinking trước.'}</div>
@@ -1430,7 +1525,7 @@
               <input class="goal-num" type="number" step="any" ${b('target')} value="${esc(k.target)}" aria-label="Mục tiêu"><input class="goal-unit" ${b('unit')} value="${esc(k.unit)}" placeholder="đơn vị" aria-label="Đơn vị"></div>
             <details><summary class="muted">Thêm thông tin (${extra ? 'đã điền' : 'không bắt buộc'})</summary><div class="stack" style="gap:8px;margin-top:8px">
               <label class="field">Con số trước khi có AI<input type="number" step="any" ${b('baseline')} value="${num(k.baseline) === null ? '' : +k.baseline}" placeholder="Ví dụ 12. Để trống nếu chưa đo"></label>
-              <label class="field">Đo bằng cách nào<input ${b('method')} value="${esc(k.method || '')}" placeholder="Ví dụ: đếm trong log chat mỗi tuần"></label></div></details></div>`; }).join('') || '<p class="muted">Chưa có chỉ số nào.</p>'}</div>
+              <label class="field">Đo bằng cách nào<input ${b('method')} value="${esc(k.method || '')}" placeholder="Ví dụ: đếm trong log chat mỗi tuần"></label></div></details></div>`; }).join('') || '<p class="muted">Chưa có chỉ số nào. Bấm “Lấy chỉ số” sau khi Thinking đã có mục Metric, hoặc bấm “Thêm chỉ số” để nhập tay.</p>'}</div>
           ${(() => { const tips = checkMetrics(); return tips.length ? `<div class="tips"><h4>Gợi ý cho bộ chỉ số</h4><ul>${tips.map(t => `<li>${esc(t)}</li>`).join('')}</ul></div>` : ''; })()}
           <p style="margin-top:10px">${btn('addmetric', 'Thêm chỉ số', 'soft small')}</p></div>
         <div class="panel">${panelHead(editing ? 'Lịch sử AI: đang sửa một lần chạy' : 'Lịch sử AI', samples ? `<span class="muted">${samples} lần chạy là dữ liệu mẫu</span>` : '')}
@@ -1454,7 +1549,7 @@
             ${q.metrics.map(k => { const v = num(r.values[k.id]); return `<td>${v === null ? '<span class="muted">Chưa khai</span>' : `${+v.toFixed(2)}${esc(k.unit)}${meets(k, v) ? '' : ' <span class="tag" style="--c:var(--orange)">Chưa đạt</span>'}`}</td>`; }).join('')}
             <td>${rate(r) === null ? '<span class="muted">Chưa khai</span>' : `${+r.passed}/${+r.total}<br><span class="muted">${pct(rate(r))}</span>`}</td>
             <td>${num(r.estTok) === null ? '—' : fmtK(num(r.estTok))} / ${num(r.actTok) === null ? '—' : fmtK(num(r.actTok))}</td><td>${!priced ? '<span class="muted">Cần đơn giá</span>' : num(r.actTok) === null ? '—' : usd(runCost(r, unit))}</td>
-            <td><span class="muted">${esc(r.note)}</span></td><td><div class="row" style="gap:6px;flex-wrap:nowrap">${btn('editrun', 'Sửa', 'soft small', `data-id="${esc(r.id)}"`)}${btn('delrun', 'Xóa', 'soft small', `data-id="${esc(r.id)}"`)}</div></td></tr>`).join('') || `<tr><td colspan="${7 + q.metrics.length}" class="muted">Chưa có lần chạy nào.</td></tr>`}</tbody></table></div></div>
+            <td><span class="muted">${esc(r.note)}</span></td><td><div class="row" style="gap:6px;flex-wrap:nowrap">${btn('editrun', 'Sửa', 'soft small', `data-id="${esc(r.id)}"`)}${btn('delrun', 'Xóa', 'soft small', `data-id="${esc(r.id)}"`)}</div></td></tr>`).join('') || `<tr><td colspan="${7 + q.metrics.length}" class="muted">Chưa có lần chạy nào. Điền form ở mục Lịch sử AI rồi bấm “Thêm lần chạy”.</td></tr>`}</tbody></table></div></div>
         <div class="panel">${panelHead('Chi phí', '<span class="muted">Đơn giá và hạ tầng là giả định của đội</span>')}<div class="cost">${numField('pricePerM', 'USD / 1 triệu token')}${numField('apiCalls', 'Số lượt gọi API/tháng', '1')}<div class="cost-field"><div class="label-row"><label for="q-infra">Hạ tầng USD/tháng</label><span class="tip-wrap"><button type="button" class="tip-btn" aria-label="Hạ tầng là gì?" aria-describedby="tip-infra">?</button><span class="tip-pop" id="tip-infra" role="tooltip">Chi phí chạy sản phẩm ngoài tiền token, ví dụ VPS, tên miền, GPU, cơ sở dữ liệu.</span></span></div><input id="q-infra" type="number" min="0" step="any" data-bind="cost" data-id="infra" value="${+c.infra || 0}"></div></div>
           <div class="kpis">${[['Chi phí lần chạy gần nhất', m.lastRun], ['Chi phí mỗi lượt gọi', m.perCase], ['Chi phí AI/tháng', m.aiMonthly], ['Tổng chi/tháng', m.totalCost]].map(([l, v]) => `<div class="kpi"><b>${v === null ? '—' : usd(v)}</b><span>${l}</span></div>`).join('')}</div>
           ${m.known ? '' : `<p class="muted" style="margin-top:8px">${m.priced ? 'Cần ít nhất một lần chạy có tổng số test và token thực tế.' : 'Cần đơn giá token để tính chi phí.'}</p>`}
@@ -1478,16 +1573,18 @@
     maintaining() {
       const m = S.maintain, today = iso(new Date()), h = health(), suggest = m.suggest || [];
       const rules = Object.values(RULES).map(r => `<tr><td>${esc(r.label)}</td>${LEVELS.slice(1).map(l => `<td>${r.dir === 'below' ? 'Dưới' : 'Từ'} ${fmtRule(r.fmt, r[l])}</td>`).join('')}</tr>`).join('');
-      return head(4, 'Sản phẩm AI cần được canh chừng. Việc đến hạn nằm trên cùng, mô hình 3D báo khi sản phẩm xuống cấp.') + `<div class="stack">
-        <div class="panel">${panelHead('Sức khỏe sản phẩm', `<span class="tag" style="--c:${HCOLOR[h.level]}">${HNAMES[h.level]}</span>`)}
+      const intro = head(4, 'Sản phẩm AI cần được canh chừng. Việc đến hạn nằm trên cùng, mô hình 3D báo khi sản phẩm xuống cấp.'), gate = teamGate('Lịch bảo trì');
+      if (gate) return intro + gate;
+      return intro + `<div class="stack">
+        <div class="panel">${panelHead('Sức khỏe sản phẩm', `<span class="tag" style="--c:${healthColor(h)}">${healthName(h)}</span>`)}
           <p class="muted">Tính từ số liệu ở Quality và lịch bảo trì. Mô hình 3D đổi theo trạng thái này: xuống cấp thì nghiêng và nứt, cần cứu hộ thì xe cứu thương tới, sập thì các tầng trên đổ xuống.</p>
-          <div style="margin-top:8px">${h.reasons.map(r => `<div class="reason"><span class="tag" style="--c:${HCOLOR[r.level]}">${HNAMES[r.level]}</span><span>${esc(reasonText(r))}</span></div>`).join('') || '<div class="reason"><span class="muted">Chưa chạm ngưỡng nào.</span></div>'}</div>
+          <div style="margin-top:8px">${h.reasons.map(r => `<div class="reason"><span class="tag" style="--c:${HCOLOR[r.level]}">${HNAMES[r.level]}</span><span>${esc(reasonText(r))}</span></div>`).join('') || `<div class="reason"><span class="muted">${noData(h) ? 'Ghi một lần chạy thử ở tab Quality hoặc thêm việc vào lịch bảo trì để bắt đầu theo dõi.' : 'Chưa chạm ngưỡng nào.'}</span></div>`}</div>
           ${h.missing.length ? `<p class="muted" style="margin-top:8px">Chưa đủ dữ liệu cho: ${h.missing.map(k => esc(RULES[k].label.toLowerCase())).join('; ')}.</p>` : ''}
           <div class="row" style="margin-top:12px"><span class="muted">Xem thử mô hình 3D</span><div class="seg" role="group" aria-label="Xem thử trạng thái">${[['real', 'Theo số liệu'], ...LEVELS.map(l => [l, HNAMES[l]])].map(([id, n]) => `<button data-act="preview" data-id="${id}" class="${(preview || 'real') === id ? 'on' : ''}">${n}</button>`).join('')}</div></div>
           <details style="margin-top:12px"><summary class="muted">Bảng ngưỡng (sửa trong file tang/health.js)</summary><div class="scroll"><table><thead><tr><th>Luật</th>${LEVELS.slice(1).map(l => `<th>${HNAMES[l]}</th>`).join('')}</tr></thead><tbody>${rules}</tbody></table></div></details></div>
         <div class="panel">${panelHead('Lịch bảo trì', btn('cadence', 'Agent gợi ý lịch', 'soft small'))}
           ${suggest.length ? `<div class="suggest-list">${suggest.map((x, i) => `<div class="suggest-row"><div class="suggest-info"><div class="row" style="gap:8px"><span>${esc(x.title)}</span><span class="tag" style="--c:var(--violet)">Mỗi ${+x.every} ngày</span></div><span class="muted">${esc(x.why)}</span></div><div class="row" style="gap:6px">${btn('addsuggest', 'Thêm vào lịch', 'soft small', `data-id="${esc(x.id || '')}" data-n="${i}"`)}${btn('dismisssuggest', 'Bỏ qua', 'soft small', `data-id="${esc(x.id || '')}" data-n="${i}"`)}</div></div>`).join('')}</div>` : ''}
-          <div class="scroll"><table><thead><tr><th>Việc</th><th>Chu kỳ</th><th>Hạn tới</th><th>Người làm</th><th></th></tr></thead><tbody>${m.schedule.slice().sort((a, b) => a.next.localeCompare(b.next)).map(x => `<tr data-row="${esc(x.id)}"><td>${esc(x.title)}<br><span class="muted">Đã làm ${+x.runs || 0} lần</span></td><td>${+x.every} ngày</td><td><span class="tag" style="--c:var(${x.next <= today ? '--orange' : '--violet'})">${x.next <= today ? 'Đến hạn ' : ''}${esc(x.next.split('-').reverse().join('/'))}</span></td><td><select data-bind="mowner" data-id="${esc(x.id)}" aria-label="Người làm">${options(x.owner)}</select></td><td><div class="row" style="gap:6px;flex-wrap:nowrap">${btn('ran', 'Đã làm', 'tone small', `data-id="${esc(x.id)}"`)}${btn('delmaint', 'Xóa', 'soft small danger', `data-id="${esc(x.id)}"`)}</div></td></tr>`).join('') || '<tr><td colspan="5" class="muted">Chưa có việc nào trong lịch bảo trì.</td></tr>'}</tbody></table></div>
+          <div class="scroll"><table><thead><tr><th>Việc</th><th>Chu kỳ</th><th>Hạn tới</th><th>Người làm</th><th></th></tr></thead><tbody>${m.schedule.slice().sort((a, b) => a.next.localeCompare(b.next)).map(x => `<tr data-row="${esc(x.id)}"><td>${esc(x.title)}<br><span class="muted">Đã làm ${+x.runs || 0} lần</span></td><td>${+x.every} ngày</td><td><span class="tag" style="--c:var(${x.next <= today ? '--orange' : '--violet'})">${x.next <= today ? 'Đến hạn ' : ''}${esc(x.next.split('-').reverse().join('/'))}</span></td><td><select data-bind="mowner" data-id="${esc(x.id)}" aria-label="Người làm">${options(x.owner)}</select></td><td><div class="row" style="gap:6px;flex-wrap:nowrap">${btn('ran', 'Đã làm', 'tone small', `data-id="${esc(x.id)}"`)}${btn('delmaint', 'Xóa', 'soft small danger', `data-id="${esc(x.id)}"`)}</div></td></tr>`).join('') || '<tr><td colspan="5" class="muted">Chưa có việc nào. Thêm việc bằng form bên dưới hoặc bấm “Agent gợi ý lịch”.</td></tr>'}</tbody></table></div>
           <form class="maint-form stack" style="gap:10px" data-form="maint" novalidate><div class="cost">
             <label>Việc cần làm<input name="title" required maxlength="120" placeholder="Ví dụ: Rà lại câu trả lời sai chính sách"></label>
             <label>Chu kỳ (ngày)<input name="every" type="number" min="1" max="365" step="1" value="7" required></label>
@@ -2222,7 +2319,7 @@ nature là bản chất problem: "behavior" nếu là problem hành vi (duy trì
         return x;
       });
       S.quality.metrics = [...next, ...old.filter(o => o.from === 'tay' && !used.has(o.id))];
-      S.quality.source = S.score.metric.text;
+      S.quality.source = src;
       S.quality.nature = NATURE[out.nature] ? out.nature : natureOf(S.score.problem.text);
       save('quality');
       toast(`Đã lấy ${next.length} chỉ số từ scorecard${out.rule ? ' bằng luật tách số' : ''}.`);
@@ -2321,6 +2418,7 @@ nature là bản chất problem: "behavior" nếu là problem hành vi (duy trì
 
   function renderTeam() {
     $('#teamBar').innerHTML = S.meta.members.map(m => avatar(m.id)).join('');
+    $('#projectName').placeholder = 'Đặt tên dự án';
     if (document.activeElement !== $('#projectName')) $('#projectName').value = S.meta.name;
   }
   function renderNav() {
@@ -2612,12 +2710,9 @@ nature là bản chất problem: "behavior" nếu là problem hành vi (duy trì
   /* Vẽ lại tab hiện tại, giữ vị trí cuộn */
   function rerender() { const y = view.scrollTop; render(); view.scrollTop = y; syncProgress(); }
   /* ---------- Sự kiện ---------- */
-  let resetArmed = 0;
   const actions = {
     enter: () => enter(),
     home,
-    replay: () => replay(),
-    flow: () => $('#flow').scrollIntoView({ behavior: reduced ? 'auto' : 'smooth' }),
     tab: b => go(b.dataset.id),
     'planning-live': () => setPlanningOpen(true),
     'repo-open': openRepo,
@@ -2855,11 +2950,7 @@ nature là bản chất problem: "behavior" nếu là problem hành vi (duy trì
         rerender(); refreshDashStats(true); toast('Đã xóa link khảo sát');
       } catch (e) { toast('Không xóa được link khảo sát.'); }
     },
-    reset(b) {
-      if (Date.now() - resetArmed > 4000) { resetArmed = Date.now(); b.textContent = db ? 'Bấm lần nữa: đặt lại cho cả đội' : 'Bấm lần nữa để đặt lại'; setTimeout(() => { b.textContent = 'Đặt lại demo'; }, 4000); return; }
-      S = SEED(); resetArmed = 0; b.textContent = 'Đặt lại demo';
-      save(...Object.keys(S)); renderTeam(); renderChat(); rerender(); enterContent(); toast('Đã đặt lại dữ liệu demo');
-    },
+    'ws-retry': () => loadPlanning(true),
     dot(b) { const s = S.score[b.dataset.id], n = +b.dataset.n; s.score = s.score === n ? n - 1 : n; save('score'); rerender(); anim($$(`.score[data-key="${b.dataset.id}"] .dots .on`, view), { scaleY: [2.2, 1] }, { type: 'spring', delay: canAnim ? M.stagger(0.04) : 0 }); },
     async seed(b) {
       const slug = activeDashSlug();
@@ -3157,7 +3248,7 @@ nature là bản chất problem: "behavior" nếu là problem hành vi (duy trì
     const v = t.value;
     if (k === 'score') { S.score[id].text = v; if (!v.trim()) S.score[id].score = 0; save('score'); }
     if (k === 'cost') {
-      S.plan.cost[id] = Math.max(0, +v || 0); save('plan'); rerender();
+      S.quality.cost[id] = Math.max(0, +v || 0); save('quality'); rerender();
     }
     if (k === 'revmodel') {
       S.quality.revenueModel = ['sub', 'usage', 'setup'].includes(v) ? v : 'sub';
@@ -3211,28 +3302,37 @@ nature là bản chất problem: "behavior" nếu là problem hành vi (duy trì
     intro = M.animate(0, 1, { duration: 5.2, delay: 0.35, ease: [0.55, 0, 0.15, 1], onUpdate: v => { heroScene.state.p = v; } });
   }
   function landing() {
-    $('#flowList').innerHTML = STEPS.map((s, i) => `<li><button class="step" style="--c:${s.hex}" data-step="${s.id}"><span class="step-no">${i + 1}</span><span class="step-body"><span class="step-title">${s.name}</span><span>${s.lead}</span>
-      <span class="shift"><span><small>Engineer thường nghĩ</small>${s.from}</span><span><small>AI builder hỏi</small>${s.to}</span></span><span class="chips">${s.out.map(o => `<span class="chip">${o}</span>`).join('')}</span></span></button></li>`).join('');
-    $$('.step').forEach(b => b.addEventListener('click', () => enter(b.dataset.step)));
+    initSteps();
+    pickModel('house');
+    initModelViewer();
     if (window.Scenes) {
       try {
-        let tipAnim;
-        heroScene = window.Scenes.hero($('#heroCanvas'), FLOORS, (i, group) => {
-          const f = FLOORS[i], tip = $('#floorTip');
-          tip.style.setProperty('--c', `var(--${f.color})`);
-          $('span', tip).textContent = `Tầng ${i + 1}, ${f.name}: ${f.text}`;
-          anim(tip, { y: [14, 0], opacity: [0, 1] }, { type: 'spring' });
-          if (canAnim) { if (tipAnim) tipAnim.stop(); tipAnim = M.animate(0, 1, { duration: 0.7, onUpdate: v => { const s = 1 + Math.sin(v * Math.PI) * 0.12; group.scale.set(s, 1, s); } }); }
+        const card = $('#floorCard');
+        heroScene = window.Scenes.hero($('#heroCanvas'), FLOORS, i => {
+          card.classList.toggle('on', i >= 0);
+          if (i < 0) return;
+          const f = FLOORS[i];
+          card.style.setProperty('--c', `var(--${f.color})`);
+          $('.floor-no', card).textContent = `Tầng ${i + 1}`;
+          $('h2', card).textContent = f.name;
+          $('p', card).textContent = f.text;
+        }, (x, y) => {
+          // Card nằm bên trái tầng đang chọn, không tràn khỏi khung
+          const box = card.offsetParent;
+          if (!box) return;
+          const left = Math.max(16, Math.min(box.clientWidth - card.offsetWidth - 16, x - card.offsetWidth - 12));
+          const top = Math.max(16, Math.min(box.clientHeight - card.offsetHeight - 16, y - card.offsetHeight / 2));
+          card.style.setProperty('--x', `${Math.round(left)}px`);
+          card.style.setProperty('--y', `${Math.round(top)}px`);
         });
         replay();
-      } catch (e) { $('#floorTip span').textContent = 'Thiết bị này không hiển thị được 3D.'; }
-    }
-    rise($$('.hero-copy > *'), 0.5);
-    if (canAnim && M.inView) {
-      $$('.step, .flow-head, .flow-end').forEach(el => {
-        el.style.opacity = 0;
-        M.inView(el, () => { M.animate(el, { opacity: [0, 1], y: [40, 0] }, { duration: 0.7, ease: EASE }); }, { amount: 0.2 });
-      });
+      } catch (e) {
+        const card = $('#floorCard');
+        card.classList.add('on');
+        $('.floor-no', card).textContent = '';
+        $('h2', card).textContent = 'Chưa hiển thị được 3D';
+        $('p', card).textContent = 'Thiết bị này không chạy được mô hình. Bạn vẫn vào buồng lái được.';
+      }
     }
   }
 

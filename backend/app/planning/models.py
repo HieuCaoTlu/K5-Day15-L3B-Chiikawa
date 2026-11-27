@@ -39,6 +39,17 @@ class PlanningBoard(Base):
     version: Mapped[int]
 
 
+class PlanningWorkspace(Base):
+    """Dữ liệu tab Quality và Maintaining của đội, mỗi phần một dòng; version chống ghi đè bản mới."""
+
+    __tablename__ = "planning_workspaces"
+
+    team_id: Mapped[str] = mapped_column(ForeignKey("planning_teams.id"), primary_key=True)
+    section: Mapped[str] = mapped_column(String(16), primary_key=True)
+    data: Mapped[dict] = mapped_column(JSON)
+    version: Mapped[int]
+
+
 class PlanningInvite(Base):
     __tablename__ = "planning_invites"
 

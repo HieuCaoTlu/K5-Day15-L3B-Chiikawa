@@ -168,6 +168,8 @@ th{font-size:12px;color:var(--mute)}
 .col-head p{font-size:12px;color:var(--mute)}
 .count{font-size:12px;color:var(--mute);background:var(--line);border-radius:99px;padding:0 8px;line-height:20px}
 .ring{display:block;width:14px;height:14px;border-radius:50%;border:2px solid var(--s);flex:none}
+.member-face{display:inline-flex;flex:none}
+.member-face .pl-avatar{--pl-unit:.45px}
 .task{--sp:#8891ac;background:#fff;border:0;border-radius:8px;padding:10px 12px;box-shadow:none;display:grid;grid-template-columns:minmax(0,1fr);min-width:0;gap:6px;font-size:14px}
 .task .task-tag{background:#fff}
 .task-tag.task-sprint,.task .task-tag.task-sprint{background:color-mix(in srgb,var(--sp) 20%,#fff);border-color:transparent;color:color-mix(in srgb,var(--sp) 45%,var(--ink));font-weight:500}
