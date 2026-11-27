@@ -33,7 +33,8 @@ backend/app/
   schemas.py           schema request/response = hợp đồng API
   api/                 health · items (CRUD mẫu) · agent (run + review) · admin (stats, usage, sessions)
   agent/
-    graph.py           LangGraph: guard_input → draft → human_review (HITL) → finalize
+    graph.py           LangGraph: guard_input → update_canvas → mark_evidence → ask_next | (verdict → human_review (HITL) → finalize)
+    canvas.py          luật Thinking bằng code: ô nào có bằng chứng, GO / NOT YET / NO
     nodes.py           code từng node (@mockable)
     state.py           AgentState + schema Pydantic cho output LLM
     llm.py             cổng DUY NHẤT gọi Gemini: structured output, ghi token/chi phí, ngân sách ngày
@@ -69,7 +70,7 @@ frontend/app/components.css  lớp d-* và nền tảng component Next.js
 - **LLM chỉ qua `agent/llm.py`**, luôn `structured(Schema, prompt, node=…)` (JSON schema Pydantic). Flash mặc định,
   `pro=True` chỉ cho bước suy luận khó. Mọi lượt gọi được ghi token + chi phí; vượt `DAILY_BUDGET_USD` → dự phòng.
 - **Node có LLM phải có đường lui**: LLM lỗi/timeout/sai schema → demo_cache → luật dự phòng. Không để lượt chạy sập.
-- **Guardrail bằng code**: `guard_input` (độ dài, injection) trước LLM; `clean_proposal` + schema sau LLM.
+- **Guardrail bằng code**: `guard_input` (độ dài, injection) trước LLM; `canvas.apply_update` (đoạn trích phải có thật trong tin nhắn) + `clean_proposal` + schema sau LLM.
 
 ## Thêm agent node (làm song song không giẫm chân nhau)
 

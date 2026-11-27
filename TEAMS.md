@@ -11,7 +11,7 @@
 
 | STT | Họ và tên          | Mã học viên | Vai trò    | Phần việc chính                                                                                               |
 | --- | ------------------ | ----------- | ---------- | ------------------------------------------------------------------------------------------------------------- |
-| 1   | Cao Trung Hiếu     | 2A202603993 | Đội trưởng | Định hướng và kiểm soát chất lượng sản phẩm, ghép nối các module, làm module product thinking và landing page |
+| 1   | Cao Trung Hiếu     | 2A202603993 | Đội trưởng | Định hướng và kiểm soát chất lượng sản phẩm, ghép nối các module, làm module Thinking và landing page |
 | 2   | Lê Phạm Thành Đạt  | 2A202604027 | Thành viên | Kết nối hệ thống với Github, làm module planning: thông báo và tự động cập nhật task                          |
 | 3   | Trần Đức Duy       | 2A202604071 | Thành viên | Làm module pitching bao gồm: tự tạo form khảo sát, pitching HTML, lên kịch bản bài quảng cáo                  |
 | 4   | Cao Phạm Thành Đạt | 2A202603970 | Thành viên | Làm module quality và module maintaing: quản lý metrics, chi phí, gợi ý thu lợi nhuận, gợi ý bảo trì hệ thống |

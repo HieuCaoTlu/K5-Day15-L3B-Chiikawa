@@ -252,7 +252,7 @@
     cyl(6.6, 6.9, 0.3, mat(0xf2f5ff), 0, BASE - 0.15, 0, yard, 72);
     const grid = new T.GridHelper(60, 50, 0xd3dbf7, 0xebeffc);
     grid.position.y = BASE - 0.32;
-    yard.add(grid);
+    scene.add(grid); // dùng chung cho mọi mô hình, không nằm trong sân của Nhà tầng
     const ring = mesh(new T.TorusGeometry(7.4, 0.025, 8, 140), flat(HEX.blue, { transparent: true, opacity: 0.6 }), 0, BASE - 0.25, 0, yard);
     ring.rotation.x = Math.PI / 2;
     const crane = new T.Group();
@@ -389,6 +389,137 @@
     rubik.position.y = 0.2;
     rubik.scale.setScalar(1.35);
 
+    // Hai mô hình tùy chọn: Trường đại học và Cây thông Noel. Mỗi bước là một phần; xong bước nào phần đó lên màu.
+    const ghostMat = () => mat(0xeef1fa, { transparent: true, opacity: 0.3 });
+    const makePart = c => {
+      const part = { color: HEX[c] ?? HEX.indigo, items: [] };
+      part.add = m => { m.userData.edge = outline(m, part.color, 0.6); part.items.push(m); return m; };
+      return part;
+    };
+    const uniModel = new T.Group(), treeModel = new T.Group();
+    uniModel.position.y = treeModel.position.y = BASE + 0.1;
+    uniModel.visible = treeModel.visible = false;
+    scene.add(uniModel, treeModel);
+
+    // Hoa lá: cây, bụi và hoa rải thành vành quanh mô hình (vị trí cố định, không ngẫu nhiên)
+    function garden(parent, cx, cz, rIn, rOut, count, y = 0) {
+      const g = new T.Group(), leaf = [0x2fbf71, 0x46c978, 0x1ea866], bloom = [0xff6b8b, 0xffc21a, 0xff8a1f, 0xa24ce8, 0xffffff];
+      g.position.y = y;
+      parent.add(g);
+      for (let k = 0; k < count; k++) {
+        const ang = k * 2.399 + 0.6, rad = rIn + ((k * 37) % 100) / 100 * (rOut - rIn), x = cx + Math.cos(ang) * rad, z = cz + Math.sin(ang) * rad;
+        if (k % 4 === 0) {
+          cyl(0.07, 0.1, 0.5, mat(0x8a5a3c), x, 0.25, z, g, 8);
+          ball(0.34 + (k % 3) * 0.06, mat(leaf[k % 3]), x, 0.74, z, g);
+        } else if (k % 4 === 1) {
+          ball(0.26 + (k % 2) * 0.08, mat(leaf[(k + 1) % 3]), x, 0.2, z, g).scale.y = 0.75;
+        } else {
+          cyl(0.015, 0.015, 0.28, mat(0x2fbf71), x, 0.14, z, g, 6);
+          ball(0.08, mat(bloom[k % bloom.length]), x, 0.3, z, g);
+          if (k % 3 === 0) ball(0.07, mat(bloom[(k + 2) % bloom.length]), x + 0.12, 0.26, z + 0.08, g);
+        }
+      }
+      return g;
+    }
+
+    // Trường đại học: đại sảnh (Thinking), nhà bên (Planning), giảng đường (Pitching), tháp đồng hồ (Quality), thư viện mái vòm (Maintaining)
+    box(12, 0.14, 8.2, mat(0xe3f5ea), 0, -0.07, 0, uniModel);
+    box(1.3, 0.04, 3.4, mat(0xf4efe6), 0, 0.02, 3.2, uniModel);
+    cyl(0.03, 0.03, 2.4, mat(0x9aa3bd), -2.0, 1.2, 2.6, uniModel, 8);
+    // Cờ Việt Nam: nền đỏ, sao vàng năm cánh (vật liệu phẳng để màu luôn đúng)
+    const vnFlag = (w, h, x, y, z) => {
+      const g = new T.Group(), shape = new T.Shape(), R = h * 0.3, r = R * 0.382;
+      g.position.set(x, y, z);
+      for (let k = 0; k < 10; k++) {
+        const a = Math.PI / 2 + k * Math.PI / 5, rad = k % 2 ? r : R;
+        if (k) shape.lineTo(Math.cos(a) * rad, Math.sin(a) * rad); else shape.moveTo(Math.cos(a) * rad, Math.sin(a) * rad);
+      }
+      shape.closePath();
+      mesh(new T.PlaneGeometry(w, h), flat(0xda251d, { side: T.DoubleSide }), 0, 0, 0, g);
+      mesh(new T.ShapeGeometry(shape), flat(0xffd400, { side: T.DoubleSide }), 0, 0, 0.01, g);
+      uniModel.add(g);
+      return g;
+    };
+    vnFlag(1.0, 0.67, -1.5, 2.0, 2.6);
+    vnFlag(0.72, 0.48, 0, 1.15, 1.03);
+    const uniParts = colors.map(c => makePart(c));
+    // Đại sảnh: thân, mái, bốn cột, bậc thềm
+    uniParts[0].add(box(3.8, 1.7, 2.0, ghostMat(), 0, 0.85, 0, uniModel));
+    const hallRoof = mesh(new T.ConeGeometry(2.5, 1.0, 4), ghostMat(), 0, 2.2, 0, uniModel);
+    hallRoof.rotation.y = Math.PI / 4;
+    hallRoof.scale.z = 0.62;
+    uniParts[0].add(hallRoof);
+    [-1.35, -0.45, 0.45, 1.35].forEach(x => uniParts[0].add(cyl(0.12, 0.12, 1.5, ghostMat(), x, 0.75, 1.15, uniModel, 12)));
+    uniParts[0].add(box(4.2, 0.18, 0.7, ghostMat(), 0, 0.09, 1.5, uniModel));
+    // Nhà bên (tây)
+    uniParts[1].add(box(2.2, 1.3, 1.6, ghostMat(), -3.4, 0.65, 0.1, uniModel));
+    uniParts[1].add(box(2.4, 0.15, 1.8, ghostMat(), -3.4, 1.38, 0.1, uniModel));
+    // Giảng đường tròn (đông)
+    uniParts[2].add(cyl(1.15, 1.15, 1.2, ghostMat(), 3.4, 0.6, 0.3, uniModel, 20));
+    uniParts[2].add(cyl(0.3, 1.25, 0.45, ghostMat(), 3.4, 1.42, 0.3, uniModel, 20));
+    // Tháp đồng hồ (sau đại sảnh)
+    uniParts[3].add(box(0.95, 3.0, 0.95, ghostMat(), 0, 1.5, -1.9, uniModel));
+    const towerRoof = mesh(new T.ConeGeometry(0.8, 0.9, 4), ghostMat(), 0, 3.45, -1.9, uniModel);
+    towerRoof.rotation.y = Math.PI / 4;
+    uniParts[3].add(towerRoof);
+    const clockFace = cyl(0.3, 0.3, 0.06, flat(0xd5dbee), 0, 2.5, -1.4, uniModel, 20);
+    clockFace.rotation.x = Math.PI / 2;
+    uniParts[3].glow = [clockFace];
+    // Thư viện mái vòm (đông bắc)
+    uniParts[4].add(box(1.8, 1.0, 1.4, ghostMat(), 3.3, 0.5, -1.9, uniModel));
+    uniParts[4].add(mesh(new T.SphereGeometry(0.8, 18, 10, 0, Math.PI * 2, 0, Math.PI / 2), ghostMat(), 3.3, 1.0, -1.9, uniModel));
+    uniParts[4].add(cyl(0.1, 0.1, 0.4, ghostMat(), 3.3, 1.95, -1.9, uniModel, 10));
+    garden(uniModel, 0, 0.4, 4.0, 5.4, 34);
+    garden(uniModel, 0, 3.4, 0.9, 1.6, 8);
+
+    // Cây thông Noel: năm tầng ứng với năm bước (tầng đáy là Thinking), ngôi sao trên đỉnh thuộc Maintaining
+    cyl(4.3, 4.4, 0.1, mat(0xf4f8ff), 0, -0.14, 0, treeModel, 48);
+    cyl(2.9, 3.0, 0.14, mat(0xffffff), 0, -0.05, 0, treeModel, 48);
+    const padRing = mesh(new T.TorusGeometry(3.3, 0.03, 8, 80), flat(HEX.blue, { transparent: true, opacity: 0.6 }), 0, 0.03, 0, treeModel);
+    padRing.rotation.x = Math.PI / 2;
+    cyl(0.35, 0.5, 1.0, mat(0x8a5a3c), 0, 0.5, 0, treeModel, 14);
+    const rp = colors.map(c => makePart(c));
+    const GREENS = [0x1c9a57, 0x24ad63, 0x2fbf71, 0x3ccf80, 0x4ddb8f];
+    rp.forEach((p, i) => {
+      const r = 2.6 - i * 0.45, h = 1.6, y0 = 0.8 + i * 1.05;
+      const cone = mesh(new T.ConeGeometry(r, h, 28), ghostMat(), 0, y0 + h / 2, 0, treeModel);
+      cone.userData.doneColor = GREENS[i % GREENS.length];
+      p.add(cone);
+      p.glow = [];
+      p.glowColor = 0xffe08a;
+      for (let k = 0; k < 6; k++) {
+        const ang = k * Math.PI / 3 + i * 0.5, rr = r * 0.74;
+        p.add(ball(0.14, ghostMat(), Math.cos(ang) * rr, y0 + 0.45, Math.sin(ang) * rr, treeModel));
+        const la = ang + Math.PI / 6, lr = r * 0.58;
+        p.glow.push(ball(0.07, flat(0xd5dbee), Math.cos(la) * lr, y0 + 0.85, Math.sin(la) * lr, treeModel));
+      }
+    });
+    const star = mesh(new T.OctahedronGeometry(0.42), ghostMat(), 0, 6.95, 0, treeModel);
+    star.scale.set(1, 1.3, 0.5);
+    star.userData.doneColor = HEX.yellow;
+    rp[rp.length - 1].add(star);
+    // Quà dưới gốc cây
+    [[-2.0, 1.9, 0xff4d5e, 0.8], [2.1, 1.6, HEX.blue, 0.7], [0.4, 2.7, 0xffc21a, 0.6]].forEach(([x, z, c, size]) => {
+      box(size, size * 0.8, size, mat(c), x, size * 0.4, z, treeModel).rotation.y = x;
+      box(size * 0.18, size * 0.82, size * 1.02, mat(0xffffff), x, size * 0.4, z, treeModel).rotation.y = x;
+    });
+    const treeParts = rp;
+    // Điểm gắn nhãn từng bước trên mỗi mô hình (toạ độ cục bộ của mô hình)
+    const ANCHORS = {
+      uni: [[1.0, 2.9, 1.0], [-3.4, 1.9, 0.1], [3.4, 2.0, 0.3], [0.5, 3.9, -1.9], [3.3, 2.5, -1.9]],
+      tree: [[1.9, 1.6, 0.7], [1.6, 2.65, 0.6], [1.25, 3.7, 0.5], [0.9, 4.75, 0.4], [0.6, 5.9, 0.3]],
+      rubik: [[0, 0, 1.7], [1.7, 0, 0], [0, 0, -1.7], [-1.7, 0, 0], [0, 1.8, 0]]
+    };
+    // Tâm từng phần trong không gian (để camera quay về đúng bước)
+    const UNI_Y = [0.9, 0.7, 0.7, 1.9, 0.8].map(y => BASE + 0.1 + y);
+    const TREE_Y = [1.6, 2.65, 3.7, 4.75, 5.8].map(y => BASE + 0.1 + y);
+
+    const rubikYard = new T.Group();
+    rubikYard.position.y = BASE;
+    rubikYard.visible = false;
+    scene.add(rubikYard);
+    cyl(3.9, 4.0, 0.1, mat(0xe3f5ea), 0, -0.05, 0, rubikYard, 48);
+    garden(rubikYard, 0, 0, 2.9, 3.6, 22);
     const pop = (obj, base = 1) => {
       if (reduced || !window.Motion) return;
       Motion.animate(0.4, 1, { type: 'spring', stiffness: 240, damping: 13, onUpdate: v => obj.scale.setScalar(v * base) });
@@ -416,8 +547,20 @@
       if (idx !== scaffoldFloor && idx >= 0) buildScaffold(floors[idx]);
       scaffoldFloor = idx;
       scaffold.visible = level !== 'collapse' && idx >= 0;
+      paintModels();
       paintStickers(true);
       applyDim();
+    }
+    function paintModels() {
+      [uniParts, treeParts].forEach(parts => parts.forEach((p, i) => {
+        const done = (values[i] ?? 0) >= 0.999;
+        p.items.forEach(m => {
+          m.material.color.setHex(done ? (m.userData.doneColor ?? p.color) : 0xeef1fa);
+          m.material.opacity = done ? 1 : 0.3;
+          m.userData.edge.material.color.setHex(done ? 0xffffff : p.color);
+        });
+        (p.glow || []).forEach(m => m.material.color.setHex(done ? (p.glowColor ?? 0x8ff3ff) : 0xd5dbee));
+      }));
     }
     function paintStickers(animate = false) {
       stickers.forEach((list, f) => {
@@ -508,6 +651,7 @@
       rescue.visible = rescuing;
       house.rotation.z = rescuing ? 0.07 : next === 'warn' ? 0.035 : 0;
       rubik.rotation.z = collapsed ? 0.35 : rescuing ? 0.15 : next === 'warn' ? 0.08 : 0;
+      uniModel.rotation.z = treeModel.rotation.z = collapsed ? 0.3 : rescuing ? 0.12 : next === 'warn' ? 0.06 : 0;
       roof.visible = !collapsed;
       scaffold.visible = !collapsed && scaffoldFloor >= 0;
       if (rescuing && !wasRescuing) drive();
@@ -531,14 +675,20 @@
     const view = { az: 1.7, el: 0.04, dist: 11, ty: BASE + 1, need: 2.6 };
     let tween = null;
     const floorY = i => BASE + 0.62 + i * FH;
+    function modelGoal(key) {
+      if (key === 'overview') return { az: 0.7, el: 0.3, dist: mode === 'uni' ? 22 : 22, ty: mode === 'tree' ? 1.4 : mode === 'uni' ? 0.3 : 0.9, need: mode === 'uni' ? 8 : 6.6 };
+      const i = Math.max(0, Math.min(4, +key)), ys = mode === 'tree' ? TREE_Y : UNI_Y;
+      return { az: [-0.55, 0.62, -0.28, 0.5, -0.4][i], el: 0.2, dist: 14, ty: ys[i], need: mode === 'uni' ? 5.2 : 3.6 };
+    }
     function goal(key) {
+      if (mode === 'uni' || mode === 'tree') return modelGoal(key);
       if (mode === 'rubik') {
-        if (key === 'overview') return { az: 0.75, el: 0.5, dist: 17, ty: 0.1, need: 3.9 };
+        if (key === 'overview') return { az: 0.75, el: 0.5, dist: 21, ty: 0, need: 5.4 };
         const side = [0, 1, 2, -1][key];
         return { az: (side ?? 0) * Math.PI / 2 + 0.28, el: side === undefined ? 0.9 : 0.22, dist: 13, ty: 0.15, need: 3.2 };
       }
       const extra = Math.max(0, floors.length - 4);
-      if (key === 'overview') return { az: 0.62, el: 0.3, dist: 25 + 2 * extra, ty: 0.35 + FH * extra / 2, need: 6.4 };
+      if (key === 'overview') return { az: 0.62, el: 0.3, dist: 27 + 2 * extra, ty: 0.35 + FH * extra / 2, need: 6.4 };
       const angles = [-0.55, 0.62, -0.28, 0.5, -0.4];
       return { az: angles[key % angles.length], el: 0.2, dist: 14.5, ty: floorY(key) - 0.1, need: 3.5 };
     }
@@ -564,7 +714,7 @@
       applyDim();
       if (key === 'overview') {
         // Đi vào từ góc công trường, sát mặt đất, rồi lùi ra và xoay lên
-        const corner = mode === 'rubik' ? { az: 1.9, el: 0.05, dist: 10, ty: 0, need: 2.6 } : { az: 1.65, el: 0.04, dist: 11, ty: BASE + 1.2, need: 2.8 };
+        const corner = mode === 'rubik' ? { az: 1.9, el: 0.05, dist: 10, ty: 0, need: 2.6 } : mode === 'house' ? { az: 1.65, el: 0.04, dist: 11, ty: BASE + 1.2, need: 2.8 } : { az: 1.9, el: 0.05, dist: 11, ty: BASE + 1, need: 3 };
         path([corner, goal('overview')], 2.6);
       } else path([goal(key)], 1.3);
     }
@@ -597,6 +747,10 @@
         const s = reduced ? target : lerp(f.g.scale.x, target, 0.08);
         f.g.scale.set(s, 1, s);
       });
+      if (uniModel.visible || treeModel.visible) {
+        const parts = uniModel.visible ? uniParts : treeParts, cur = values.findIndex(v => v < 0.999);
+        if (cur >= 0 && parts[cur]) parts[cur].items.forEach(m => { m.material.opacity = reduced ? 0.45 : 0.34 + (Math.sin(t * 3) + 1) * 0.12; });
+      }
       jib.rotation.y = 0.5 + Math.sin(t * 0.28) * 0.9;
       const drop = 2.1 + Math.sin(t * 0.7) * 0.8;
       cable.scale.y = drop; cable.position.y = -drop / 2; load.position.y = -drop - 0.2;
@@ -614,12 +768,14 @@
       cam.lookAt(0, view.ty, 0);
       r.render(scene, cam);
       // Vị trí nhãn của từng tầng trên màn hình
-      const pts = floors.map((f, i) => {
-        const s = f.g.scale.x;
-        v3.set((f.w / 2 + 0.2) * s, floorY(i), f.depth / 2 * s);
-        house.localToWorld(v3).project(cam);
+      const toScreen = (group, x, y, z) => {
+        v3.set(x, y, z);
+        group.localToWorld(v3).project(cam);
         return { x: (v3.x + 1) / 2 * canvas.clientWidth, y: (1 - v3.y) / 2 * canvas.clientHeight };
-      });
+      };
+      const pts = mode === 'house'
+        ? floors.map((f, i) => toScreen(house, (f.w / 2 + 0.2) * f.g.scale.x, floorY(i), f.depth / 2 * f.g.scale.x))
+        : ANCHORS[mode].map(([x, y, z]) => toScreen({ rubik, uni: uniModel, tree: treeModel }[mode], x, y, z));
       onFrame(pts, mode);
     });
 
@@ -629,7 +785,11 @@
         mode = m;
         house.visible = yard.visible = m === 'house';
         rubik.visible = m === 'rubik';
-        pop(m === 'house' ? house : rubik, m === 'house' ? 1 : 1.35);
+        uniModel.visible = m === 'uni';
+        rubikYard.visible = m === 'rubik';
+        treeModel.visible = m === 'tree';
+        const group = { house, rubik, uni: uniModel, tree: treeModel }[m] || house;
+        pop(group, m === 'rubik' ? 1.35 : 1);
         path([goal(focus)], 1.1);
       }
     };

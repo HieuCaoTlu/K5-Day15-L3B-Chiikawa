@@ -32,7 +32,7 @@ class AgentRun(Base):
     id: Mapped[str] = mapped_column(String(32), primary_key=True)
     session_id: Mapped[str | None] = mapped_column(String(64), index=True, nullable=True)  # phiên chat phía FE
     request: Mapped[str] = mapped_column(Text)
-    # running | blocked | waiting_review | approved | rejected | error
+    # running | blocked | needs_info | waiting_review | approved | rejected | error
     status: Mapped[str] = mapped_column(String(20), default="running", index=True)
     source: Mapped[str | None] = mapped_column(String(20), nullable=True)  # llm | demo_cache | fallback | mock
     proposal: Mapped[dict | None] = mapped_column(JSON, nullable=True)

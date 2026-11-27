@@ -1,14 +1,62 @@
 {
-  "lên kế hoạch onboarding cho nhân viên mới trong tuần đầu": {
-    "title": "Onboarding tuần đầu cho nhân viên mới",
-    "summary": "Kế hoạch 5 ngày giúp nhân viên mới nắm công cụ, quy trình và hoàn thành việc đầu tiên có người kèm.",
-    "steps": [
-      "Chuẩn bị tài khoản, thiết bị và tài liệu trước ngày đầu",
-      "Ngày 1: giới thiệu nhóm, mục tiêu quý và người kèm cặp",
-      "Ngày 2–3: hướng dẫn quy trình và công cụ chính",
-      "Ngày 4: giao một việc nhỏ có người kèm",
-      "Ngày 5: buổi phản hồi 30 phút, chốt mục tiêu 30 ngày"
-    ],
-    "confidence": 0.85
+  "persona: chị lan, chủ shop mỹ phẩm 2 nhân viên. tuần trước chị mất 3 đơn vì trả lời tin nhắn trễ 2 giờ. hiện chị trả lời tay qua zalo, ghi đơn vào excel. mình muốn bot tự trả lời câu hỏi giá và tồn kho.": {
+    "intent": "answer",
+    "persona": {
+      "content": "Chị Lan, chủ shop mỹ phẩm có 2 nhân viên",
+      "who": "chị Lan",
+      "when": "tuần trước",
+      "quote": "chị Lan, chủ shop mỹ phẩm 2 nhân viên"
+    },
+    "jtbd": {
+      "content": "Trả lời khách kịp thời để không mất đơn",
+      "who": "chị Lan",
+      "when": "tuần trước",
+      "quote": "Tuần trước chị mất 3 đơn vì trả lời tin nhắn trễ 2 giờ"
+    },
+    "pain_point": {
+      "content": "Mất 3 đơn vì trả lời tin nhắn trễ 2 giờ",
+      "who": "chị Lan",
+      "when": "tuần trước",
+      "quote": "Tuần trước chị mất 3 đơn vì trả lời tin nhắn trễ 2 giờ"
+    },
+    "current_workaround": {
+      "content": "Trả lời tay qua Zalo, ghi đơn vào Excel",
+      "who": "chị Lan",
+      "when": "hiện nay",
+      "quote": "Hiện chị trả lời tay qua Zalo, ghi đơn vào Excel"
+    },
+    "solution": {
+      "content": "Bot tự trả lời câu hỏi giá và tồn kho",
+      "who": "",
+      "when": "",
+      "quote": ""
+    },
+    "ai_leverage": {
+      "content": "",
+      "who": "",
+      "when": "",
+      "quote": ""
+    },
+    "mvp_scope": {
+      "content": "",
+      "who": "",
+      "when": "",
+      "quote": ""
+    },
+    "metrics": {
+      "content": "",
+      "who": "",
+      "when": "",
+      "quote": ""
+    },
+    "prior_art": {
+      "content": "",
+      "who": "",
+      "when": "",
+      "quote": ""
+    },
+    "persona_changed": false,
+    "no_ai_needed": false,
+    "solved_elsewhere": false
   }
 }

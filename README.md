@@ -46,7 +46,7 @@ Không có `make` (Windows): xem lệnh tương ứng trong `Makefile`. Windows 
 | Chế độ | Lệnh | Khi nào |
 |---|---|---|
 | Mock toàn bộ node | `make mock` (`MOCK_NODES=all`) | Làm UI, chưa cần agent thật |
-| Mock vài node | `MOCK_NODES=draft` | Node của người khác chưa xong |
+| Mock vài node | `MOCK_NODES=update_canvas` | Node của người khác chưa xong |
 | Demo | `make demo` (`DEMO_MODE=true`) | Quay video / demo live, không phụ thuộc mạng |
 
 ## Hợp đồng API
@@ -68,7 +68,14 @@ Chốt trước khi code, sửa ở đây khi đổi (FE đọc chi tiết ở `
 | GET | `/api/v1/admin/sessions` | — | phiên chat (số lượt, token, chi phí) |
 | GET | `/api/v1/admin/sessions/{id}` | — | `Run[]` của phiên |
 
-`Run = {id, session_id, request, status, source, proposal: {title, summary, steps[], confidence} | null, result, created_at, updated_at}`
+`Run = {id, session_id, request, status, source, proposal: Proposal | null, result, created_at, updated_at}`
+
+`status` ∈ `running | blocked | needs_info | waiting_review | approved | rejected | error`. `needs_info`: agent còn hỏi tiếp (chưa đủ bằng chứng).
+
+`Proposal = {verdict: "GO" | "NOT YET" | "NO", reply, next_cell, reasons[], canvas, flags, title, summary, steps[], confidence}`.
+`canvas` gồm 9 ô `persona, jtbd, pain_point, current_workaround, solution, ai_leverage, mvp_scope, metrics, prior_art`, mỗi ô
+`{content, who, when, quote, grounded, status: "evidence" | "assumption" | "empty"}`. `title/summary/steps/confidence` giữ cho trang `/chat` và `/admin` cũ.
+`GET /api/v1/agent/runs?session_id=…` lấy các lượt của một phiên (canvas nối tiếp giữa các lượt cùng `session_id`).
 
 ## Schema DB
 

@@ -1,6 +1,6 @@
 /* Ứng dụng: điều hướng, bốn bước, agent, dữ liệu dùng chung và chuyển động. */
 (function () {
-  const { STEPS, FLOORS, SCORE, ROLES, STATUS, SAMPLE_SCORE, SEED, STACK, MONEY, FILES, AGENT, inDays, iso } = window.DATA;
+  const { STEPS, FLOORS, CANVAS, CANVAS_TO_SCORE, SCORE, ROLES, STATUS, SAMPLE_SCORE, SEED, STACK, MONEY, FILES, AGENT, inDays, iso } = window.DATA;
   const { RULES, PROFIT, NAMES: HNAMES, LEVELS } = window.HEALTH;
   const $ = (s, p = document) => p.querySelector(s);
   const $$ = (s, p = document) => [...p.querySelectorAll(s)];
@@ -11,7 +11,7 @@
   const canAnim = !!M && !reduced;
   const EASE = [0.22, 1, 0.36, 1];
   const TABS = [{ id: 'overview', name: 'Tổng quan', short: 'Tổng quan', hex: '#121a33' },
-    ...STEPS.map((s, i) => ({ id: s.id, name: s.name, short: ['Product', 'Plan', 'Pitch', 'Quality', 'Bảo trì'][i] || s.name, hex: s.hex }))];
+    ...STEPS.map((s, i) => ({ id: s.id, name: s.name, short: ['Thinking', 'Plan', 'Pitch', 'Quality', 'Bảo trì'][i] || s.name, hex: s.hex }))];
 
   const anim = (el, kf, o) => (canAnim && el && (el.length === undefined || el.length) ? M.animate(el, kf, o) : null);
   const done = a => (a ? Promise.resolve(a.finished || a).catch(() => {}) : Promise.resolve());
@@ -27,13 +27,41 @@
     if (raw && raw.S) Object.assign(S, raw.S);
     if (raw && raw.local) Object.assign(local, raw.local);
   } catch (e) { /* bộ nhớ trình duyệt không dùng được */ }
+  if (!local.think || !local.think.session) local.think = { session: 'th-' + Math.random().toString(36).slice(2, 10), msgs: [] };
+  const tk = { run: null, busy: false, offline: false, loaded: false };
+  /* Chế độ xem mock đầy đủ: /workstation?demo=full. Dữ liệu mẫu trong bộ nhớ, không gọi backend, không lưu. */
+  const mockMode = new URLSearchParams(location.search).get('demo') === 'full';
+  if (mockMode) {
+    STEPS.forEach(x => { S.done[x.id] = true; });
+    const cell = (content, who, when) => ({ content, who: who || '', when: when || '', quote: content, grounded: !!who, status: who ? 'evidence' : 'assumption' });
+    tk.loaded = true;
+    local.think = { session: 'preview', msgs: [
+      { who: 'me', text: 'Chị Lan, chủ shop mỹ phẩm, tuần trước mất 3 đơn vì trả lời tin nhắn trễ 2 giờ. Hiện chị trả lời tay qua Zalo.' },
+      { who: 'agent', text: 'GO. Cả 4 ô lõi đều có chuyện thật. Bạn xem Canvas rồi duyệt để sang Planning.' },
+      { who: 'agent', text: 'Đã duyệt Canvas. Bạn có thể sang bước Planning.' }] };
+    tk.run = { id: 'preview', status: 'approved', source: 'mock', proposal: { verdict: 'GO',
+      reasons: ['Cả 4 ô lõi đều có chuyện thật: một người cụ thể, một lần cụ thể.', 'Còn cần làm rõ ở Planning: Metrics, Prior Art & Edge.'],
+      canvas: {
+        persona: cell('Chị Lan, chủ shop mỹ phẩm có 2 nhân viên', 'chị Lan', 'tuần trước'),
+        jtbd: cell('Trả lời khách kịp thời để không mất đơn', 'chị Lan', 'hôm qua'),
+        pain_point: cell('Mất 3 đơn vì trả lời tin nhắn trễ 2 giờ', 'chị Lan', 'tuần trước'),
+        current_workaround: cell('Trả lời tay qua Zalo, ghi đơn vào Excel', 'chị Lan', 'hôm qua'),
+        solution: cell('Bot tự trả lời câu hỏi giá và tồn kho'),
+        ai_leverage: cell('AI soạn sẵn câu trả lời từ bảng giá và tồn kho, chị Lan duyệt trước khi gửi'),
+        mvp_scope: cell('Một kênh Zalo, ba loại câu hỏi phổ biến'),
+        metrics: cell(''), prior_art: cell('')
+      } } };
+    Object.keys(S.score).forEach(k => { if (!S.score[k].text) S.score[k].text = 'Dữ liệu mẫu'; });
+  }
   let db = null, canWrite = true, owner = true;
   const synced = {}, dirty = new Set(), writing = new Set();
   let saveTimer;
   function persist() {
+    if (mockMode) return;
     try { localStorage.setItem(KEY, JSON.stringify({ S: db ? undefined : S, local })); } catch (e) { /* bỏ qua */ }
   }
   function save(...sections) {
+    if (mockMode) return;
     persist();
     if (db && canWrite) {
       sections.forEach(k => dirty.add(k));
@@ -106,24 +134,31 @@
   const options = (sel, empty = 'Chưa giao') => `<option value="">${empty}</option>` +
     S.meta.members.map(m => `<option value="${esc(m.id)}" ${m.id === sel ? 'selected' : ''}>${esc(m.name)}</option>`).join('');
 
-  /* ---------- Tiến độ ---------- */
-  const filled = () => SCORE.filter(([k]) => S.score[k] && S.score[k].text.trim()).length;
-  function progress() {
-    const t = S.tasks.list, p = S.pitch, sc = S.maintain.schedule;
-    return [
-      filled() / SCORE.length,
-      0.2 * (ROLES.filter(r => S.plan.roles[r]).length / ROLES.length) + 0.8 * (t.reduce((a, x) => a + (STATUS[x.status] || [0, 0])[1], 0) / (t.length || 1)),
-      [p.form, p.responses.length, p.overview, p.deck, p.script, p.ads].filter(Boolean).length / 6,
-      qualityProgress(),
-      sc.filter(x => x.runs > 0).length / (sc.length || 1)
-    ].map(v => Math.max(0, Math.min(1, v)));
-  }
-  function qualityProgress() {
-    const q = S.quality, c = S.plan.cost;
-    return 0.3 * (q.metrics.length > 0) + 0.5 * Math.min(1, q.runs.length / 3) + 0.2 * ((+c.priceIn || +c.priceOut) > 0);
-  }
+  /* ---------- Trạng thái bước: phải xong bước trước mới làm bước sau, nên không đo phần trăm ---------- */
+  const STATE_LABEL = { done: ['Đã xong', 'var(--green)'], doing: ['Đang làm', 'var(--blue)'], locked: ['Chưa mở', 'var(--mute)'] };
+  const stepState = i => (S.done[STEPS[i].id] ? 'done' : STEPS.slice(0, i).every(x => S.done[x.id]) ? 'doing' : 'locked');
+  const started = i => (i === 0 ? !!(tk.run || local.think.msgs.length) : true);
+  const stepKey = i => { const k = stepState(i); return k === 'doing' ? 'now' : k; };
+  /* Ghi rõ: chưa làm thì là "Chưa làm" để nhìn thấy và bấm ngay */
+  const stepLabel = i => {
+    const k = stepKey(i);
+    if (k === 'done') return ['Đã xong', 'var(--green)'];
+    if (k === 'now') return started(i) ? ['Đang làm', 'var(--blue)'] : ['Chưa làm', 'var(--orange)'];
+    return ['Chưa làm', 'var(--mute)'];
+  };
+  const stateTag = (i, attr = '') => { const [t, c] = stepLabel(i); return `<span class="tag" style="--c:${c}" ${attr}>${t}</span>`; };
+  const progress = () => STEPS.map(x => (S.done[x.id] ? 1 : 0));
+  const doneCount = () => progress().reduce((a, b) => a + b, 0);
+
   function nextAction(i) {
-    if (i === 0) { const m = SCORE.find(([k]) => !S.score[k].text.trim()); return m ? `Còn thiếu mục ${m[1]} trong scorecard` : 'Scorecard đã đủ 7 mục'; }
+    if (i === 0) {
+      const p = tk.run && tk.run.proposal;
+      if (S.done.product) return 'Canvas đã duyệt, sang Planning';
+      if (!p) return 'Chưa trao đổi với agent';
+      if (tk.run.status === 'waiting_review') return 'Canvas chờ bạn duyệt';
+      const cell = CANVAS.find(([k]) => k === p.next_cell);
+      return cell ? `Còn thiếu chuyện thật ở ô ${cell[1]}` : 'Chờ agent đánh giá';
+    }
     if (i === 1) {
       const r = ROLES.find(r => !S.plan.roles[r]);
       if (r) return `Chưa giao vai ${r}`;
@@ -136,32 +171,29 @@
     }
     if (i === 3) {
       const q = S.quality;
-      if (!q.metrics.length) return 'Để agent lấy chỉ số từ scorecard';
-      if (q.source !== S.score.metric.text) return 'Scorecard đã đổi, lấy lại chỉ số';
+      if (!q.metrics.length) return 'Để agent lấy chỉ số từ Canvas';
+      if (q.source !== S.score.metric.text) return 'Canvas đã đổi, lấy lại chỉ số';
       if (!q.runs.length) return 'Ghi lần chạy thử đầu tiên';
       return q.runs.some(r => !r.sample) ? `Đã ghi ${q.runs.length} lần chạy` : 'Mới có dữ liệu mẫu, ghi lần chạy thật';
     }
     const due = S.maintain.schedule.slice().sort((a, b) => a.next.localeCompare(b.next))[0];
     return due ? `${due.next <= iso(new Date()) ? 'Đến hạn' : 'Sắp tới'}: ${due.title}` : 'Chưa có lịch';
   }
-  const pct = v => Math.round(v * 100) + '%';
+  const pct = v => Math.round(v * 100) + '%'; // dùng cho chỉ số chất lượng, không dùng cho tiến độ bước
 
   let site = null, pins = [], shown = 0;
   function syncProgress() {
-    const v = progress(), total = v.reduce((a, b) => a + b, 0) / v.length;
+    const v = progress();
     if (site) site.set(v);
     const el = $('#totalPct');
-    if (canAnim) M.animate(shown, total, { duration: 0.9, ease: EASE, onUpdate: x => { el.textContent = pct(x); } });
-    else el.textContent = pct(total);
-    shown = total;
-    pins.forEach((p, i) => { $('span', p).textContent = pct(v[i]); });
-    $$('#overlay [data-pct], #view [data-pct]').forEach(b => { b.textContent = pct(v[+b.dataset.pct]); });
-    $$('#overlay [data-next], #view [data-next]').forEach(b => { b.textContent = nextAction(+b.dataset.next); });
-    $$('[data-bar]').forEach(b => {
-      const x = v[+b.dataset.bar];
-      b.style.width = pct(x);
+    if (el) el.textContent = `${doneCount()}/${STEPS.length}`;
+    pins.forEach((p, i) => {
+      const k = stepKey(i);
+      $('span', p).textContent = k === 'now' && !started(i) ? 'Chưa làm, bấm để bắt đầu' : stepLabel(i)[0];
+      p.dataset.state = k;
     });
-    floorInfo(v);
+    $$('[data-state]').forEach(b => { if (b.classList.contains('pin')) return; const [t, c] = stepLabel(+b.dataset.state); b.textContent = t; b.style.setProperty('--c', c); });
+    $$('#overlay [data-next], #view [data-next]').forEach(b => { b.textContent = nextAction(+b.dataset.next); });
     applyHealth();
   }
 
@@ -254,7 +286,7 @@
     const legend = series.map(s => `<span style="--c:${s.color}"><i></i>${esc(s.name)}${s.target !== null && s.target !== undefined && isFinite(s.target) ? `, mục tiêu ${+s.target}` : ''}</span>`).join('');
     return `<div class="chart-wrap"><svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(label)}">${grid}${xl}${lines}</svg></div><div class="legend">${legend}<span class="muted">Nét đứt là mục tiêu</span></div>`;
   }
-  /* Khung Product thinking cho metric:
+  /* Khung Thinking cho metric:
      - đủ hiện trạng, mục tiêu, cách đo;
      - metric mạnh (hành vi lặp lại, kết quả công việc) thay vì metric phù phiếm (lượt đăng ký, lượt tải, số tính năng);
      - metric đi theo bản chất problem: hành vi thì đo retention, phiên, quay lại; năng suất thì đo thời gian, tỉ lệ chỉnh sửa, số lần dùng thật;
@@ -293,7 +325,7 @@
       return Object.assign(k, { rule: ruleOf(k) });
     }).filter(Boolean);
   }
-  /* Gợi ý cho bộ chỉ số theo khung Product thinking. Code chấm, không để LLM chấm. Chỉ trả về điều còn thiếu. */
+  /* Gợi ý cho bộ chỉ số theo khung Thinking. Code chấm, không để LLM chấm. Chỉ trả về điều còn thiếu. */
   function checkMetrics() {
     const q = S.quality, list = q.metrics, out = [];
     if (!list.length) return [];
@@ -336,14 +368,6 @@
     add('Kiểm tra bản cập nhật thư viện và model', 30, 'Đọc ghi chú phát hành trước khi nâng cấp. Phiên bản cụ thể cần đội kiểm tra lại.');
     return { items: out };
   }
-  function floorInfo(v = progress()) {
-    const box = $('#floorInfo'), i = STEPS.findIndex(s => s.id === tab);
-    box.hidden = i < 0;
-    if (i < 0) return;
-    box.style.setProperty('--c', STEPS[i].hex);
-    box.innerHTML = `<div class="line"><span>Tầng ${i + 1}: ${STEPS[i].name}</span><span>${pct(v[i])}</span></div><div class="bar"><span style="width:${pct(v[i])}"></span></div><div class="muted">${esc(nextAction(i))}</div>`;
-  }
-
   /* ---------- Thông báo ---------- */
   let toastTimer;
   function toast(msg) {
@@ -448,17 +472,141 @@
     save('chat');
   }
 
+  /* ---------- Thinking: trao đổi với agent → điền AI MVP Canvas → agent đánh giá → trưởng nhóm duyệt ---------- */
+  const API = '/api/v1/agent';
+  const CORE = ['persona', 'pain_point', 'current_workaround', 'jtbd'];
+  const CELL_STATE = { evidence: ['Có bằng chứng', 'var(--green)'], assumption: ['Giả định', 'var(--orange)'], empty: ['Trống', 'var(--mute)'] };
+  const VERDICT = { GO: 'var(--green)', 'NOT YET': 'var(--orange)', NO: 'var(--red)' };
+  async function api(path, opts) {
+    const res = await fetch(API + path, Object.assign({ headers: { 'Content-Type': 'application/json' } }, opts));
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    return res.json();
+  }
+  function syncScore(canvas) {
+    Object.entries(CANVAS_TO_SCORE).forEach(([cell, key]) => {
+      const c = canvas && canvas[cell];
+      if (c && c.content && S.score[key]) S.score[key].text = c.content;
+    });
+    save('score');
+  }
+  function renderThink(scrollEnd) {
+    if (!$('#tkCanvas')) return;
+    const run = tk.run, p = run && run.proposal, canvas = (p && p.canvas) || {};
+    $('#tkCanvas').innerHTML = `<div class="tk-head"><h3>AI MVP Canvas</h3><span class="muted">Dấu * là ô lõi: cần chuyện thật của một người, một lần cụ thể</span><button class="btn soft small" data-act="think-reset">Làm lại</button></div>
+      <div class="tk-grid">${CANVAS.map(([k, label], n) => {
+        const cell = canvas[k] || {}, st = cell.status || 'empty', [txt, col] = CELL_STATE[st];
+        return `<div class="tk-cell ${st}" style="--c:${col}"><div class="tk-top"><b><span class="tk-no">${n + 1}.</span> ${label}${CORE.includes(k) ? '<i title="Ô lõi">*</i>' : ''}</b><span class="tag" style="--c:${col}">${txt}</span></div>
+          <p title="${esc(cell.content || '')}">${cell.content ? esc(cell.content) : '<span class="muted">Chưa có</span>'}</p>${st === 'evidence' ? `<small>${esc(cell.who)} · ${esc(cell.when)}</small>` : ''}</div>`;
+      }).join('')}</div>`;
+
+    const status = run && run.status;
+    let actions = '<span class="muted">Trả lời câu hỏi của agent để tiếp tục</span>';
+    if (status === 'waiting_review') actions = `${btn('think-approve', 'Duyệt Canvas', 'tone small', 'style="--c:var(--green)"')}${btn('think-reject', 'Chưa duyệt', 'soft small')}`;
+    if (status === 'approved') actions = '<span class="tag" style="--c:var(--green)">Đã duyệt</span>';
+    if (status === 'rejected') actions = '<span class="tag" style="--c:var(--orange)">Chưa duyệt, cần bổ sung</span>';
+    const src = run && run.source === 'fallback' ? '<span class="tag" style="--c:var(--orange)" title="Chưa có GOOGLE_API_KEY hoặc Gemini lỗi, agent dùng luật dự phòng">Chế độ dự phòng</span>' : run && run.source === 'mock' ? '<span class="tag">Dữ liệu mẫu</span>' : '';
+    $('#tkEval').innerHTML = p
+      ? `<div class="tk-head"><h3>Đánh giá của agent</h3><span class="tk-verdict" style="--c:${VERDICT[p.verdict] || 'var(--mute)'}">${esc(p.verdict)}</span>${src}</div>
+         <ul class="tk-reasons">${(p.reasons || []).map(r => `<li>${esc(r)}</li>`).join('')}</ul><div class="tk-actions">${actions}</div>`
+      : `<div class="tk-head"><h3>Đánh giá của agent</h3></div><span class="muted">Chưa có đánh giá. Kể ý tưởng của bạn ở khung chat bên dưới.</span>`;
+
+    const box = $('#tkMsgs'), msgs = local.think.msgs;
+    box.innerHTML = (msgs.length ? '' : '<p class="muted">Gõ ý tưởng thô của bạn để bắt đầu.</p>') +
+      msgs.map(m => `<div class="tk-msg ${m.who === 'me' ? 'me' : ''}"><div class="tk-bubble">${esc(m.text)}</div></div>`).join('') +
+      (tk.busy ? '<div class="tk-msg"><div class="tk-bubble muted">Đang suy nghĩ...</div></div>' : '');
+    const send = $('.tk-compose button');
+    if (send) send.disabled = tk.busy;
+    if (scrollEnd) box.scrollTop = box.scrollHeight;
+  }
+  async function thinkLoad() {
+    try {
+      const runs = await api(`/runs?session_id=${encodeURIComponent(local.think.session)}`);
+      tk.run = runs.find(r => r.proposal && r.proposal.canvas) || null;
+      tk.offline = false;
+      if (tk.run) syncScore(tk.run.proposal.canvas);
+    } catch (e) { tk.offline = true; }
+    renderThink(true);
+    syncProgress();
+  }
+  function thinkMount() {
+    renderThink(true);
+    if (!tk.loaded) { tk.loaded = true; thinkLoad(); }
+  }
+  async function thinkSend(text) {
+    text = text.trim().slice(0, 2000);
+    if (!text || tk.busy) return;
+    const t = local.think;
+    t.msgs.push({ who: 'me', text });
+    t.msgs = t.msgs.slice(-60);
+    tk.busy = true; persist(); renderThink(true);
+    try {
+      if (tk.run && tk.run.status === 'waiting_review') {
+        await api(`/runs/${tk.run.id}/review`, { method: 'POST', body: JSON.stringify({ approved: false, note: 'Trưởng nhóm tiếp tục trao đổi' }) });
+      }
+      const run = await api('/runs', { method: 'POST', body: JSON.stringify({ request: text, session_id: t.session }) });
+      tk.offline = false;
+      if (run.status === 'blocked') {
+        t.msgs.push({ who: 'agent', text: 'Mình không xử lý tin nhắn này: ' + ((run.result || {}).reason || 'bị chặn') + '.' });
+      } else {
+        tk.run = run;
+        t.msgs.push({ who: 'agent', text: run.proposal.reply });
+        syncScore(run.proposal.canvas);
+        if (S.done.product) { S.done.product = false; save('done'); }
+      }
+    } catch (e) {
+      tk.offline = true;
+      t.msgs.push({ who: 'agent', text: 'Chưa kết nối được backend. Hãy chạy backend (cd backend, uv run uvicorn app.main:app --port 8000) rồi gửi lại.' });
+    }
+    tk.busy = false; persist(); renderThink(true); syncProgress();
+  }
+  async function thinkReview(approved) {
+    if (!tk.run || tk.busy) return;
+    tk.busy = true; renderThink();
+    try {
+      const run = await api(`/runs/${tk.run.id}/review`, { method: 'POST', body: JSON.stringify({ approved, note: approved ? 'Trưởng nhóm duyệt Canvas' : 'Trưởng nhóm chưa duyệt, cần bổ sung' }) });
+      tk.run = run;
+      const handoff = approved && run.result && run.result.handoff === 'planning';
+      if (handoff) { S.done.product = true; save('done'); toast('Đã duyệt Canvas. Bước Planning đã mở.'); }
+      local.think.msgs.push({ who: 'agent', text: handoff ? 'Đã duyệt Canvas. Bạn có thể sang bước Planning.' : approved ? 'Đã ghi nhận kết luận. Canvas chưa đủ điều kiện sang Planning.' : 'Đã ghi nhận chưa duyệt. Bạn kể thêm để mình hỏi tiếp nhé.' });
+    } catch (e) { toast('Chưa gửi được quyết định duyệt. Kiểm tra backend.'); }
+    tk.busy = false; persist(); renderThink(true); syncProgress(); renderNav();
+  }
+  function thinkReset() {
+    local.think = { session: 'th-' + Math.random().toString(36).slice(2, 10), msgs: [] };
+    tk.run = null; tk.loaded = true;
+    S.done.product = false; save('done'); persist();
+    renderThink(true); syncProgress(); renderNav();
+  }
+
   /* ---------- Các khung nhìn ---------- */
-  const head = (i, sub, extra = '') => `<div class="view-head"><div><h2>${STEPS[i].name}</h2><p>${sub}</p></div>${extra}</div>
+  /* Một câu giải thích mỗi bước, hiện ở khối bên trái tab Tổng quan */
+  const STEP_HINT = {
+    product: 'Phân tích kỹ ý tưởng của bạn bằng tư duy sản phẩm trước khi thực hiện.',
+    planning: 'Chia vai, chia việc và tính chi phí cho cả đội.',
+    pitching: 'Biến bằng chứng thành khảo sát và bài thuyết trình.',
+    quality: 'Theo dõi chất lượng và chi phí từng lần chạy thử.',
+    maintaining: 'Cập nhật và bảo trì để sản phẩm luôn khỏe.'
+  };
+
+  const finishBtn = i => (i === 0 ? '' : stepState(i) === 'doing' ? btn('finish', 'Hoàn thành bước này', 'tone small', `data-id="${STEPS[i].id}"`) : stepState(i) === 'done' ? btn('reopen', 'Mở lại', 'soft small', `data-id="${STEPS[i].id}"`) : '');
+  const lockNote = i => (stepState(i) === 'locked' ? `<div class="lock-note">Bước này mở sau khi hoàn thành ${STEPS[i - 1].name}. Bạn vẫn xem trước được.</div>` : '');
+  const head = (i, sub, extra = '') => `<div class="view-head"><div><h2>${STEPS[i].name}</h2><p>${sub}</p></div><div class="head-tools">${stateTag(i)}${finishBtn(i)}${extra}</div></div>${lockNote(i)}
     <div class="mind" aria-label="Chuyển tư duy"><span>Engineer: ${STEPS[i].from}</span><span>AI builder: ${STEPS[i].to}</span></div>`;
   const panelHead = (t, extra = '') => `<div class="panel-head"><h3>${t}</h3>${extra}</div>`;
   const btn = (act, label, cls = 'tone', data = '') => `<button class="btn ${cls}" data-act="${act}" ${data}>${label}</button>`;
 
   const views = {
     overview() {
-      const v = progress();
-      const cards = STEPS.map((s, i) => `<button class="over-step" style="--c:${s.hex}" data-act="tab" data-id="${s.id}">
-        <span class="line"><span>${s.name}</span><b data-pct="${i}">${pct(v[i])}</b></span><span class="bar"><span data-bar="${i}" style="width:${pct(v[i])}"></span></span><span class="muted" data-next="${i}">${esc(nextAction(i))}</span></button>`).join('');
+      const cards = STEPS.map((s, i) => {
+        const k = stepKey(i);
+        return `<button class="ms ${k}" style="--c:${s.hex}" data-act="tab" data-id="${s.id}">
+          <span class="ms-rail"><span class="ms-dot">${k === 'done' ? '✓' : i + 1}</span>${i < STEPS.length - 1 ? '<span class="ms-line"></span>' : ''}</span>
+          <span class="ms-name">${s.name}</span>${stateTag(i, `data-state="${i}"`)}
+          <span class="muted" data-next="${i}">${esc(nextAction(i))}</span>
+          ${k === 'now' ? `<span class="ms-cta">${i === 0 && !started(0) ? 'Bắt đầu tại đây' : 'Bấm để làm tiếp'}</span>` : k === 'locked' ? `<span class="ms-wait">Sau khi xong ${STEPS[i - 1].name}</span>` : ''}</button>`;
+      }).join('');
+      const curIdx = progress().findIndex(x => !x), cur = Math.max(0, curIdx);
+      const goLabel = curIdx < 0 ? 'Xem lại: Thinking' : cur === 0 && !started(0) ? 'Bắt đầu: Thinking' : `Làm tiếp: ${STEPS[cur].name}`;
       const team = S.meta.members.map(m => {
         const open = S.tasks.list.filter(t => t.owner === m.id && t.status !== 'done').length;
         const roles = ROLES.filter(r => S.plan.roles[r] === m.id).join(', ') || 'Chưa có vai';
@@ -471,19 +619,17 @@
           <div class="panel">${panelHead('Ai đang làm gì')}<div class="ov-team">${team}</div></div>
           <div class="panel">${panelHead('Việc cần để ý')}${health().reasons.slice(0, 2).map(r => `<p>Sức khỏe ${esc(HNAMES[r.level].toLowerCase())}: ${esc(reasonText(r))}</p>`).join('')}${S.tasks.list.filter(t => t.status === 'review').map(t => `<p>${esc(t.id)} đang chờ review: ${esc(t.title)}</p>`).join('')}${late.map(x => `<p>Bảo trì đến hạn: ${esc(x.title)}</p>`).join('') || ''}${!late.length && !S.tasks.list.some(t => t.status === 'review') && !health().reasons.length ? '<p class="muted">Không có việc gấp.</p>' : ''}</div></div>`;
       }
-      return `<div class="ov-title"><h2>Công trình đang xây</h2><p>Mỗi tầng là một bước. Khối được đổ màu khi đội hoàn thành thêm việc.</p>${btn('tab', 'Làm tiếp', 'primary small', `data-id="${STEPS[Math.max(0, v.findIndex(x => x < 1))].id}"`)}</div>
-        <div class="ov-team">${team}</div><div class="ov-cards">${cards}</div>`;
+      return `<div class="ov-title"><h2>${STEPS[cur].name}</h2><p>${STEP_HINT[STEPS[cur].id]}</p>${btn('tab', goLabel, 'primary big', `data-id="${STEPS[cur].id}"`)}</div>
+        <div class="ov-team">${team}</div>`;
     },
 
     product() {
-      const total = SCORE.reduce((a, [k]) => a + (+S.score[k].score || 0), 0);
-      return head(0, 'Cả đội trò chuyện cùng agent. Khi đủ ý, để agent điền scorecard rồi sửa tay chỗ chưa đúng.') +
-        `<div class="cols"><div class="panel" id="chatSlot">${panelHead('Phòng chat nhóm')}</div>
-        <div class="panel">${panelHead('AI MVP Scorecard', btn('fill', 'Agent điền scorecard', 'tone small'))}
-          <p><span class="score-total">${total}</span> <span class="muted">/ 35 điểm. Bấm vạch để chấm lại.</span></p>
-          ${SCORE.map(([k, l]) => `<div class="score" data-key="${k}"><div class="score-top"><label for="sc-${k}">${l}</label><div class="dots" role="group" aria-label="Điểm ${l}">${[1, 2, 3, 4, 5].map(n => `<button class="${n <= S.score[k].score ? 'on' : ''}" data-act="dot" data-id="${k}" data-n="${n}" aria-label="${n} trên 5"></button>`).join('')}</div></div>
-          <textarea id="sc-${k}" data-bind="score" data-id="${k}" rows="2" placeholder="Chưa có. Bàn thêm trong chat rồi để agent điền.">${esc(S.score[k].text)}</textarea></div>`).join('')}
-        </div></div>`;
+      return `<div class="think">
+        <section class="tk-box" id="tkCanvas"></section>
+        <section class="tk-box tk-eval" id="tkEval"></section>
+        <section class="tk-box tk-chat"><div class="tk-msgs" id="tkMsgs" aria-live="polite"></div>
+          <form class="tk-compose" data-form="think"><input aria-label="Tin nhắn" placeholder="Kể ý tưởng của bạn hoặc trả lời câu hỏi của agent" autocomplete="off" maxlength="2000"><button class="btn tone" style="--c:var(--blue)">Gửi</button></form></section>
+      </div>`;
     },
 
     planning() {
@@ -547,7 +693,7 @@
       return head(3, 'Mỗi lần đổi model hay prompt là một lần chạy thử. Ghi lại để thấy chất lượng, token và chi phí đi về đâu.') + `<div class="stack">
         <div class="cols"><div class="panel">${panelHead('Chỉ số cần đạt', btn('metrics', q.metrics.length ? 'Agent lấy lại chỉ số' : 'Agent lấy chỉ số', 'tone small'))}
           <p class="muted">Agent đọc mục Metric trong scorecard và tách thành từng chỉ số. Mỗi lần chạy thử, đội nhập con số đo được để so với mục tiêu ở đây.</p>
-          <div class="prose" style="margin:8px 0">${src ? esc(src) : 'Mục Metric đang trống. Điền ở tab Product thinking trước.'}</div>
+          <div class="prose" style="margin:8px 0">${src ? esc(src) : 'Mục Metric đang trống. Điền ở tab Thinking trước.'}</div>
           ${stale ? `<p class="note-warn">Scorecard đã đổi sau lần lấy chỉ số gần nhất. Bấm lấy lại để cập nhật.</p>` : ''}
           <div class="stack" style="gap:10px;margin-top:10px">${q.metrics.map(k => { const b = f => `data-bind="qmetric" data-id="${esc(k.id)}" data-field="${f}"`; const extra = num(k.baseline) !== null || String(k.method || '').trim(); return `<div class="metric">
             <div class="metric-top"><input class="metric-name" ${b('name')} value="${esc(k.name)}" aria-label="Tên chỉ số">${btn('delmetric', 'Bỏ', 'soft small', `data-id="${esc(k.id)}"`)}</div>
@@ -736,9 +882,9 @@
     },
     async metrics() {
       const src = S.score.metric.text.trim();
-      if (!src) { toast('Mục Metric trong scorecard đang trống. Điền ở Product thinking trước.'); return ['quality', () => {}]; }
+      if (!src) { toast('Mục Metric trong scorecard đang trống. Điền ở Thinking trước.'); return ['quality', () => {}]; }
       const card = ['problem', 'leverage', 'scope', 'feasibility'].map(k => `${k}: ${S.score[k].text}`).join('\n');
-      const out = await generate(`Đóng vai người thẩm định Product thinking. Tách mục Metric của scorecard thành danh sách chỉ số đo được, đối chiếu với các mục còn lại.
+      const out = await generate(`Đóng vai người thẩm định Thinking. Tách mục Metric của scorecard thành danh sách chỉ số đo được, đối chiếu với các mục còn lại.
 Mục Metric: "${src}"
 Các mục khác của scorecard:
 ${card}
@@ -778,7 +924,7 @@ nature là bản chất problem: "behavior" nếu là problem hành vi (duy trì
     if (document.activeElement !== $('#projectName')) $('#projectName').value = S.meta.name;
   }
   function renderNav() {
-    $('#nav').innerHTML = TABS.map(t => `<button class="nav-item ${t.id === tab ? 'on' : ''}" style="--c:${t.hex}" data-act="tab" data-id="${t.id}" aria-current="${t.id === tab}"><i></i><span class="long">${t.name}</span><span class="short">${t.short}</span></button>`).join('');
+    $('#nav').innerHTML = TABS.map(t => `<button class="nav-item ${t.id === tab ? 'on' : ''}" style="--c:${t.hex}" data-act="tab" data-id="${t.id}" aria-current="${t.id === tab}"><span class="long">${t.name}</span><span class="short">${t.short}</span></button>`).join('');
   }
   function render() {
     const t = TABS.find(x => x.id === tab);
@@ -787,15 +933,16 @@ nature là bản chất problem: "behavior" nếu là problem hành vi (duy trì
     const desktopOverview = tab === 'overview' && !mobile.matches;
     if (desktopOverview) { overlay.innerHTML = views.overview(); view.innerHTML = ''; }
     else { view.innerHTML = views[tab](); overlay.innerHTML = ''; }
-    if (tab === 'product') { $('#chatSlot').append(chat); renderChat(); }
+    if (tab === 'product') thinkMount();
   }
   function layout(animate) {
     const over = tab === 'overview', isMobile = mobile.matches;
     ws.classList.toggle('overview', over);
     $('#app').classList.toggle('on-overview', over);
-    $('#collapseBtn').hidden = over || isMobile;
     const hidden = local.collapsed && !over && !isMobile;
-    $('#reveal').hidden = !hidden;
+    ws.classList.toggle('collapsed', hidden);
+    const toggle = $('#sideToggle');
+    if (toggle) toggle.setAttribute('aria-expanded', String(!hidden));
     if (stageAnim) { stageAnim.stop(); stageAnim = null; }
     if (isMobile) {
       ws.style.removeProperty('--stage');
@@ -805,7 +952,7 @@ nature là bản chất problem: "behavior" nếu là problem hành vi (duy trì
       else stage.style.setProperty('--sh', h + 'px');
       return;
     }
-    const side = Math.min(380, Math.max(290, innerWidth * 0.26));
+    const side = Math.min(361, Math.max(276, innerWidth * 0.247)); // nhỏ hơn 5% so với 380 / 290 / 26%
     const target = over ? ws.clientWidth : hidden ? 0 : side;
     const from = stage.offsetWidth;
     const apply = v => ws.style.setProperty('--stage', v + 'px');
@@ -816,13 +963,13 @@ nature là bản chất problem: "behavior" nếu là problem hành vi (duy trì
   function enterContent() {
     if (tab === 'overview' && !mobile.matches) {
       rise($$('.ov-title > *', overlay), 0.7);
-      anim($$('.ov-team > div', overlay), { opacity: [0, 1], x: [40, 0] }, { duration: 0.6, ease: EASE, delay: canAnim ? M.stagger(0.08, { startDelay: 0.9 }) : 0 });
-      rise($$('.over-step', overlay), 1.1);
+      anim($$('.ov-team > div', overlay), { opacity: [0, 1], y: [14, 0] }, { duration: 0.6, ease: EASE, delay: canAnim ? M.stagger(0.08, { startDelay: 0.9 }) : 0 });
+      rise($$('.ms', overlay), 1.1);
       anim($('#pins'), { opacity: [0, 1] }, { delay: 2.2, duration: 0.5 });
       $('#pins').style.opacity = canAnim ? 0 : 1;
     } else {
       $('#pins').style.opacity = 0;
-      rise($$('#view > .view-head, #view > .mind, #view .panel, #view .over-step', view).slice(0, 14), 0.1);
+      rise($$('#view > .view-head, #view > .mind, #view .panel, #view .ms', view).slice(0, 14), 0.1);
     }
     anim($$('.grow', view), { scaleX: [0, 1] }, { duration: 0.8, ease: EASE, delay: 0.3 });
   }
@@ -831,11 +978,12 @@ nature là bản chất problem: "behavior" nếu là problem hành vi (duy trì
     const n = ++going;
     closeDrawer(true);
     anim($('#pins'), { opacity: 0 }, { duration: 0.2 });
-    await done(anim(tab === 'overview' && !mobile.matches ? overlay : view, { opacity: [1, 0], x: [0, -18] }, { duration: 0.2 }));
+    await done(anim(tab === 'overview' && !mobile.matches ? overlay : view, { opacity: [1, 0] }, { duration: 0.15 }));
     if (n !== going) return;
     tab = id;
+    history.replaceState(null, '', '#' + id);
     renderNav();
-    $('#fab').hidden = id === 'product';
+    { const fab = $('#fab'); if (fab) fab.hidden = id === 'product'; }
     view.style.opacity = overlay.style.opacity = 1;
     view.style.transform = overlay.style.transform = 'none';
     render();
@@ -846,14 +994,13 @@ nature là bản chất problem: "behavior" nếu là problem hành vi (duy trì
     if (mobile.matches) scrollTo({ top: 0, behavior: reduced ? 'auto' : 'smooth' });
     enterContent();
     anim($('.nav-item.on'), { scale: [0.85, 1] }, { type: 'spring', stiffness: 380, damping: 18 });
-    anim($('#floorInfo'), { opacity: [0, 1], y: [20, 0] }, { delay: 0.4, duration: 0.5 });
   }
 
   function initSite() {
     if (site || !window.Scenes) return;
     try {
       site = window.Scenes.site($('#progressCanvas'), STEPS.map(s => s.color), S.meta.members.map(m => color(m.color)), (pts, mode) => {
-        const visible = tab === 'overview' && mode === 'house';
+        const visible = tab === 'overview';
         pins.forEach((p, i) => {
           p.style.visibility = visible ? 'visible' : 'hidden';
           const w = p.offsetWidth, x = Math.max(8, Math.min(stage.clientWidth - w - 8, pts[i].x + (mobile.matches ? 2 : 24)));
@@ -865,41 +1012,32 @@ nature là bản chất problem: "behavior" nếu là problem hành vi (duy trì
     $('#pins').innerHTML = STEPS.map(s => `<button class="pin" style="--c:${s.hex}" data-act="tab" data-id="${s.id}"><i></i>${s.name} <span></span></button>`).join('');
     pins = $$('.pin');
     site.set(progress());
-    if (local.model === 'rubik') site.mode('rubik');
+    if (!['house', 'rubik', 'uni', 'tree'].includes(local.model)) local.model = 'house';
+    if (local.model !== 'house') site.mode(local.model);
     $$('[data-model]').forEach(b => b.classList.toggle('on', b.dataset.model === local.model));
   }
 
+  /* Hai route riêng: "/" là trang giới thiệu, "/workstation" là workstation (hash #tab chọn tab) */
   let inApp = false;
-  async function enter(id = 'overview') {
+  function startApp(id = 'overview') {
     if (inApp) return;
     inApp = true;
-    await done(anim($('#landing'), { opacity: [1, 0], scale: [1, 1.04] }, { duration: 0.4 }));
-    $('#landing').hidden = true;
+    if (mockMode) document.body.insertAdjacentHTML('beforeend', '<div class="preview-badge">Chế độ xem mock: dữ liệu mẫu, không lưu</div>');
     $('#app').hidden = false;
-    scrollTo(0, 0);
     tab = id;
     renderTeam(); renderNav();
-    $('#fab').hidden = id === 'product';
+    { const fab = $('#fab'); if (fab) fab.hidden = id === 'product'; }
     render();
     layout(false);
     initSite();
     syncProgress();
-    if (site) site.focus(id === 'overview' ? 'overview' : STEPS.findIndex(s => s.id === id));
+    if (site) site.focus(id === 'overview' ? 'overview' : STEPS.findIndex(x => x.id === id));
     anim($('#app'), { opacity: [0, 1] }, { duration: 0.5 });
     rise($$('.nav-item'), 0.15);
     enterContent();
   }
-  async function home() {
-    closeDrawer(true);
-    await done(anim($('#app'), { opacity: [1, 0] }, { duration: 0.3 }));
-    inApp = false;
-    $('#app').hidden = true;
-    $('#landing').hidden = false;
-    $('#landing').style.transform = 'none';
-    scrollTo(0, 0);
-    anim($('#landing'), { opacity: [0, 1] }, { duration: 0.4 });
-    replay();
-  }
+  function enter(id = 'overview') { location.href = '/workstation' + (id && id !== 'overview' ? '#' + id : ''); }
+  function home() { location.href = '/'; }
 
   const drawer = $('#drawer');
   function closeDrawer(instant) {
@@ -956,10 +1094,15 @@ nature là bản chất problem: "behavior" nếu là problem hành vi (duy trì
     replay: () => replay(),
     flow: () => $('#flow').scrollIntoView({ behavior: reduced ? 'auto' : 'smooth' }),
     tab: b => go(b.dataset.id),
-    collapse() { local.collapsed = !local.collapsed; persist(); layout(true); if (!local.collapsed) anim($('#floorInfo'), { opacity: [0, 1] }, { delay: 0.4 }); },
+    collapse() { local.collapsed = !local.collapsed; persist(); layout(true); },
     drawer: toggleDrawer,
     me(b) { local.me = b.dataset.id; persist(); renderChat(); anim($('.speak .me', chat), { scale: [0.6, 1] }, { type: 'spring' }); },
     quick: b => send(b.textContent),
+    'think-approve': () => thinkReview(true),
+    'think-reject': () => thinkReview(false),
+    'think-reset': () => thinkReset(),
+    finish(b) { if (stepState(STEPS.findIndex(x => x.id === b.dataset.id)) !== 'doing') return; S.done[b.dataset.id] = true; save('done'); rerender(); renderNav(); toast('Đã hoàn thành bước. Bước tiếp theo đã mở.'); },
+    reopen(b) { const i = STEPS.findIndex(x => x.id === b.dataset.id); STEPS.slice(i).forEach(x => { S.done[x.id] = false; }); save('done'); rerender(); renderNav(); },
     reset(b) {
       if (Date.now() - resetArmed > 4000) { resetArmed = Date.now(); b.textContent = db ? 'Bấm lần nữa: đặt lại cho cả đội' : 'Bấm lần nữa để đặt lại'; setTimeout(() => { b.textContent = 'Đặt lại demo'; }, 4000); return; }
       S = SEED(); resetArmed = 0; b.textContent = 'Đặt lại demo';
@@ -1056,6 +1199,7 @@ nature là bản chất problem: "behavior" nếu là problem hành vi (duy trì
   document.addEventListener('submit', e => {
     e.preventDefault();
     const f = e.target, kind = f.dataset.form;
+    if (kind === 'think') { const i = $('input', f); thinkSend(i.value); i.value = ''; }
     if (kind === 'chat') { const i = $('input', f); if (typing) return toast('Đợi agent trả lời xong đã.'); send(i.value); i.value = ''; }
     if (kind === 'task') {
       const v = f.elements.title.value.trim();
@@ -1162,7 +1306,8 @@ nature là bản chất problem: "behavior" nếu là problem hành vi (duy trì
     }
   }
 
-  landing();
+  if ($('#landing')) landing();
+  if ($('#app')) { const h = location.hash.slice(1); startApp(TABS.some(t => t.id === h) ? h : 'overview'); }
   connect().catch(() => {});
   ready.then(() => { if (inApp && tab === 'pitching') rerender(); });
 })();

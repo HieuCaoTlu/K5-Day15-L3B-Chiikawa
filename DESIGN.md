@@ -12,7 +12,7 @@
 | `--line` | `#e7ebf5` | Viền mảnh, đường phân cách |
 | `--soft` | `#f4f6fc` | Nút phụ, ô nhập, nền nhóm nội dung |
 | `--indigo` | `#4d5bf0` | Liên kết và viền focus |
-| `--blue` | `#0a9cf0` | Product thinking |
+| `--blue` | `#0a9cf0` | Thinking |
 | `--green` | `#14b86a` | Planning |
 | `--orange` | `#ff8a1f` | Pitching |
 | `--indigo` | `#4d5bf0` | Quality. Cùng giá trị với màu liên kết và focus; trong tab Quality, phân biệt bằng chấm màu, chip và dải cạnh thay vì chữ màu |

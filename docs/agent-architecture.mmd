@@ -1,0 +1,34 @@
+%%{init: {"theme": "base", "flowchart": {"curve": "basis", "nodeSpacing": 40, "rankSpacing": 46}, "themeVariables": {"fontFamily": "Be Vietnam Pro, Segoe UI, Arial", "fontSize": "15px", "primaryColor": "#ffffff", "primaryBorderColor": "#cfd6ea", "primaryTextColor": "#121a33", "lineColor": "#626d8c"}}}%%
+flowchart TD
+    U(["Trưởng nhóm Engineer<br/>gửi ý tưởng thô hoặc trả lời câu hỏi<br/><i>mỗi tin nhắn là một lượt</i>"]):::human
+    G["guard_input<br/><i>code: độ dài, chặn prompt injection</i>"]:::code
+    B(["Từ chối + lý do<br/><i>status = blocked</i>"]):::out
+    X["update_canvas<br/><i>Gemini Flash, structured output<br/>trích tin nhắn vào 9 ô AI MVP Canvas</i><br/>Đường lui: demo_cache → heuristic"]:::llm
+    E["mark_evidence<br/><i>code: ô là CÓ BẰNG CHỨNG chỉ khi có<br/>người cụ thể + lần cụ thể + trích dẫn có thật</i>"]:::code
+    R{"decide()<br/><i>4 ô lõi đã đủ bằng chứng?</i>"}:::route
+    Q["ask_next<br/><i>code: NOT YET + hỏi đúng 1 câu<br/>vào ô lõi còn thiếu</i>"]:::code
+    W(["Lượt kết thúc, chờ tin nhắn tiếp<br/><i>status = needs_info · canvas nối tiếp theo session_id</i>"]):::out
+    V["verdict<br/><i>code: GO, hoặc NO khi bài toán không cần AI<br/>hay đã có người giải quyết</i>"]:::code
+    H["human_review<br/><i>interrupt(): trưởng nhóm Duyệt / Chưa duyệt</i><br/>status = waiting_review"]:::human
+    F["finalize<br/><i>lưu kết quả cuối</i>"]:::code
+    P(["Bàn giao sang Planning<br/><i>handoff = planning khi GO được duyệt</i>"]):::out
+
+    U --> G
+    G -- "bị chặn" --> B
+    G -- "hợp lệ" --> X
+    X --> E
+    E --> R
+    R -- "còn thiếu" --> Q
+    Q --> W
+    W -. "tin nhắn mới" .-> U
+    R -- "đủ 4 ô lõi hoặc NO" --> V
+    V --> H
+    H -- "Duyệt" --> F
+    H -- "Chưa duyệt" --> W
+    F --> P
+
+    classDef human fill:#fff7ed,stroke:#ff8a1f,stroke-width:1.5px,color:#121a33;
+    classDef code fill:#f4f6fc,stroke:#9aa3bd,stroke-width:1.5px,color:#121a33;
+    classDef llm fill:#eef2ff,stroke:#4d5bf0,stroke-width:1.5px,color:#121a33;
+    classDef route fill:#ecfdf5,stroke:#14b86a,stroke-width:1.5px,color:#121a33;
+    classDef out fill:#ffffff,stroke:#121a33,stroke-width:1.5px,color:#121a33;

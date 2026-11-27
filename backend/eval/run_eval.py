@@ -1,4 +1,4 @@
-"""Eval end-to-end cho pitch ("agent đúng X%"). Tự động duyệt bước HITL bằng mock human_review.
+"""Eval end-to-end cho pitch ("agent đúng X%") của bước Thinking. Tự động duyệt bước HITL bằng mock human_review.
 
     uv run python eval/run_eval.py              # dùng GOOGLE_API_KEY nếu có, không thì luật dự phòng
     uv run python eval/run_eval.py --min 0.8    # exit 1 nếu dưới ngưỡng (gắn vào CI khi đã ổn)
@@ -24,13 +24,20 @@ from app.agent.graph import build_graph  # noqa: E402
 
 
 def check(case: dict, state: dict) -> tuple[bool, str]:
-    status = "blocked" if state.get("blocked") else (state.get("result") or {}).get("status")
+    status = (
+        "blocked" if state.get("blocked") else (state.get("result") or {}).get("status")
+    )  # needs_info | approved | …
     if status != case["expect_status"]:
         return False, f"status={status}, cần {case['expect_status']}"
-    steps = (state.get("proposal") or {}).get("steps", [])
-    if len(steps) < case.get("expect_min_steps", 0):
-        return False, f"{len(steps)} bước, cần ≥ {case['expect_min_steps']}"
-    return True, f"source={state.get('source', '-')}"
+    proposal = state.get("proposal") or {}
+    if "expect_verdict" in case and proposal.get("verdict") != case["expect_verdict"]:
+        return False, f"verdict={proposal.get('verdict')}, cần {case['expect_verdict']}"
+    if "expect_next_cell" in case and proposal.get("next_cell") != case["expect_next_cell"]:
+        return False, f"next_cell={proposal.get('next_cell')}, cần {case['expect_next_cell']}"
+    needle = case.get("expect_reply_contains")
+    if needle and needle.lower() not in proposal.get("reply", "").lower():
+        return False, f"reply thiếu '{needle}'"
+    return True, f"verdict={proposal.get('verdict', '-')} source={state.get('source', '-')}"
 
 
 def main() -> int:

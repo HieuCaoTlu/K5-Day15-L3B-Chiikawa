@@ -1,0 +1,156 @@
+{
+  "node": "mark_evidence",
+  "description": "Gán lại trạng thái từng ô bằng code: evidence chỉ khi có người + lần cụ thể + trích dẫn có thật trong tin nhắn.",
+  "input": {
+    "canvas": {
+      "persona": {
+        "content": "Chị Lan, chủ shop mỹ phẩm có 2 nhân viên",
+        "who": "chị Lan",
+        "when": "tuần trước",
+        "quote": "chị Lan, chủ shop mỹ phẩm 2 nhân viên",
+        "grounded": true,
+        "status": "evidence"
+      },
+      "jtbd": {
+        "content": "Trả lời khách kịp thời để không mất đơn",
+        "who": "chị Lan",
+        "when": "tuần trước",
+        "quote": "Tuần trước chị mất 3 đơn vì trả lời tin nhắn trễ 2 giờ",
+        "grounded": true,
+        "status": "evidence"
+      },
+      "pain_point": {
+        "content": "Mất 3 đơn vì trả lời tin nhắn trễ 2 giờ",
+        "who": "chị Lan",
+        "when": "tuần trước",
+        "quote": "Tuần trước chị mất 3 đơn vì trả lời tin nhắn trễ 2 giờ",
+        "grounded": true,
+        "status": "evidence"
+      },
+      "current_workaround": {
+        "content": "Trả lời tay qua Zalo, ghi đơn vào Excel",
+        "who": "chị Lan",
+        "when": "hiện nay",
+        "quote": "Hiện chị trả lời tay qua Zalo, ghi đơn vào Excel",
+        "grounded": true,
+        "status": "evidence"
+      },
+      "solution": {
+        "content": "Bot tự trả lời câu hỏi giá và tồn kho",
+        "who": "",
+        "when": "",
+        "quote": "",
+        "grounded": false,
+        "status": "assumption"
+      },
+      "ai_leverage": {
+        "content": "",
+        "who": "",
+        "when": "",
+        "quote": "",
+        "grounded": false,
+        "status": "empty"
+      },
+      "mvp_scope": {
+        "content": "",
+        "who": "",
+        "when": "",
+        "quote": "",
+        "grounded": false,
+        "status": "empty"
+      },
+      "metrics": {
+        "content": "",
+        "who": "",
+        "when": "",
+        "quote": "",
+        "grounded": false,
+        "status": "empty"
+      },
+      "prior_art": {
+        "content": "",
+        "who": "",
+        "when": "",
+        "quote": "",
+        "grounded": false,
+        "status": "empty"
+      }
+    }
+  },
+  "output": {
+    "canvas": {
+      "persona": {
+        "content": "Chị Lan, chủ shop mỹ phẩm có 2 nhân viên",
+        "who": "chị Lan",
+        "when": "tuần trước",
+        "quote": "chị Lan, chủ shop mỹ phẩm 2 nhân viên",
+        "grounded": true,
+        "status": "evidence"
+      },
+      "jtbd": {
+        "content": "Trả lời khách kịp thời để không mất đơn",
+        "who": "chị Lan",
+        "when": "tuần trước",
+        "quote": "Tuần trước chị mất 3 đơn vì trả lời tin nhắn trễ 2 giờ",
+        "grounded": true,
+        "status": "evidence"
+      },
+      "pain_point": {
+        "content": "Mất 3 đơn vì trả lời tin nhắn trễ 2 giờ",
+        "who": "chị Lan",
+        "when": "tuần trước",
+        "quote": "Tuần trước chị mất 3 đơn vì trả lời tin nhắn trễ 2 giờ",
+        "grounded": true,
+        "status": "evidence"
+      },
+      "current_workaround": {
+        "content": "Trả lời tay qua Zalo, ghi đơn vào Excel",
+        "who": "chị Lan",
+        "when": "hiện nay",
+        "quote": "Hiện chị trả lời tay qua Zalo, ghi đơn vào Excel",
+        "grounded": true,
+        "status": "evidence"
+      },
+      "solution": {
+        "content": "Bot tự trả lời câu hỏi giá và tồn kho",
+        "who": "",
+        "when": "",
+        "quote": "",
+        "grounded": false,
+        "status": "assumption"
+      },
+      "ai_leverage": {
+        "content": "",
+        "who": "",
+        "when": "",
+        "quote": "",
+        "grounded": false,
+        "status": "empty"
+      },
+      "mvp_scope": {
+        "content": "",
+        "who": "",
+        "when": "",
+        "quote": "",
+        "grounded": false,
+        "status": "empty"
+      },
+      "metrics": {
+        "content": "",
+        "who": "",
+        "when": "",
+        "quote": "",
+        "grounded": false,
+        "status": "empty"
+      },
+      "prior_art": {
+        "content": "",
+        "who": "",
+        "when": "",
+        "quote": "",
+        "grounded": false,
+        "status": "empty"
+      }
+    }
+  }
+}

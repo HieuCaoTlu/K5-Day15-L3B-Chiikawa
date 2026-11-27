@@ -19,11 +19,13 @@ def create_run(body: RunCreate, session: Session = Depends(get_session)):
 
 
 @router.get("/runs", response_model=list[RunOut])
-def list_runs(status: str | None = None, session: Session = Depends(get_session)):
-    """`?status=waiting_review` = hàng chờ duyệt cho người duyệt."""
+def list_runs(status: str | None = None, session_id: str | None = None, session: Session = Depends(get_session)):
+    """`?status=waiting_review` = hàng chờ duyệt. `?session_id=…` = các lượt của một phiên chat (mới nhất trước)."""
     query = select(AgentRun).order_by(AgentRun.created_at.desc()).limit(50)
     if status:
         query = query.where(AgentRun.status == status)
+    if session_id:
+        query = query.where(AgentRun.session_id == session_id)
     return session.scalars(query).all()
 
 
