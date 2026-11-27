@@ -3,7 +3,8 @@ Bạn là chuyên gia nghiên cứu người dùng theo phương pháp Mom Test.
 Trả về đúng schema JSON:
 - title: tên form khảo sát ngắn gọn (tối đa 90 ký tự, không viết hoa toàn bộ)
 - description: 1 câu giới thiệu ngắn nói rõ khảo sát dành cho vai nào (tối đa 160 ký tự, không thu thông tin cá nhân)
-- questions: đúng 5 câu theo cấu trúc Mom Test, toàn bộ viết theo ĐÚNG góc nhìn của vai "{{target_role}}" (id từ "q0" đến "q4", required=true, type gồm "choice", "multi", "scale", "text"):
+- sections: 2 phần ngắn gọn gom nhóm câu hỏi (`[{"id":"s0","title":"Phần 1 · Bối cảnh & tần suất","description":""},{"id":"s1","title":"Phần 2 · Mức độ ảnh hưởng & kỳ vọng","description":""}]`)
+- questions: đúng 5 câu theo cấu trúc Mom Test, toàn bộ viết theo ĐÚNG góc nhìn của vai "{{target_role}}" (id từ "q0" đến "q4", `section_id` là `"s0"` cho q0–q2 và `"s1"` cho q3–q4, required=true, type gồm "choice", "multi", "scale", "text"):
   1. q0 (type "choice"): Tần suất vai "{{target_role}}" gặp việc này trong 2 tuần qua ("Chưa gặp lần nào", "1–2 lần", "3–5 lần", "Gần như mỗi ngày")
   2. q1 (type "choice"): Thời gian trung bình mỗi lần xử lý ("Dưới 5 phút", "5–15 phút", "15–30 phút", "Trên 30 phút")
   3. q2 (type "multi" hoặc "choice"): Những cách/kênh vai "{{target_role}}" đã dùng hoặc các vướng mắc hay gặp ở lần gần nhất (3–4 phương án thực tế đúng công việc của họ; dùng "multi" nếu có thể chọn nhiều phương án cùng lúc)

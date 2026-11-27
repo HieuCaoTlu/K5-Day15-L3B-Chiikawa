@@ -21,7 +21,10 @@ def test_generate_survey_uses_single_target_role(client):
     assert student_body["source"] == "fallback"
     assert student_body["target_role"] == "Học viên"
     assert "Học viên" in student_body["title"]
+    assert len(student_body["sections"]) == 2
     assert len(student_body["questions"]) == 5
+    sec_ids = {s["id"] for s in student_body["sections"]}
+    assert all(q["section_id"] in sec_ids for q in student_body["questions"])
     assert "vai trò" not in student_body["questions"][0]["q"].lower()
     assert "học hoặc làm bài tập" in student_body["questions"][0]["q"]
 
@@ -58,6 +61,7 @@ def test_publish_survey_submit_and_delete(client):
             "problem_context": _sample_context("Học viên"),
             "title": draft["title"],
             "description": draft["description"],
+            "sections": draft["sections"],
             "questions": draft["questions"],
         },
     )
@@ -65,6 +69,7 @@ def test_publish_survey_submit_and_delete(client):
     survey = pub_res.json()
     slug = survey["slug"]
     assert survey["target_role"] == "Học viên"
+    assert len(survey["sections"]) == 2
     assert survey["published"] is True
 
     fetched = client.get(f"/api/v1/pitching/surveys/{slug}")
@@ -92,6 +97,30 @@ def test_publish_survey_submit_and_delete(client):
     after = client.get(f"/api/v1/pitching/surveys/{slug}").json()
     assert after["response_count"] == 1
     assert len(client.get(f"/api/v1/pitching/surveys/{slug}/responses").json()) == 1
+
+    upd = client.put(
+        f"/api/v1/pitching/surveys/{slug}",
+        json={
+            "project_name": "Trợ lý TA AI lớp L3B",
+            "target_role": "Học viên",
+            "problem_context": _sample_context("Học viên"),
+            "title": "Khảo sát đã chỉnh sửa",
+            "description": "Mô tả mới",
+            "sections": [
+                {"id": "s0", "title": "Phần 1: Đã sửa", "description": "Mô tả section 1"},
+                {"id": "s_extra", "title": "Phần 2: Section mới", "description": ""},
+            ],
+            "questions": [
+                {**draft["questions"][0], "section_id": "s0"},
+                {**draft["questions"][1], "section_id": "s_extra"},
+            ],
+        },
+    )
+    assert upd.status_code == 200
+    assert upd.json()["title"] == "Khảo sát đã chỉnh sửa"
+    assert upd.json()["response_count"] == 1
+    assert len(upd.json()["sections"]) == 2
+    assert upd.json()["questions"][1]["section_id"] == "s_extra"
 
     assert client.delete(f"/api/v1/pitching/surveys/{slug}").status_code == 204
     assert client.get(f"/api/v1/pitching/surveys/{slug}").status_code == 404
@@ -161,3 +190,140 @@ def test_multi_choice_survey_flow(client):
     )
     assert ok.status_code == 201
     assert ok.json()["answers"]["q0"] == ["Cài Python", "Chạy Docker"]
+
+
+def test_survey_stats_and_sample_seeding(client):
+    assert client.get("/api/v1/pitching/surveys/khong-ton-tai/stats").status_code == 404
+
+    pub = client.post(
+        "/api/v1/pitching/surveys",
+        json={
+            "project_name": "Trợ lý lớp L3B",
+            "target_role": "Học viên",
+            "title": "Khảo sát thống kê dashboard",
+            "questions": [
+                {"id": "q0", "type": "choice", "q": "Tần suất?", "options": ["Ít", "Nhiều"], "required": True},
+                {
+                    "id": "q1",
+                    "type": "multi",
+                    "q": "Kênh hay hỏi?",
+                    "options": ["Slide", "Chat lớp", "TA"],
+                    "required": True,
+                },
+                {"id": "q2", "type": "scale", "q": "Bất tiện?", "options": [], "required": True},
+                {"id": "q3", "type": "text", "q": "Góp ý?", "options": [], "required": True},
+            ],
+        },
+    ).json()
+    slug = pub["slug"]
+
+    client.post(
+        f"/api/v1/pitching/surveys/{slug}/responses",
+        json={"answers": {"q0": "Nhiều", "q1": ["Slide", "TA"], "q2": "5", "q3": "Cần nhanh"}},
+    )
+    client.post(
+        f"/api/v1/pitching/surveys/{slug}/responses",
+        json={"answers": {"q0": "Ít", "q1": ["Slide"], "q2": "3", "q3": "Có nguồn slide"}},
+    )
+
+    stats = client.get(f"/api/v1/pitching/surveys/{slug}/stats")
+    assert stats.status_code == 200
+    body = stats.json()
+    assert body["total_responses"] == 2
+    assert body["real_responses"] == 2
+    assert body["sample_responses"] == 0
+
+    q0_opts = {o["label"]: o for o in body["questions"][0]["options"]}
+    assert q0_opts["Nhiều"]["pct"] == 50.0
+    assert q0_opts["Ít"]["pct"] == 50.0
+
+    q1_opts = {o["label"]: o for o in body["questions"][1]["options"]}
+    assert q1_opts["Slide"]["count"] == 2
+    assert q1_opts["Slide"]["pct"] == 100.0
+    assert q1_opts["TA"]["pct"] == 50.0
+
+    assert body["questions"][2]["avg"] == 4.0
+    assert len(body["questions"][3]["texts"]) == 2
+
+    seeded = client.post(f"/api/v1/pitching/surveys/{slug}/samples")
+    assert seeded.status_code == 201
+    after = seeded.json()
+    assert after["total_responses"] == 10
+    assert after["real_responses"] == 2
+    assert after["sample_responses"] == 8
+
+
+def test_pitch_deck_overview_and_ads_flow(client):
+    survey = client.post(
+        "/api/v1/pitching/surveys",
+        json={
+            "project_name": "Trợ lý TA AI lớp L3B",
+            "target_role": "Học viên",
+            "problem_context": _sample_context("Học viên"),
+            "title": "Khảo sát học viên lớp L3B",
+            "questions": [
+                {"id": "q0", "type": "choice", "q": "Tần suất?", "options": ["Ít", "Nhiều"], "required": True},
+                {"id": "q1", "type": "scale", "q": "Bất tiện?", "options": [], "required": True},
+            ],
+        },
+    ).json()
+    slug = survey["slug"]
+    client.post(f"/api/v1/pitching/surveys/{slug}/samples")
+
+    ov = client.post("/api/v1/pitching/overview", json={"context": _sample_context("Học viên"), "survey_slug": slug})
+    assert ov.status_code == 200
+    assert ov.json()["total_responses"] == 8
+    assert ov.json()["sample_responses"] == 8
+    assert "mẫu" in ov.json()["overview"].lower()
+
+    draft_res = client.post(
+        "/api/v1/pitching/decks/generate",
+        json={"context": _sample_context("Học viên"), "survey_slug": slug, "slide_count": 7},
+    )
+    assert draft_res.status_code == 200
+    draft = draft_res.json()
+    assert draft["source"] == "fallback"
+    assert 3 <= len(draft["slides"]) <= 10
+    assert draft["survey_slug"] == slug
+
+    assets_res = client.post(
+        "/api/v1/pitching/assets/generate", json={"context": _sample_context("Học viên"), "survey_slug": slug}
+    )
+    assert assets_res.status_code == 200
+    assets = assets_res.json()
+    assert len(assets["ads"]) == 1
+    assert assets["ads"][0]["placeholders"]
+    assert "0:00" in assets["script"]
+
+    pub = client.post(
+        "/api/v1/pitching/decks",
+        json={
+            "project_name": "Trợ lý TA AI lớp L3B",
+            "survey_slug": slug,
+            "title": draft["title"],
+            "slides": draft["slides"],
+            "script": assets["script"],
+            "ads": assets["ads"],
+        },
+    )
+    assert pub.status_code == 201
+    deck_slug = pub.json()["slug"]
+    assert client.get(f"/api/v1/pitching/decks/{deck_slug}").status_code == 200
+
+    upd = client.put(
+        f"/api/v1/pitching/decks/{deck_slug}",
+        json={
+            "project_name": "Trợ lý TA AI lớp L3B",
+            "survey_slug": slug,
+            "title": "Deck L3B đã sửa",
+            "slides": draft["slides"][:5],
+            "script": assets["script"],
+            "ads": assets["ads"],
+        },
+    )
+    assert upd.status_code == 200
+    assert upd.json()["title"] == "Deck L3B đã sửa"
+    assert len(upd.json()["slides"]) == 5
+
+    assert client.delete(f"/api/v1/pitching/decks/{deck_slug}").status_code == 204
+    assert client.get(f"/api/v1/pitching/decks/{deck_slug}").status_code == 404

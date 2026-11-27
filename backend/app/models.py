@@ -87,3 +87,20 @@ class PitchSurveyResponse(Base):
     answers: Mapped[dict] = mapped_column(JSON, default=dict)
     is_sample: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, index=True)
+
+
+class PitchDeck(Base):
+    """Bộ slide Pitching HTML (tối đa 10 slide), kịch bản nói và bài quảng cáo đã lưu."""
+
+    __tablename__ = "pitch_decks"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    slug: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    project_name: Mapped[str] = mapped_column(String(200))
+    survey_slug: Mapped[str] = mapped_column(String(64), default="")
+    title: Mapped[str] = mapped_column(String(200))
+    slides: Mapped[list] = mapped_column(JSON, default=list)
+    script: Mapped[str] = mapped_column(Text, default="")
+    ads: Mapped[list] = mapped_column(JSON, default=list)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, index=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, onupdate=_now)
