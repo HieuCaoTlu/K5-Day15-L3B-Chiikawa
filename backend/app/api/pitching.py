@@ -446,6 +446,7 @@ def _normalize_slides(slides: list[PitchSlide]) -> list[dict]:
                 title=slide.title.strip(),
                 body=slide.body.strip(),
                 highlight=slide.highlight.strip()[:140],
+                layout=slide.layout,
             ).model_dump()
         )
     return normalized

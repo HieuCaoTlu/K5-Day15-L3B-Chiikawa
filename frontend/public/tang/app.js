@@ -418,6 +418,40 @@
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => { t.style.opacity = 0; }, 3200);
   }
+  async function copyTextWithFeedback(text, b, okMsg = 'Đã copy link') {
+    let copied = false;
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(text);
+        copied = true;
+      }
+    } catch (e) { /* thử fallback textarea */ }
+    if (!copied) {
+      try {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.cssText = 'position:fixed;left:-9999px;top:-9999px;opacity:0';
+        document.body.append(ta);
+        ta.select();
+        copied = document.execCommand('copy');
+        ta.remove();
+      } catch (e) { copied = false; }
+    }
+    if (!copied) return toast('Trình duyệt chặn sao chép.');
+    toast(okMsg);
+    if (b && b.isConnected) {
+      if (!b.dataset.origLabel) b.dataset.origLabel = b.textContent;
+      b.textContent = '✓ ' + okMsg;
+      b.classList.add('copied');
+      clearTimeout(b._copyTimer);
+      b._copyTimer = setTimeout(() => {
+        if (b.isConnected && b.dataset.origLabel) {
+          b.textContent = b.dataset.origLabel;
+          b.classList.remove('copied');
+        }
+      }, 2200);
+    }
+  }
 
   /* ---------- Claude ---------- */
   let sample = null, downloads = null;
@@ -518,6 +552,131 @@
   const panelHead = (t, extra = '') => `<div class="panel-head"><h3>${t}</h3>${extra}</div>`;
   const btn = (act, label, cls = 'tone', data = '') => `<button class="btn ${cls}" data-act="${act}" ${data}>${label}</button>`;
 
+  const SLIDE_LAYOUTS = [
+    ['auto', 'Tự động'],
+    ['hero', 'Bìa mở đầu'],
+    ['split', '2 cột điểm nhấn'],
+    ['cards', 'Thẻ ngang'],
+    ['compare', 'Đối chiếu 2 cột'],
+    ['metric', 'Số liệu lớn'],
+    ['steps', 'Lộ trình bước']
+  ];
+  function resolveSlideLayout(s, i, total) {
+    const raw = String((s && s.layout) || 'auto').trim().toLowerCase();
+    if (['hero', 'split', 'cards', 'compare', 'metric', 'steps'].includes(raw)) return raw;
+    if (i === 0) return 'hero';
+    const k = String((s && s.kicker) || '').toLowerCase();
+    if (i === total - 1 || /bước|kế hoạch|lộ trình|pilot/.test(k)) return 'steps';
+    if (/bằng chứng|khảo sát|đo|số liệu/.test(k)) return 'metric';
+    if (/mvp|phạm vi|so sánh/.test(k)) return 'compare';
+    if (/ai|đòn bẩy|giải pháp|tính năng/.test(k)) return 'cards';
+    return ['split', 'cards', 'metric', 'compare', 'steps'][i % 5];
+  }
+  function parseSlideItems(body) {
+    const lines = String(body || '').split(/\r?\n/).map(x => x.trim()).filter(Boolean);
+    const paras = [];
+    const items = [];
+    lines.forEach(line => {
+      if (/^(?:[-•*]|\d+[.)])\s+/.test(line)) {
+        const clean = line.replace(/^(?:[-•*]|\d+[.)])\s+/, '');
+        const idx = clean.indexOf(':');
+        if (idx > 0 && idx <= 34 && clean.slice(idx + 1).trim()) {
+          items.push({ label: clean.slice(0, idx).trim(), text: clean.slice(idx + 1).trim() });
+        } else {
+          items.push({ label: '', text: clean });
+        }
+      } else {
+        paras.push(line);
+      }
+    });
+    return { paras, items };
+  }
+  function renderSlideLayoutBody(s, layout) {
+    const { paras, items } = parseSlideItems(s.body || '');
+    const hl = String(s.highlight || '').trim();
+    const listHtml = items.length
+      ? `<ul class="slide-list">${items.map(it => `<li>${it.label ? `<b>${esc(it.label)}:</b> ` : ''}${esc(it.text)}</li>`).join('')}</ul>`
+      : '';
+    const leadHtml = paras.map(p => `<p>${esc(p)}</p>`).join('');
+
+    if (layout === 'hero') {
+      const pills = items.slice(0, 3).map(it => `<div class="slide-pill">${it.label ? `<small>${esc(it.label)}</small>` : ''}<span>${esc(it.text)}</span></div>`).join('');
+      return `<div class="slide-main"><h3>${esc(s.title)}</h3>${leadHtml}${pills ? `<div class="slide-pills">${pills}</div>` : ''}${hl ? `<div class="slide-callout" style="margin-top:4px"><small>Trọng tâm</small><b>${esc(hl)}</b></div>` : ''}</div>`;
+    }
+    if (layout === 'cards') {
+      const cards = items.length ? items : paras.map(p => ({ label: '', text: p }));
+      return `<div class="slide-main"><h3>${esc(s.title)}</h3>${leadHtml && items.length ? leadHtml : ''}
+        <div class="slide-cards">${cards.slice(0, 4).map((it, n) => `<div class="slide-card"><span class="slide-card-no">${String(n + 1).padStart(2, '0')}</span>${it.label ? `<b>${esc(it.label)}</b>` : ''}<span>${esc(it.text)}</span></div>`).join('')}</div>
+        ${hl ? `<div class="slide-callout"><small>Điểm nhấn</small><b>${esc(hl)}</b></div>` : ''}</div>`;
+    }
+    if (layout === 'compare') {
+      const src = items.length >= 2 ? items : [{ label: 'Hiện trạng / Trọng tâm', text: paras[0] || s.body || '' }, { label: 'Hướng tiếp cận', text: paras[1] || hl || 'Tập trung kiểm chứng thực tế' }];
+      const mid = Math.ceil(src.length / 2);
+      const colA = src.slice(0, mid), colB = src.slice(mid);
+      const renderCol = (arr, accent, fallbackLbl) => `<div class="slide-col${accent ? ' accent' : ''}">${arr.map(it => `<small>${esc(it.label || fallbackLbl)}</small><b>${esc(it.text)}</b>`).join('')}</div>`;
+      return `<div class="slide-main"><h3>${esc(s.title)}</h3><div class="slide-compare">${renderCol(colA, false, 'Vế 1')}${renderCol(colB, true, 'Vế 2')}</div>${hl && items.length >= 2 ? `<div class="slide-callout"><small>Chốt phạm vi</small><b>${esc(hl)}</b></div>` : ''}</div>`;
+    }
+    if (layout === 'metric') {
+      const statVal = hl || (items[0] ? items[0].text : s.title);
+      return `<div class="slide-metric-grid">
+        <aside class="slide-stat"><small>${esc(s.kicker || 'Chỉ số chính')}</small><b>${esc(statVal)}</b></aside>
+        <div class="slide-main"><h3>${esc(s.title)}</h3><div class="slide-body-slot">${leadHtml}${listHtml}</div></div>
+      </div>`;
+    }
+    if (layout === 'steps') {
+      const steps = items.length ? items : paras.map(p => ({ label: '', text: p }));
+      return `<div class="slide-main"><h3>${esc(s.title)}</h3>${leadHtml && items.length ? leadHtml : ''}
+        <div class="slide-steps">${steps.slice(0, 4).map((it, n) => `<div class="slide-step"><span class="slide-step-no">${n + 1}</span>${it.label ? `<b>${esc(it.label)}</b>` : ''}<span>${esc(it.text)}</span></div>`).join('')}</div>
+        ${hl ? `<div class="slide-callout"><small>Mục tiêu</small><b>${esc(hl)}</b></div>` : ''}</div>`;
+    }
+    return `<div class="${hl ? 'slide-grid' : 'slide-main'}">
+      <div class="slide-main"><h3>${esc(s.title)}</h3><div class="slide-body-slot">${leadHtml}${listHtml}</div></div>
+      ${hl ? `<aside class="slide-callout"><small>Điểm nhấn</small><b>${esc(hl)}</b></aside>` : ''}
+    </div>`;
+  }
+  function renderSlideCard(s, i, total, slideTitle) {
+    const tone = STEPS[i % STEPS.length].hex;
+    const pctW = Math.round(((i + 1) / (total || 1)) * 100);
+    const layout = resolveSlideLayout(s, i, total);
+    return `<section class="slide is-${layout}" style="--s:${tone}">
+      <div class="slide-prog"><span style="width:${pctW}%"></span></div>
+      <div class="slide-top">
+        <span class="slide-kicker">${esc(s.kicker || ('Slide ' + (i + 1)))}</span>
+        <span class="slide-num">${String(i + 1).padStart(2, '0')} / ${String(total).padStart(2, '0')}</span>
+      </div>
+      ${renderSlideLayoutBody(s, layout)}
+      <div class="slide-foot"><span>${esc(slideTitle)}</span><span>${esc(STEPS[i % STEPS.length].name)}</span></div>
+    </section>`;
+  }
+  function renderSlideEditorBox() {
+    const p = S.pitch;
+    if (!(p.deckShown && p.deck && p.deck.length)) return '';
+    if (activeSlideIdx >= p.deck.length) activeSlideIdx = Math.max(0, p.deck.length - 1);
+    const curSlide = p.deck[activeSlideIdx];
+    const curLayout = String(curSlide.layout || 'auto');
+    const deckBadge = p.deckSource === 'llm'
+      ? '<span class="tag" style="--c:var(--green)">AI Gemini</span>'
+      : p.deckSource === 'fallback'
+        ? '<span class="tag">Từ dữ liệu bài toán</span>'
+        : '';
+    return `<div class="slide-editor" id="slideEditorBox">
+      <div class="row" style="justify-content:space-between;gap:8px">
+        <span style="font-size:13px;font-weight:500">Chỉnh slide ${activeSlideIdx + 1}/${p.deck.length} ${deckBadge}</span>
+        <div class="row" style="gap:6px">
+          <select data-bind="slideLayout" data-id="${activeSlideIdx}" aria-label="Dạng bố cục slide">${SLIDE_LAYOUTS.map(([val, lbl]) => `<option value="${val}" ${curLayout === val ? 'selected' : ''}>Dạng: ${lbl}</option>`).join('')}</select>
+          ${p.deck.length < 10 ? btn('addSlide', '+ Thêm slide', 'soft small') : ''}
+          ${p.deck.length > 1 ? btn('delSlide', 'Xóa slide này', 'danger small') : ''}
+        </div>
+      </div>
+      <div class="row" style="gap:8px">
+        <input style="flex:1 1 160px" data-bind="slideKicker" data-id="${activeSlideIdx}" value="${esc(curSlide.kicker || '')}" placeholder="Nhãn slide">
+        <input style="flex:2 1 240px" data-bind="slideTitle" data-id="${activeSlideIdx}" value="${esc(curSlide.title || '')}" placeholder="Tiêu đề slide">
+      </div>
+      <textarea rows="3" data-bind="slideBody" data-id="${activeSlideIdx}" placeholder="Nội dung slide (dùng '- Nhãn: nội dung' để chia thẻ/bước)">${esc(curSlide.body || '')}</textarea>
+      <input data-bind="slideHighlight" data-id="${activeSlideIdx}" value="${esc(curSlide.highlight || '')}" placeholder="Điểm nhấn / số liệu chính (tùy chọn)">
+    </div>`;
+  }
+
   const views = {
     overview() {
       const v = progress();
@@ -585,64 +744,43 @@
       const hasSurveys = list.length > 0;
       const curDeckSlug = activeDeckSurveySlug();
       const selSurvey = list.find(x => x.slug === curDeckSlug);
-      const deckSourceBox = `<div class="deck-source">
-        <div class="row" style="justify-content:space-between;gap:8px">
-          <label for="deckSurveySel" style="font-size:13px;font-weight:500">Chọn khảo sát đưa vào slide</label>
-          ${hasSurveys ? `<select id="deckSurveySel" data-bind="deckSurveySlug" aria-label="Chọn khảo sát đưa vào slide">
-            ${list.map(s => `<option value="${esc(s.slug)}" ${curDeckSlug === s.slug ? 'selected' : ''}>${esc(s.title)} (${+s.response_count || 0} phản hồi)</option>`).join('')}
-            <option value="__none__" ${curDeckSlug === '__none__' ? 'selected' : ''}>Chỉ dùng Product thinking (không kèm khảo sát)</option>
-          </select>` : ''}
-        </div>
-        <div class="muted" style="font-size:13px">${hasSurveys
-          ? (selSurvey ? `Sẽ tổng hợp từ "${esc(selSurvey.title)}" (${+selSurvey.response_count || 0} phản hồi) cùng Product thinking.` : 'Chỉ dùng dữ liệu từ Product thinking & Scorecard.')
-          : 'Chưa có khảo sát nào được lưu. Lưu một khảo sát ở trên để chọn đưa số liệu thật vào slide, hoặc bấm Tạo slide theo Product thinking.'}</div>
-      </div>`;
+      const deckSourceBox = hasSurveys ? `<div class="deck-source">
+        <label for="deckSurveySel" style="font-size:13px;font-weight:500">Dữ liệu khảo sát đưa vào slide</label>
+        <select id="deckSurveySel" data-bind="deckSurveySlug" aria-label="Chọn khảo sát đưa vào slide">
+          ${list.map(s => `<option value="${esc(s.slug)}" ${curDeckSlug === s.slug ? 'selected' : ''}>${esc(s.title)} (${+s.response_count || 0} phản hồi)</option>`).join('')}
+          <option value="__none__" ${curDeckSlug === '__none__' ? 'selected' : ''}>Chỉ dùng Product thinking</option>
+        </select>
+      </div>` : '';
       const deckVisible = !!(p.deckShown && p.deck && p.deck.length);
       if (deckVisible && activeSlideIdx >= p.deck.length) activeSlideIdx = Math.max(0, p.deck.length - 1);
-      const curSlide = deckVisible ? p.deck[activeSlideIdx] : null;
-      const deckBadge = p.deckSource === 'llm'
-        ? '<span class="tag" style="--c:var(--green)">AI Gemini</span>'
-        : p.deckSource === 'fallback'
-          ? '<span class="tag">Từ dữ liệu bài toán</span>'
-          : '';
-      const deck = deckVisible ? `<div class="deck" tabindex="0">${p.deck.map((s, i) => `<section class="slide" style="--s:${STEPS[i % STEPS.length].hex}">${s.kicker ? `<span class="slide-kicker">${esc(s.kicker)}</span>` : ''}<h3>${esc(s.title)}</h3><p>${esc(s.body)}</p>${s.highlight ? `<span class="slide-hl" style="--s:${STEPS[i % STEPS.length].hex}">${esc(s.highlight)}</span>` : ''}</section>`).join('')}</div>
-        <div class="slide-editor">
-          <div class="row" style="justify-content:space-between;gap:8px">
-            <span style="font-size:13px;font-weight:500">Chỉnh nhanh slide ${activeSlideIdx + 1}/${p.deck.length} ${deckBadge}</span>
-            <div class="row" style="gap:6px">
-              <select data-bind="activeSlidePick" aria-label="Chọn slide để sửa">${p.deck.map((s, i) => `<option value="${i}" ${i === activeSlideIdx ? 'selected' : ''}>Slide ${i + 1}: ${esc((s.title || '').slice(0, 32))}</option>`).join('')}</select>
-              ${p.deck.length < 10 ? btn('addSlide', '+ Thêm slide', 'soft small') : ''}
-              ${p.deck.length > 1 ? btn('delSlide', 'Xóa slide này', 'danger small') : ''}
-            </div>
-          </div>
-          <div class="row" style="gap:8px">
-            <input style="flex:1 1 160px" data-bind="slideKicker" data-id="${activeSlideIdx}" value="${esc(curSlide.kicker || '')}" placeholder="Nhãn slide (vd: Bằng chứng)">
-            <input style="flex:2 1 240px" data-bind="slideTitle" data-id="${activeSlideIdx}" value="${esc(curSlide.title || '')}" placeholder="Tiêu đề slide">
-          </div>
-          <textarea rows="2" data-bind="slideBody" data-id="${activeSlideIdx}" placeholder="Nội dung súc tích (tối đa ~45 từ)">${esc(curSlide.body || '')}</textarea>
-          <input data-bind="slideHighlight" data-id="${activeSlideIdx}" value="${esc(curSlide.highlight || '')}" placeholder="Điểm nhấn số liệu / ghi chú ngắn (tùy chọn)">
+      const slideTitle = (p.deckTitle || S.meta.name || 'Pitching Deck').trim();
+      const deck = deckVisible ? `<div class="deck" tabindex="0">${p.deck.map((s, i) => renderSlideCard(s, i, p.deck.length, slideTitle)).join('')}</div>
+        ${renderSlideEditorBox()}
+        <div class="slide-nav">
+          <div class="row" style="gap:6px">${btn('slide', '← Trang trước', 'soft small', 'data-n="-1"')}${btn('slide', 'Trang sau →', 'soft small', 'data-n="1"')}${btn('fullDeck', 'Toàn màn hình', 'soft small')}</div>
+          <div class="row" style="gap:8px">${btn('saveDeck', p.deckSlug ? 'Lưu cập nhật' : 'Lưu & lấy link', 'primary small')}${btn('copy', 'Sao chép HTML', 'soft small', 'data-id="html"')}${btn('download', 'Tải HTML', 'soft small')}</div>
         </div>
-        <div class="row" style="margin-top:10px">${btn('slide', 'Trang trước', 'soft small', 'data-n="-1"')}${btn('slide', 'Trang sau', 'soft small', 'data-n="1"')}${btn('saveDeck', p.deckSlug ? 'Lưu cập nhật slide' : 'Lưu & lấy link slide', 'primary small')}${btn('copy', 'Sao chép HTML', 'soft small', 'data-id="html"')}${btn('download', 'Tải file HTML', 'soft small')}</div>
-        ${p.deckSlug ? `<div class="pub-box" style="margin-top:10px"><div><strong>Link trình chiếu công khai:</strong> <code>/pitch?slug=${esc(p.deckSlug)}</code></div><div class="row"><input readonly value="${esc(location.origin + '/pitch?slug=' + p.deckSlug)}" aria-label="Link slide">${btn('copyDeckLink', 'Sao chép link', 'tone small')}<a class="btn soft small" style="text-decoration:none" href="/pitch?slug=${encodeURIComponent(p.deckSlug)}" target="_blank" rel="noopener">Mở trang trình chiếu</a></div></div>` : ''}`
-        : '<p class="muted">Chưa tạo slide. Chọn dữ liệu khảo sát ở trên rồi bấm “Tạo slide” để tạo tối đa 10 slide.</p>';
+        ${p.deckSlug ? `<div class="pub-box" style="margin-top:12px"><div class="row"><input readonly value="${esc(location.origin + '/pitch?slug=' + p.deckSlug)}" aria-label="Link slide">${btn('copyDeckLink', 'Sao chép link', 'tone small')}<a class="btn soft small" style="text-decoration:none" href="/pitch?slug=${encodeURIComponent(p.deckSlug)}" target="_blank" rel="noopener">Mở</a></div></div>` : ''}`
+        : '<div class="empty-note">Chưa có slide. Bấm <b>Tạo slide</b> để bắt đầu.</div>';
       const mainAd = Array.isArray(p.adPosts) && p.adPosts.length ? p.adPosts[0] : null;
       const linkSurveySlug = activeTileSlug();
-      const adsCard = `<div class="panel">${panelHead('Bài quảng cáo', btn('ads', mainAd || p.ads ? 'Tạo lại' : 'Tạo', 'tone small'))}${mainAd
+      const adsCard = `<div class="panel">${panelHead('Bài quảng cáo', btn('ads', mainAd || p.ads ? 'Tạo lại' : 'Tạo', 'primary small'))}${mainAd
         ? `<div class="stack" style="gap:10px">
-            ${Array.isArray(mainAd.placeholders) && mainAd.placeholders.length ? `<div class="ph-row"><span class="muted">Placeholder:</span>${mainAd.placeholders.map(ph => `<span class="tag">${esc(ph)}</span>`).join('')}</div>` : ''}
-            <textarea class="script-edit" data-bind="adFull" data-id="0" aria-label="Nội dung bài quảng cáo dùng chung">${esc(adFullText(mainAd))}</textarea>
+            ${Array.isArray(mainAd.placeholders) && mainAd.placeholders.length ? `<div class="ph-row">${mainAd.placeholders.map(ph => `<span class="tag">${esc(ph)}</span>`).join('')}</div>` : ''}
+            <textarea class="script-edit" data-bind="adFull" data-id="0" aria-label="Nội dung bài quảng cáo">${esc(adFullText(mainAd))}</textarea>
             <div class="row" style="gap:8px">${linkSurveySlug ? btn('insertSurveyInAd', 'Chèn link khảo sát', 'soft small', 'data-id="0"') : ''}${btn('copyAd', 'Sao chép', 'soft small', 'data-id="0"')}</div>
+            <p class="muted" style="font-size:13px">Điền các phần còn thiếu trong ngoặc [...] trước khi sao chép và đăng bài lên diễn đàn.</p>
           </div>`
         : p.ads
-          ? `<textarea class="script-edit" data-bind="pitchAdsPlain" aria-label="Nội dung bài quảng cáo">${esc(p.ads)}</textarea><p style="margin-top:10px">${btn('copy', 'Sao chép', 'soft small', 'data-id="ads"')}</p>`
-          : '<p class="muted">Một bài giới thiệu dùng chung kèm placeholder để bạn điền link và copy đăng qua các kênh.</p>'}</div>`;
+          ? `<textarea class="script-edit" data-bind="pitchAdsPlain" aria-label="Nội dung bài quảng cáo">${esc(p.ads)}</textarea><p style="margin-top:10px">${btn('copy', 'Sao chép', 'soft small', 'data-id="ads"')}</p><p class="muted" style="font-size:13px;margin-top:6px">Điền các phần còn thiếu trong ngoặc [...] trước khi sao chép và đăng bài lên diễn đàn.</p>`
+          : '<div class="empty-note">Bấm <b>Tạo</b> để soạn bài đăng kèm placeholder.</div>'}</div>`;
       const topActions = hasSurveys
-        ? `<div class="row" style="gap:8px">${btn('reloadSurveys', 'Tải lại', 'soft small')}${btn('openSelectedEdit', 'Xem khảo sát', 'soft small')}${btn('openSelectedStats', 'Dashboard', 'soft small')}${btn('copySelectedLink', 'Publish link', 'soft small')}</div>`
-        : `<div class="row" style="gap:8px">${btn('reloadSurveys', 'Tải lại', 'soft small')}${btn('openCreateSurvey', 'Tạo khảo sát', 'primary small')}</div>`;
-      const bottomBar = hasSurveys ? `<div class="survey-bottom">${btn('openCreateSurvey', 'Tạo khảo sát', 'primary small')}</div>` : '';
+        ? `<div class="row" style="gap:6px">${btn('openSelectedEdit', 'Xem khảo sát', 'tone small')}${btn('openSelectedStats', 'Dashboard', 'soft small')}${btn('copySelectedLink', 'Publish link', 'soft small')}${btn('reloadSurveys', 'Làm mới', 'ghost small')}</div>`
+        : `<div class="row" style="gap:6px">${btn('reloadSurveys', 'Làm mới', 'ghost small')}${btn('openCreateSurvey', 'Tạo khảo sát', 'primary small')}</div>`;
+      const bottomBar = hasSurveys ? `<div class="survey-bottom">${btn('openCreateSurvey', '+ Tạo khảo sát', 'primary small')}</div>` : '';
       const hasDeck = !!(p.deck && p.deck.length) || !!p.deckSlug;
-      const deckActs = `<div class="row">${deckVisible ? btn('hideDeck', 'Thu gọn slide', 'soft small') : (hasDeck ? btn('showDeck', 'Mở slide', 'soft small') : '')}${hasDeck ? btn('clearDeck', 'Xóa slide', 'danger small') : ''}${btn('deck', hasDeck ? 'Tạo lại slide' : 'Tạo slide', 'tone small')}</div>`;
-      return head(2, 'Thu bằng chứng trước, kể chuyện sau. Dashboard tự dựng từ câu trả lời.') + `<div class="stack">
+      const deckActs = `<div class="row" style="gap:6px">${deckVisible ? btn('hideDeck', 'Thu gọn slide', 'soft small') : (hasDeck ? btn('showDeck', 'Mở slide', 'soft small') : '')}${hasDeck ? btn('clearDeck', 'Xóa slide', 'danger small') : ''}${btn('deck', hasDeck ? 'Tạo lại slide' : 'Tạo slide', 'primary small')}</div>`;
+      return head(2, 'Thu bằng chứng trước, kể chuyện sau.') + `<div class="stack">
         <div class="panel survey-panel">${panelHead('Khảo sát', topActions)}${publishedPanel()}${bottomBar}</div>
         <div class="panel">${panelHead('Pitching HTML', deckActs)}${deckSourceBox}${deck}</div>
         ${adsCard}</div>`;
@@ -787,15 +925,14 @@
     const ctx = pitchCtx();
     return `<div class="role-pick">
       <div class="row" style="justify-content:space-between">
-        <span><b>Ý tưởng nhóm (từ Product thinking):</b> ${esc(ctx.project_name)}</span>
+        <span><b>${esc(ctx.project_name)}</b></span>
         ${btn('tab', 'Sửa ở Product thinking', 'soft small', 'data-id="product"')}
       </div>
-      <div class="muted">${esc(ctx.problem || ctx.overview || 'Chưa điền Problem ở tab Product thinking — AI sẽ dùng tên dự án và chat nhóm để gợi ý.')}</div>
-      <span class="muted" style="margin-top:4px">Chọn 1 đối tượng nhận form (1 Form = 1 Vai chính)</span>
+      ${ctx.problem || ctx.overview ? `<div class="muted">${esc(ctx.problem || ctx.overview)}</div>` : ''}
+      <span class="muted" style="margin-top:2px">Đối tượng nhận form</span>
       <div class="row">${roleOptions.map(r => `<button type="button" class="btn small ${curRole === r ? 'tone' : 'soft'}" data-act="pickRole" data-id="${esc(r)}">${esc(r)}</button>`).join('')}</div>
-      <input data-bind="targetRole" value="${esc(curRole)}" placeholder="Hoặc nhập 1 đối tượng cụ thể (vd: Học viên lớp L3B, Người dùng thử)">
-      <div class="row" style="justify-content:space-between;gap:8px;margin-top:4px">
-        <span class="muted">AI lấy ý tưởng từ Product thinking + đối tượng trên để gợi ý sẵn câu hỏi.</span>
+      <input data-bind="targetRole" value="${esc(curRole)}" placeholder="Hoặc nhập đối tượng khác">
+      <div class="row" style="justify-content:flex-end;margin-top:4px">
         ${btn('form', target.draftSource ? 'AI gợi ý lại' : 'AI gợi ý câu hỏi', 'tone small')}
       </div>
     </div>`;
@@ -829,12 +966,12 @@
     const sections = ensureSections(target);
     const questions = target.form || [];
     const sourceBadge = isEdit
-      ? `<span class="tag">Đang sửa form: /survey?slug=${esc(target.slug)}</span>`
+      ? '<span class="tag">Đang sửa</span>'
       : target.draftSource === 'llm'
-        ? '<span class="tag" style="--c:var(--green)">AI Gemini gợi ý theo Product thinking</span>'
+        ? '<span class="tag" style="--c:var(--green)">AI Gemini</span>'
         : target.draftSource === 'fallback'
-          ? '<span class="tag">Gợi ý theo ngữ cảnh dự phòng</span>'
-          : '<span class="tag">Bản nháp — bấm “AI gợi ý câu hỏi” để tạo theo ý mới</span>';
+          ? '<span class="tag">Theo Product thinking</span>'
+          : '<span class="tag">Bản nháp</span>';
     const allCollapsed = sections.every(s => collapsedSecs.has(secKey(target, s.id)));
     const secNav = `<div class="sec-nav">
       <div class="row" style="gap:6px">${sections.map((s, si) => {
@@ -920,12 +1057,11 @@
       <button type="button" class="gf-rail-btn" data-act="form" title="AI gợi ý câu hỏi theo đối tượng & Product thinking" aria-label="AI gợi ý câu hỏi"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 5.2L19 10l-5.1 1.8L12 17l-1.9-5.2L5 10l5.1-1.8z"/></svg></button>
     </aside>`;
 
-    const footerBtns = isEdit
-      ? `${btn('addSec', '+ Thêm section', 'soft small')}${btn('addQ', '+ Thêm câu hỏi', 'soft small')}${btn('saveEdit', 'Lưu', 'primary small')}`
-      : `${btn('addSec', '+ Thêm section', 'soft small')}${btn('addQ', '+ Thêm câu hỏi', 'soft small')}${btn('publishSurvey', 'Lưu', 'primary small')}`;
+    const leftFootBtns = `${btn('addSec', '+ Thêm section', 'soft small')}${btn('addQ', '+ Thêm câu hỏi', 'soft small')}`;
+    const saveFootBtn = isEdit ? btn('saveEdit', 'Lưu thay đổi', 'primary') : btn('publishSurvey', 'Lưu khảo sát', 'primary');
     const showSlug = isEdit && (lastSavedSlug === target.slug || target.slug);
     const linkBox = isEdit && showSlug && lastSavedSlug === target.slug
-      ? `<div class="pub-box"><div><strong>Đã lưu &amp; có link khảo sát:</strong> <code>/survey?slug=${esc(target.slug)}</code></div><div class="row"><input readonly value="${esc(location.origin + '/survey?slug=' + target.slug)}" aria-label="Link công khai">${btn('copySlug', 'Sao chép link', 'tone small', `data-id="${esc(target.slug)}"`)}<a class="btn soft small" style="text-decoration:none" href="/survey?slug=${encodeURIComponent(target.slug)}" target="_blank" rel="noopener">Mở trang khảo sát</a></div></div>`
+      ? `<div class="pub-box"><div class="row"><input readonly value="${esc(location.origin + '/survey?slug=' + target.slug)}" aria-label="Link khảo sát">${btn('copySlug', 'Sao chép link', 'tone small', `data-id="${esc(target.slug)}"`)}<a class="btn soft small" style="text-decoration:none" href="/survey?slug=${encodeURIComponent(target.slug)}" target="_blank" rel="noopener">Mở</a></div></div>`
       : '';
 
     return `<div class="stack" style="gap:10px;margin-top:10px">
@@ -941,7 +1077,7 @@
         </div>
         ${rail}
       </div>
-      <div class="gf-foot-bar"><div class="row">${footerBtns}</div></div>
+      <div class="gf-foot-bar"><div class="row" style="gap:8px">${leftFootBtns}</div>${saveFootBtn}</div>
       ${linkBox}
     </div>`;
   }
@@ -949,10 +1085,13 @@
   const CHART_COLORS = ['#ff8a1f', '#0a9cf0', '#14b86a', '#4d5bf0', '#a24ce8', '#ff4d5e'];
   function pitchCtx() {
     const t = activeEditorTarget();
-    const role = (t.targetRole || S.pitch.targetRole || '').trim();
+    const list = Array.isArray(surveysCache) ? surveysCache : [];
+    const selSlug = activeDeckSurveySlug();
+    const selSurvey = selSlug && selSlug !== '__none__' ? list.find(x => x.slug === selSlug) : null;
+    const role = (t.targetRole || S.pitch.targetRole || (selSurvey && selSurvey.target_role) || '').trim();
     const chatNotes = (S.chat || []).filter(m => m.who !== 'agent').slice(-4).map(m => m.text).join(' | ');
     return {
-      project_name: (sideMode === 'survey' && editSurveyTarget && editSurveyTarget.project_name) || S.meta.name || 'Sản phẩm mới',
+      project_name: (sideMode === 'survey' && editSurveyTarget && editSurveyTarget.project_name) || (S.meta.name || '').trim() || (selSurvey && selSurvey.project_name) || 'Sản phẩm AI',
       target_role: role,
       persona: score('persona') || role,
       problem: score('problem'),
@@ -1041,15 +1180,15 @@
   }
   function publishedPanel() {
     const list = surveysCache;
-    if (surveysLoading && !list) return '<div class="survey-box"><p class="muted">Đang tải danh sách khảo sát…</p></div>';
-    if (surveysError) return `<div class="survey-box"><p class="muted">${esc(surveysError)}</p></div>`;
-    if (!list || !list.length) return '<div class="survey-box survey-empty"><p class="muted">Chưa có khảo sát nào được tạo. Bấm “Tạo khảo sát” để bắt đầu.</p></div>';
+    if (surveysLoading && !list) return '<div class="empty-note">Đang tải danh sách khảo sát…</div>';
+    if (surveysError) return `<div class="empty-note">${esc(surveysError)}</div>`;
+    if (!list || !list.length) return '<div class="empty-note">Chưa có khảo sát nào. Bấm <b>Tạo khảo sát</b> để bắt đầu.</div>';
     const curSel = activeTileSlug();
     return `<div class="survey-grid">${list.map(s => `<button type="button" class="survey-tile${(sideSlug || curSel) === s.slug ? ' on' : ''}" data-act="openSurveySide" data-id="${esc(s.slug)}">
       <span class="survey-tile-title">${esc(s.title)}</span>
       <span class="survey-tile-meta">
         ${s.target_role ? `<span class="tag" style="--c:var(--orange)">${esc(s.target_role)}</span>` : ''}
-        <span class="muted"><b data-resp-count="${esc(s.slug)}">${+s.response_count || 0}</b> phản hồi</span>
+        <span class="tag" style="--c:var(--ink)"><b data-resp-count="${esc(s.slug)}">${+s.response_count || 0}</b> phản hồi</span>
       </span>
     </button>`).join('')}</div>`;
   }
@@ -1189,8 +1328,10 @@
     return selector + `<div class="kpis" style="margin:0 0 8px"><div class="kpi" style="--c:var(--orange)"><b>${data.total_responses}</b><span>Tổng phản hồi ${sampleNote}</span></div></div>` + charts;
   }
   function deckHTML() {
-    const slides = (S.pitch.deck || []).map((s, i) => `<section style="--s:${STEPS[i % STEPS.length].hex}">${s.kicker ? `<small>${esc(s.kicker)}</small>` : ''}<h1>${esc(s.title)}</h1><p>${esc(s.body)}</p>${s.highlight ? `<div class="hl">${esc(s.highlight)}</div>` : ''}</section>`).join('\n');
-    return `<!DOCTYPE html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${esc(S.pitch.deckTitle || S.meta.name)}</title><style>*{box-sizing:border-box;font-style:normal}body{margin:0;font-family:"Familjen Grotesk","Be Vietnam Pro",Arial,sans-serif;color:#121a33;background:#fff;scroll-snap-type:y mandatory;overflow-y:auto;height:100vh}section{height:100vh;scroll-snap-align:start;display:flex;flex-direction:column;justify-content:center;gap:14px;padding:8vw;border-bottom:6px solid var(--s)}small{font-size:13px;letter-spacing:.14em;text-transform:uppercase;color:#626d8c}h1{font-weight:400;font-size:clamp(30px,5vw,60px);margin:0;letter-spacing:-0.03em}p{font-size:clamp(17px,2vw,26px);font-weight:300;line-height:1.6;max-width:32em;white-space:pre-wrap;margin:0}.hl{align-self:flex-start;background:#eef2ff;padding:6px 14px;border-radius:999px;font-size:14px}</style></head><body>\n${slides}\n</body></html>`;
+    const list = S.pitch.deck || [];
+    const title = (S.pitch.deckTitle || S.meta.name || 'Pitching Deck').trim();
+    const slides = list.map((s, i) => renderSlideCard(s, i, list.length, title)).join('\n');
+    return `<!DOCTYPE html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${esc(title)}</title><style>*{box-sizing:border-box;font-style:normal}:root{--ink:#121a33;--mute:#626d8c;--line:#e7ebf5;--soft:#f4f6fc}body{margin:0;font-family:"Be Vietnam Pro",system-ui,Arial,sans-serif;color:var(--ink);background:#fff;scroll-snap-type:y mandatory;overflow-y:auto;height:100vh}.slide{height:100vh;scroll-snap-align:start;display:flex;flex-direction:column;justify-content:space-between;gap:24px;padding:clamp(28px,6vw,72px);background:radial-gradient(circle at 95% 6%,color-mix(in srgb,var(--s) 13%,#fff),#fff 56%);border-bottom:1px solid var(--line)}.slide.is-hero{background:radial-gradient(circle at 88% 12%,color-mix(in srgb,var(--s) 24%,#fff),#fff 64%)}.slide-prog{height:4px;background:var(--line);border-radius:99px;overflow:hidden}.slide-prog>span{display:block;height:100%;background:var(--s)}.slide-top{display:flex;justify-content:space-between;align-items:center}.slide-kicker{display:inline-flex;align-items:center;gap:8px;font-size:13px;letter-spacing:.08em;text-transform:uppercase;font-weight:500;background:color-mix(in srgb,var(--s) 14%,#fff);padding:5px 14px;border-radius:99px}.slide-kicker::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--s)}.slide-num{font-size:14px;color:var(--mute);font-variant-numeric:tabular-nums}.slide-grid{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(240px,.85fr);gap:32px;align-items:center}.slide-main{display:grid;gap:16px}h3{font-weight:500;font-size:clamp(26px,4vw,48px);margin:0;letter-spacing:-0.025em;line-height:1.15}.is-hero h3{font-size:clamp(32px,4.8vw,56px)}p{font-size:clamp(16px,1.7vw,22px);color:#475569;line-height:1.6;max-width:48ch;margin:0}.slide-list{margin:0;padding:0;list-style:none;display:grid;gap:12px}.slide-list li{position:relative;padding-left:22px;font-size:clamp(16px,1.7vw,22px);line-height:1.55}.slide-list li::before{content:"";position:absolute;left:0;top:.62em;width:8px;height:8px;border-radius:50%;background:var(--s)}.slide-callout{border-left:4px solid var(--s);background:color-mix(in srgb,var(--s) 8%,#fff);border-radius:0 16px 16px 0;padding:20px 24px;display:grid;gap:6px}.slide-callout small,.slide-stat small,.slide-col small,.slide-pill small{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--mute)}.slide-callout b,.slide-stat b{font-size:clamp(18px,2vw,26px);font-weight:500;line-height:1.35}.slide-pills{display:flex;flex-wrap:wrap;gap:12px}.slide-pill{background:#fff;border:1px solid var(--line);border-radius:14px;padding:12px 16px;font-size:16px;display:grid;gap:3px}.slide-cards,.slide-steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px}.slide-card,.slide-step{background:#fff;border:1px solid var(--line);border-radius:16px;padding:18px;display:grid;gap:8px;align-content:start}.slide-card{border-top:4px solid var(--s)}.slide-card-no{font-size:12px;font-weight:600;color:var(--s)}.slide-step-no{width:30px;height:30px;border-radius:50%;background:var(--s);color:#fff;font-size:14px;font-weight:600;display:grid;place-items:center}.slide-card b,.slide-step b{font-size:18px;font-weight:500}.slide-card span,.slide-step span{font-size:16px;color:var(--mute);line-height:1.5}.slide-compare{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}.slide-col{border:1px solid var(--line);border-radius:16px;padding:22px;background:var(--soft);display:grid;gap:8px;align-content:start}.slide-col.accent{background:color-mix(in srgb,var(--s) 8%,#fff);border-color:color-mix(in srgb,var(--s) 35%,var(--line))}.slide-col b{font-size:19px;font-weight:500;line-height:1.45}.slide-metric-grid{display:grid;grid-template-columns:minmax(220px,.8fr) minmax(0,1.4fr);gap:28px;align-items:center}.slide-stat{background:color-mix(in srgb,var(--s) 10%,#fff);border:1px solid color-mix(in srgb,var(--s) 35%,var(--line));border-radius:18px;padding:26px;display:grid;gap:8px}.slide-stat b{font-size:clamp(26px,3.2vw,42px)}.slide-foot{display:flex;justify-content:space-between;font-size:13px;color:var(--mute);border-top:1px solid var(--line);padding-top:14px}@media(max-width:760px){.slide-grid,.slide-compare,.slide-metric-grid{grid-template-columns:1fr}}</style></head><body>\n${slides}\n<script>const s=[...document.querySelectorAll('.slide')];let i=0;document.addEventListener('keydown',e=>{if(['ArrowRight','ArrowDown',' '].includes(e.key)){e.preventDefault();i=Math.min(s.length-1,i+1);s[i]?.scrollIntoView({behavior:'smooth'});}else if(['ArrowLeft','ArrowUp'].includes(e.key)){e.preventDefault();i=Math.max(0,i-1);s[i]?.scrollIntoView({behavior:'smooth'});}});</script></body></html>`;
   }
 
   /* ---------- Hành động của agent ---------- */
@@ -1414,7 +1555,8 @@
           kicker: String(s.kicker || '').trim(),
           title: String(s.title || '').trim() || `Slide ${i + 1}`,
           body: String(s.body || '').trim() || 'Cần bổ sung nội dung.',
-          highlight: String(s.highlight || '').trim()
+          highlight: String(s.highlight || '').trim(),
+          layout: s.layout || 'auto'
         })),
         script: '',
         ads: (S.pitch.adPosts || []).map((ad, i) => ({
@@ -1520,6 +1662,36 @@ nature là bản chất problem: "behavior" nếu là problem hành vi (duy trì
   function renderNav() {
     $('#nav').innerHTML = TABS.map(t => `<button class="nav-item ${t.id === tab ? 'on' : ''}" style="--c:${t.hex}" data-act="tab" data-id="${t.id}" aria-current="${t.id === tab}"><i></i><span class="long">${t.name}</span><span class="short">${t.short}</span></button>`).join('');
   }
+  let deckScrollTimer = null, ignoreDeckScrollUntil = 0;
+  function syncSlideEditorBox() {
+    const box = $('#slideEditorBox', view);
+    if (box) box.outerHTML = renderSlideEditorBox();
+  }
+  function bindDeckScroll() {
+    const d = $('.deck', view);
+    const list = S.pitch.deck || [];
+    if (!d || !list.length) return;
+    const step = (d.clientWidth || 0) + 12;
+    if (step > 12 && activeSlideIdx > 0) {
+      ignoreDeckScrollUntil = Date.now() + 120;
+      d.scrollLeft = activeSlideIdx * step;
+    }
+    const updateFromScroll = () => {
+      if (Date.now() < ignoreDeckScrollUntil) return;
+      const curStep = (d.clientWidth || 0) + 12;
+      if (curStep <= 12) return;
+      const nextIdx = Math.max(0, Math.min(list.length - 1, Math.round(d.scrollLeft / curStep)));
+      if (nextIdx !== activeSlideIdx) {
+        activeSlideIdx = nextIdx;
+        syncSlideEditorBox();
+      }
+    };
+    d.addEventListener('scroll', () => {
+      clearTimeout(deckScrollTimer);
+      deckScrollTimer = setTimeout(updateFromScroll, 65);
+    }, { passive: true });
+    d.addEventListener('scrollend', updateFromScroll, { passive: true });
+  }
   function render() {
     const t = TABS.find(x => x.id === tab);
     view.style.setProperty('--c', t.hex);
@@ -1528,7 +1700,7 @@ nature là bản chất problem: "behavior" nếu là problem hành vi (duy trì
     if (desktopOverview) { overlay.innerHTML = views.overview(); view.innerHTML = ''; }
     else { view.innerHTML = views[tab](); overlay.innerHTML = ''; }
     if (tab === 'product') { $('#chatSlot').append(chat); renderChat(); }
-    if (tab === 'pitching') { loadPublishedSurveys(); renderSidePanel(); }
+    if (tab === 'pitching') { loadPublishedSurveys(); renderSidePanel(); bindDeckScroll(); }
   }
   function layout(animate) {
     const over = tab === 'overview', isMobile = mobile.matches;
@@ -1694,13 +1866,12 @@ nature là bản chất problem: "behavior" nếu là problem hành vi (duy trì
       sidePanel.innerHTML = `<div class="side-head">
         <div style="min-width:0;flex:1 1 220px">
           <h3>Tạo khảo sát mới</h3>
-          <div class="muted" style="font-size:13px;margin-top:4px">Chọn đối tượng từ Product thinking, AI gợi ý sẵn rồi chỉnh theo kiểu Google Forms và bấm Lưu.</div>
         </div>
-        <div class="row" style="gap:6px">${btn('form', p.draftSource ? 'AI gợi ý lại' : 'AI gợi ý câu hỏi', 'tone small')}${btn('closeSurveySide', 'Đóng', 'soft small')}</div>
+        <div class="row" style="gap:6px">${btn('form', p.draftSource ? 'AI gợi ý lại' : 'AI gợi ý câu hỏi', 'tone small')}${btn('publishSurvey', 'Lưu', 'primary small')}${btn('closeSurveySide', 'Đóng', 'soft small')}</div>
       </div>
       <div class="side-body">
         ${renderRolePick(p)}
-        ${p.form ? renderSurveyEditor(p, false) : '<p class="muted">Chọn đối tượng ở trên rồi bấm “AI gợi ý câu hỏi”.</p>'}
+        ${p.form ? renderSurveyEditor(p, false) : '<div class="empty-note">Chọn đối tượng rồi bấm <b>AI gợi ý câu hỏi</b>.</div>'}
       </div>`;
       const newBody = $('.side-body', sidePanel);
       if (newBody && sy) newBody.scrollTop = sy;
@@ -1723,13 +1894,13 @@ nature là bản chất problem: "behavior" nếu là problem hành vi (duy trì
       bodyHtml = `${renderRolePick(editSurveyTarget)}${renderSurveyEditor(editSurveyTarget, true)}`;
     } else if (sideTab === 'stats') {
       bodyHtml = `<div class="panel">${panelHead('Dashboard', `<div class="row">${dashToggle}${btn('seed', 'Thêm 8 phản hồi mẫu', 'soft small')}</div>`)}<div id="dashBody">${dashboard()}</div></div>
-        <div class="panel">${panelHead('AI overview từ form', hasResp ? btn('summary', S.pitch.overview ? 'Phân tích lại' : 'Phân tích phản hồi', 'tone small') : '')}${S.pitch.overview ? `<div class="prose">${esc(S.pitch.overview)}</div>` : `<p class="muted">${hasResp ? 'Bấm phân tích để agent tóm tắt tín hiệu và việc nên làm tiếp.' : 'Cần ít nhất một phản hồi.'}</p>`}</div>`;
+        <div class="panel">${panelHead('AI overview từ form', hasResp ? btn('summary', S.pitch.overview ? 'Phân tích lại' : 'Phân tích phản hồi', 'tone small') : '')}${S.pitch.overview ? `<div class="prose">${esc(S.pitch.overview)}</div>` : `<div class="empty-note">${hasResp ? 'Bấm phân tích để tóm tắt tín hiệu.' : 'Cần ít nhất một phản hồi.'}</div>`}</div>`;
     } else {
       const rows = activeSurveyDetail && activeSurveyDetail.slug === sideSlug ? activeSurveyDetail.responses : null;
       bodyHtml = !rows
-        ? '<p class="muted">Đang tải phản hồi…</p>'
+        ? '<p class="muted">Đang tải…</p>'
         : !rows.length
-          ? '<p class="muted">Chưa có phản hồi nào cho khảo sát này. Sao chép link gửi thử hoặc vào tab Dữ liệu để thêm dữ liệu mẫu.</p>'
+          ? '<div class="empty-note">Chưa có phản hồi nào.</div>'
           : `<div class="resp-drawer">${rows.map(r => `<div class="resp-item"><div class="row" style="justify-content:space-between"><strong>${esc(r.respondent_role || editSurveyTarget.targetRole || 'Ẩn danh')}</strong><span class="muted">${esc((r.created_at || '').slice(0, 16).replace('T', ' '))}${r.is_sample ? ' · Mẫu' : ''}</span></div>
             ${(editSurveyTarget.form || []).map(q => { const a = (r.answers || {})[q.id]; return `<div><span class="muted">${esc(q.q)}:</span> ${esc(Array.isArray(a) ? a.join(' · ') : (a || '—'))}</div>`; }).join('')}</div>`).join('')}</div>`;
     }
@@ -1737,7 +1908,7 @@ nature là bản chất problem: "behavior" nếu là problem hành vi (duy trì
     sidePanel.innerHTML = `<div class="side-head">
       <div style="min-width:0;flex:1 1 220px">
         <h3>${esc(editSurveyTarget.formTitle || surveyObj.title || sideSlug)}</h3>
-        <div class="row" style="margin-top:6px;gap:6px">${editSurveyTarget.targetRole ? `<span class="tag" style="--c:var(--orange)">${esc(editSurveyTarget.targetRole)}</span>` : ''}<span class="muted">/survey?slug=${esc(sideSlug)}</span></div>
+        ${editSurveyTarget.targetRole ? `<div class="row" style="margin-top:6px"><span class="tag" style="--c:var(--orange)">${esc(editSurveyTarget.targetRole)}</span></div>` : ''}
       </div>
       <div class="row" style="gap:6px">
         ${btn('copySlug', 'Publish link', 'soft small', `data-id="${esc(sideSlug)}"`)}
@@ -1833,12 +2004,10 @@ nature là bản chất problem: "behavior" nếu là problem hành vi (duy trì
     },
     openSelectedEdit() { openSideForSlug(activeTileSlug(), 'edit'); },
     openSelectedStats() { openSideForSlug(activeTileSlug(), 'stats'); },
-    async copySelectedLink() {
+    async copySelectedLink(b) {
       const slug = activeTileSlug();
       if (!slug) return toast('Chưa có khảo sát nào để sao chép link.');
-      const url = location.origin + '/survey?slug=' + slug;
-      try { await navigator.clipboard.writeText(url); toast('Đã sao chép link khảo sát: /survey?slug=' + slug); }
-      catch (e) { toast('Link khảo sát: /survey?slug=' + slug); }
+      await copyTextWithFeedback(location.origin + '/survey?slug=' + slug, b, 'Đã copy link');
     },
     async openSurveySide(b) { openSideForSlug(b.dataset.id, 'edit'); },
     closeSurveySide() { closeSurveySide(false); },
@@ -1996,14 +2165,12 @@ nature là bản chất problem: "behavior" nếu là problem hành vi (duy trì
       t.form.splice(+b.dataset.id, 1); persistActiveEditor(); rerender();
     },
     reloadSurveys() { loadPublishedSurveys(true); },
-    async copySurveyLink() {
+    async copySurveyLink(b) {
       if (!S.pitch.publishedSlug) return;
-      try { await navigator.clipboard.writeText(location.origin + '/survey?slug=' + S.pitch.publishedSlug); toast('Đã sao chép link khảo sát'); }
-      catch (e) { toast('Trình duyệt chặn sao chép, hãy copy trực tiếp trong ô link.'); }
+      await copyTextWithFeedback(location.origin + '/survey?slug=' + S.pitch.publishedSlug, b, 'Đã copy link');
     },
     async copySlug(b) {
-      try { await navigator.clipboard.writeText(location.origin + '/survey?slug=' + b.dataset.id); toast('Đã sao chép link khảo sát'); }
-      catch (e) { toast('Trình duyệt chặn sao chép, link: /survey?slug=' + b.dataset.id); }
+      await copyTextWithFeedback(location.origin + '/survey?slug=' + b.dataset.id, b, 'Đã copy link');
     },
     async toggleResponses(b) {
       const slug = b.dataset.id, survey = (surveysCache || []).find(x => x.slug === slug);
@@ -2083,10 +2250,17 @@ nature là bản chất problem: "behavior" nếu là problem hành vi (duy trì
       const len = (S.pitch.deck || []).length;
       if (!len) return;
       activeSlideIdx = Math.max(0, Math.min(len - 1, activeSlideIdx + (+b.dataset.n || 0)));
-      if (d) d.scrollBy({ left: +b.dataset.n * (d.clientWidth + 12), behavior: reduced ? 'auto' : 'smooth' });
-      rerender();
-      const d2 = $('.deck', view);
-      if (d2) d2.scrollLeft = activeSlideIdx * (d2.clientWidth + 12);
+      syncSlideEditorBox();
+      if (d) {
+        ignoreDeckScrollUntil = Date.now() + 450;
+        d.scrollTo({ left: activeSlideIdx * ((d.clientWidth || 0) + 12), behavior: reduced ? 'auto' : 'smooth' });
+      }
+    },
+    fullDeck() {
+      const d = $('.deck', view);
+      if (!d) return;
+      if (document.fullscreenElement) { document.exitFullscreen().catch(() => {}); return; }
+      if (d.requestFullscreen) d.requestFullscreen().then(() => { d.scrollLeft = activeSlideIdx * (d.clientWidth + 12); }).catch(() => toast('Trình duyệt không cho phép bật toàn màn hình.'));
     },
     addSlide() {
       if (!Array.isArray(S.pitch.deck) || S.pitch.deck.length >= 10) return toast('Tối đa 10 slide trong một bộ.');
@@ -2102,22 +2276,19 @@ nature là bản chất problem: "behavior" nếu là problem hành vi (duy trì
       activeSlideIdx = Math.max(0, Math.min(activeSlideIdx, S.pitch.deck.length - 1));
       save('pitch'); rerender();
     },
-    async copyDeckLink() {
+    async copyDeckLink(b) {
       if (!S.pitch.deckSlug) return;
-      try { await navigator.clipboard.writeText(location.origin + '/pitch?slug=' + S.pitch.deckSlug); toast('Đã sao chép link trình chiếu'); }
-      catch (e) { toast('Link slide: /pitch?slug=' + S.pitch.deckSlug); }
+      await copyTextWithFeedback(location.origin + '/pitch?slug=' + S.pitch.deckSlug, b, 'Đã copy link');
     },
     async copyAd(b) {
       const ad = S.pitch.adPosts && S.pitch.adPosts[+b.dataset.id];
       if (!ad) return;
-      try { await navigator.clipboard.writeText(adFullText(ad)); toast('Đã sao chép bài ' + ad.channel); }
-      catch (e) { toast('Trình duyệt chặn sao chép.'); }
+      await copyTextWithFeedback(adFullText(ad), b, 'Đã copy bài');
     },
-    async copyAllAds() {
+    async copyAllAds(b) {
       const text = (S.pitch.adPosts || []).map(ad => `【${ad.channel}】\n${adFullText(ad)}`).join('\n\n---\n\n');
       if (!text) return;
-      try { await navigator.clipboard.writeText(text); toast('Đã sao chép tất cả bài quảng cáo'); }
-      catch (e) { toast('Trình duyệt chặn sao chép.'); }
+      await copyTextWithFeedback(text, b, 'Đã copy tất cả');
     },
     insertSurveyInAd(b) {
       const slug = activeTileSlug();
@@ -2129,11 +2300,11 @@ nature là bản chất problem: "behavior" nếu là problem hành vi (duy trì
         ? txt.replace(/\/survey\?slug=\S+|\[[^\]]*(link|khảo sát|dùng thử)[^\]]*\]/gi, url)
         : txt + '\n\n' + url;
       ad.text = txt;
-      save('pitch'); rerender(); toast('Đã chèn link khảo sát vào bài ' + ad.channel);
+      save('pitch'); rerender(); toast('Đã chèn link khảo sát vào bài');
     },
     async copy(b) {
       const text = b.dataset.id === 'html' ? deckHTML() : S.pitch[b.dataset.id];
-      try { await navigator.clipboard.writeText(text); toast('Đã sao chép'); } catch (e) { toast('Trình duyệt chặn sao chép. Hãy bôi đen văn bản để chép tay.'); }
+      await copyTextWithFeedback(text, b, 'Đã copy');
     },
     async download() {
       const html = deckHTML();
@@ -2338,8 +2509,8 @@ nature là bản chất problem: "behavior" nếu là problem hành vi (duy trì
         const deckCards = $$('#view .deck .slide');
         const card = deckCards[+id];
         if (card) {
-          if (field === 'title' && $('h3', card)) $('h3', card).textContent = v;
-          if (field === 'body' && $('p', card)) $('p', card).textContent = v;
+          const slideTitle = (S.pitch.deckTitle || S.meta.name || 'Pitching Deck').trim();
+          card.outerHTML = renderSlideCard(s, +id, S.pitch.deck.length, slideTitle);
         }
       }
       return true;
@@ -2391,11 +2562,14 @@ nature là bản chất problem: "behavior" nếu là problem hành vi (duy trì
     if (k === 'qReq') { const target = activeEditorTarget(); const q = target.form && target.form[+id]; if (q) { q.required = t.checked; persistActiveEditor(); } }
     if (k === 'dashSlug') { dashSlugSelected = v; dashStats = null; lastDashJson = ''; refreshDashStats(true); }
     if (k === 'deckSurveySlug') { deckSurveySlug = v; rerender(); }
-    if (k === 'activeSlidePick') {
-      activeSlideIdx = +v || 0;
-      rerender();
-      const d2 = $('.deck', view);
-      if (d2) d2.scrollLeft = activeSlideIdx * (d2.clientWidth + 12);
+    if (k === 'slideLayout') {
+      const s = S.pitch.deck && S.pitch.deck[+id];
+      if (s) {
+        s.layout = v;
+        save('pitch');
+        const card = $$('#view .deck .slide')[+id];
+        if (card) card.outerHTML = renderSlideCard(s, +id, S.pitch.deck.length, (S.pitch.deckTitle || S.meta.name || 'Pitching Deck').trim());
+      }
     }
   });
   document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeDrawer(); closeSurveySide(); } });

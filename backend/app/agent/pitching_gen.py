@@ -1,6 +1,7 @@
 """Sinh form khảo sát theo nguyên tắc 1 Form = 1 Vai chính, qua cổng LLM chung hoặc luật dự phòng."""
 
 import logging
+import re
 
 from pydantic import BaseModel, Field
 
@@ -369,6 +370,7 @@ def _clean_slides(raw_slides: list[PitchSlide], limit: int = 10) -> list[PitchSl
                 title=_clip(slide.title, 140, f"Nội dung {idx + 1}"),
                 body=slide.body.strip()[:800] or "Cần bổ sung nội dung.",
                 highlight=_clip(slide.highlight, 140, ""),
+                layout=slide.layout,
             )
         )
     return cleaned
@@ -378,67 +380,83 @@ def _rule_based_deck(ctx: ProblemContextIn, stats: SurveyStatsOut | None, slide_
     project = _clip(ctx.project_name, 90, "Sản phẩm AI")
     role_label = _resolve_target_role(ctx)
     note, lines = _format_stats_summary(stats)
-    evidence_body = (
-        note + ("\n" + "\n".join(lines[:2]) if lines else "")
-        if stats and stats.total_responses
-        else "Chưa có dữ liệu khảo sát. Cần thu phản hồi thực tế trước khi chốt đầu tư."
+    persona_line = _clip(ctx.persona, 160, f"{role_label} gặp tác vụ lặp lại hằng ngày.")
+    problem_line = _clip(ctx.problem, 200, f"{role_label} tốn nhiều thời gian xử lý thủ công lặp lại.")
+    leverage_line = _clip(
+        ctx.leverage, 200, "AI tóm tắt ngữ cảnh, gợi ý bản nháp có nguồn dẫn để con người duyệt cuối."
     )
-    evidence_highlight = (
-        f"{stats.real_responses} thật · {stats.sample_responses} mẫu"
-        if stats and stats.total_responses
-        else "Cần thu khảo sát thật"
-    )
+    scope_line = _clip(ctx.scope, 180, "Tập trung đúng 1 luồng đau nhất cho 1 nhóm vai trò cốt lõi.")
+    metric_line = _clip(ctx.metric, 180, "Thời gian hoàn thành tác vụ & tỉ lệ bản nháp được dùng lại.")
+    overview_line = _clip(ctx.overview, 180, f"Giúp {role_label} xử lý nhanh và chuẩn hơn ngay từ bản đầu.")
+
+    if stats and stats.total_responses:
+        bullet_lines = [line if line.startswith("- ") else f"- {line}" for line in lines[:3]]
+        evidence_body = "\n".join([f"- Quy mô khảo sát: {note}", *bullet_lines])
+        evidence_highlight = f"{stats.real_responses} thật · {stats.sample_responses} mẫu"
+    else:
+        evidence_body = (
+            f"- Đối tượng mục tiêu: {role_label}\n"
+            "- Chưa có phản hồi khảo sát đã thu để làm bằng chứng định lượng\n"
+            "- Mục tiêu trước khi pitch: thu ít nhất 5–10 phản hồi thật ngoài nhóm quen"
+        )
+        evidence_highlight = "0 phản hồi · Cần thu thật"
+
     slides = [
         PitchSlide(
             id="s0",
             kicker="Tổng quan",
             title=project,
-            body=_clip(ctx.overview or ctx.problem, 220, f"Giải pháp AI hỗ trợ {role_label} xử lý công việc cốt lõi."),
-            highlight=f"Đối tượng: {role_label}",
+            body=f"- Đối tượng: {role_label}\n- Giá trị cốt lõi: {overview_line}\n- Phạm vi: {scope_line}",
+            highlight=f"Dành cho {role_label}",
+            layout="hero",
         ),
         PitchSlide(
             id="s1",
-            kicker="Nỗi đau thật",
-            title=f"{role_label} đang gặp vấn đề gì",
-            body=_clip(ctx.problem, 240, f"{role_label} mất nhiều thời gian tra cứu và xử lý thủ công lặp lại."),
+            kicker="Vấn đề thật",
+            title=f"Vì sao {role_label} đang bị quá tải",
+            body=f"- Chân dung: {persona_line}\n- Điểm nghẽn: {problem_line}\n- Hệ quả: tốn thời gian lặp lại và dễ sai sót khi cao điểm",
             highlight="Từ Product thinking",
+            layout="split",
         ),
         PitchSlide(
             id="s2",
             kicker="Đòn bẩy AI",
-            title="AI giúp ở khâu nào",
-            body=_clip(
-                ctx.leverage, 240, "AI tóm tắt ngữ cảnh, gợi ý bản nháp có căn cứ để con người kiểm soát và duyệt."
-            ),
-            highlight="Con người luôn duyệt cuối",
+            title="AI xử lý phần nặng, người chốt phần cuối",
+            body=f"- Cơ chế AI: {leverage_line}\n- Kiểm soát rủi ro: hiển thị căn cứ rõ ràng trước khi gửi\n- Giới hạn an toàn: không tự gửi ở các bước nhạy cảm",
+            highlight="Con người duyệt cuối",
+            layout="cards",
         ),
         PitchSlide(
             id="s3",
-            kicker="Bằng chứng khảo sát",
-            title="Tín hiệu từ người dùng",
-            body=_clip(evidence_body, 280, note),
+            kicker="Bằng chứng",
+            title="Tín hiệu từ khảo sát người dùng",
+            body=_clip(evidence_body, 380, note),
             highlight=evidence_highlight,
+            layout="metric",
         ),
         PitchSlide(
             id="s4",
-            kicker="Phạm vi MVP",
-            title="Thử nghiệm gọn trong 4 tuần",
-            body=_clip(ctx.scope, 240, "Tập trung đúng một luồng đau nhất cho một nhóm người dùng mục tiêu."),
-            highlight="MVP 1 luồng cốt lõi",
+            kicker="MVP 4 tuần",
+            title="Làm gọn một luồng để kiểm chứng nhanh",
+            body=f"- Trong phạm vi v1: {scope_line}\n- Ngoài phạm vi v1: chưa mở rộng đa kênh hay tùy biến phức tạp",
+            highlight="1 luồng · 4 tuần",
+            layout="compare",
         ),
         PitchSlide(
             id="s5",
-            kicker="Đo thành công",
-            title="Chỉ số đánh giá hiệu quả",
-            body=_clip(ctx.metric, 240, "Theo dõi thời gian hoàn thành công việc và tỉ lệ bản nháp được dùng lại."),
-            highlight="Đo trước & sau dùng thử",
+            kicker="Đo lường",
+            title="Thước đo giá trị và chất lượng AI",
+            body=f"- Chỉ số chính: {metric_line}\n- Cách kiểm tra: đối chiếu trước & sau khi dùng bản nháp AI\n- Kỷ luật eval: chấm bộ câu hỏi thực tế trước khi mở rộng",
+            highlight="Đo trước & sau dùng",
+            layout="cards",
         ),
         PitchSlide(
             id="s6",
             kicker="Bước tiếp theo",
-            title="Thử nghiệm thực tế cùng nhóm đầu tiên",
-            body=f"Mời 5–10 {role_label} dùng thử bản MVP trong 2 tuần và thu phản hồi thật để tinh chỉnh.",
-            highlight="Kế hoạch tuần tới",
+            title="Kế hoạch thử nghiệm trong 2 tuần tới",
+            body=f"- Bước 1: Mời 5–10 {role_label} dùng thử bản MVP trên tình huống thật\n- Bước 2: Thu thập lỗi sai để siết prompt & bộ đánh giá\n- Bước 3: Chốt giữ lại hay chỉnh hướng dựa trên số liệu đo",
+            highlight="Pilot 5–10 người",
+            layout="steps",
         ),
     ]
     return PitchDeckDraftOut(
@@ -500,8 +518,20 @@ def _rule_based_assets(ctx: ProblemContextIn, stats: SurveyStatsOut | None) -> P
     return PitchAssetsOut(script="", ads=ads, source="fallback")
 
 
+def _fill_ad_placeholders(text: str, project: str, role_label: str) -> str:
+    text = re.sub(r"\[(?:tên|ten)\s+(?:sản|san)\s+(?:phẩm|pham)\]", project, text, flags=re.IGNORECASE)
+    return re.sub(
+        r"\[(?:đối|doi)\s+(?:tượng|tuong)(?:\s+(?:mục|muc)\s+(?:tiêu|tieu))?\]",
+        role_label,
+        text,
+        flags=re.IGNORECASE,
+    )
+
+
 def generate_pitch_assets(ctx: ProblemContextIn, stats: SurveyStatsOut | None = None) -> PitchAssetsOut:
     """Sinh bài quảng cáo chung kèm placeholder qua LLM hoặc luật dự phòng."""
+    project = _clip(ctx.project_name, 80, "Sản phẩm AI")
+    role_label = _resolve_target_role(ctx)
     prompt = render("pitch_assets", **_prompt_ctx_fields(ctx, stats))
     try:
         generated = llm.structured(_GeneratedAssets, prompt, node="pitch_assets")
@@ -509,10 +539,19 @@ def generate_pitch_assets(ctx: ProblemContextIn, stats: SurveyStatsOut | None = 
             PitchAdPost(
                 id="ad0",
                 channel=_clip(ad.channel, 60, "Bài đăng chung"),
-                hook=ad.hook.strip()[:300],
-                body=ad.body.strip()[:1600],
-                cta=ad.cta.strip()[:240],
-                placeholders=[p.strip()[:60] for p in ad.placeholders if p.strip()][:6],
+                hook=_fill_ad_placeholders(ad.hook.strip(), project, role_label)[:300],
+                body=_fill_ad_placeholders(ad.body.strip(), project, role_label)[:1600],
+                cta=_fill_ad_placeholders(ad.cta.strip(), project, role_label)[:240],
+                placeholders=[
+                    p.strip()[:60]
+                    for p in ad.placeholders
+                    if p.strip()
+                    and not re.search(
+                        r"\[(?:tên|ten)\s+(?:sản|san)\s+(?:phẩm|pham)\]|\[(?:đối|doi)\s+(?:tượng|tuong)",
+                        p,
+                        flags=re.IGNORECASE,
+                    )
+                ][:6],
             )
             for ad in generated.ads[:1]
         ]
