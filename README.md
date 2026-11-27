@@ -67,6 +67,19 @@ Chốt trước khi code, sửa ở đây khi đổi (FE đọc chi tiết ở `
 | GET | `/api/v1/admin/usage?days=7` | — | token, chi phí theo ngày/model/node, lượt gọi gần nhất, ngân sách hôm nay |
 | GET | `/api/v1/admin/sessions` | — | phiên chat (số lượt, token, chi phí) |
 | GET | `/api/v1/admin/sessions/{id}` | — | `Run[]` của phiên |
+| POST | `/api/v1/pitching/surveys/generate` | `ProblemContext` | `{title, description, target_role, sections[], questions[], source}` |
+| POST | `/api/v1/pitching/surveys` | `{project_name, target_role?, problem_context, title, description, sections?, questions[]}` | `Survey` (201, kèm `slug`) |
+| GET | `/api/v1/pitching/surveys` | — | `Survey[]` |
+| GET / PUT / DELETE | `/api/v1/pitching/surveys/{slug}` | `SurveyPublishIn?` | `Survey` / 204 |
+| POST | `/api/v1/pitching/surveys/{slug}/responses` | `{respondent_role?, answers, is_sample?}` | `SurveyResponse` (201) |
+| GET | `/api/v1/pitching/surveys/{slug}/responses` | — | `SurveyResponse[]` |
+| GET | `/api/v1/pitching/surveys/{slug}/stats` | — | `SurveyStats` (đếm, `%`, TB thang điểm, thật vs mẫu) |
+| POST | `/api/v1/pitching/surveys/{slug}/samples` | — | `SurveyStats` (thêm 8 phản hồi mẫu `is_sample=true`) |
+| POST | `/api/v1/pitching/decks/generate` | `{context, survey_slug?, slide_count?}` | `{title, survey_slug, slides[] (<=10), source}` |
+| POST / GET | `/api/v1/pitching/decks` | `PitchDeckPublishIn` / — | `PitchDeck` (`slug` cho `/pitch?slug=...`) / `PitchDeck[]` |
+| GET / PUT / DELETE | `/api/v1/pitching/decks/{slug}` | `PitchDeckPublishIn?` | `PitchDeck` / 204 |
+| POST | `/api/v1/pitching/assets/generate` | `{context, survey_slug?}` | `{ads[], source}` (bài quảng cáo chung có placeholder) |
+| POST | `/api/v1/pitching/overview` | `{context, survey_slug?}` | `{overview, total_responses, real_responses, sample_responses, source}` |
 
 `Run = {id, session_id, request, status, source, proposal: Proposal | null, result, created_at, updated_at}`
 
@@ -84,6 +97,9 @@ Chốt trước khi code, sửa ở đây khi đổi (FE đọc chi tiết ở `
 | `items` | id, title, description, status (todo/doing/done), created_at |
 | `agent_runs` | id, session_id, request, status, source, proposal (JSON), result (JSON), created_at, updated_at |
 | `llm_calls` | id, run_id, node, model, input_tokens, output_tokens, cost_usd, latency_ms, ok, error, created_at |
+| `pitch_surveys` | id, slug, project_name, problem_context (JSON), title, description, questions (JSON), published, created_at, updated_at |
+| `pitch_survey_responses` | id, survey_id, respondent_role, answers (JSON), is_sample, created_at |
+| `pitch_decks` | id, slug, project_name, survey_slug, title, slides (JSON), script, ads (JSON), created_at, updated_at |
 
 ## Kiểm tra chất lượng
 
