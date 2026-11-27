@@ -93,6 +93,7 @@ class Review(BaseModel):
 
 class AgentState(TypedDict, total=False):
     request: str  # tin nhắn mới nhất của người dùng
+    repeated_request: bool  # tin nhắn đã được xử lý trong phiên này
     canvas: dict  # 9 ô: {content, who, when, quote, grounded, status}
     flags: dict  # no_ai_needed, solved_elsewhere
     intent: str  # update_canvas

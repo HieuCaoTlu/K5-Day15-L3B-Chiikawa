@@ -8,6 +8,13 @@ from app.db import session_scope
 router = APIRouter(tags=["health"])
 
 
+def _llm_status(settings) -> str:
+    """Provider LLM đang dùng; "mock" khi provider đó chưa có key (agent chạy luật dự phòng)."""
+    provider = settings.active_llm_provider
+    key = settings.openrouter_api_key if provider == "openrouter" else settings.google_api_key
+    return provider if key else "mock"
+
+
 @router.get("/health")
 def health() -> JSONResponse:
     """Docker healthcheck + bước kiểm tra sau deploy. DB hỏng → 503 để `docker compose up --wait` báo lỗi."""
@@ -22,7 +29,7 @@ def health() -> JSONResponse:
         "status": "ok" if db == "ok" else "degraded",
         "env": settings.app_env,
         "db": db,
-        "llm": "gemini" if settings.google_api_key else "mock",
+        "llm": _llm_status(settings),
         "demo_mode": settings.demo_mode,
         "mock_nodes": settings.mock_nodes or None,
     }

@@ -4,7 +4,7 @@ import logging
 from uuid import uuid4
 
 from langgraph.types import Command
-from sqlalchemy import select
+from sqlalchemy import Select, select
 from sqlalchemy.orm import Session
 
 from app.agent.graph import get_graph
@@ -18,7 +18,7 @@ def _config(run_id: str) -> dict:
     return {"configurable": {"thread_id": run_id}}
 
 
-def _sync(session: Session, run: AgentRun) -> AgentRun:
+def _sync(session: Session, run: AgentRun, *, new_run: bool) -> AgentRun:
     """Đọc trạng thái mới nhất từ checkpointer, ghi vào bảng để FE liệt kê / lọc."""
     snapshot = get_graph().get_state(_config(run.id))
     values = snapshot.values
@@ -32,11 +32,13 @@ def _sync(session: Session, run: AgentRun) -> AgentRun:
     else:
         run.result = values.get("result")
         run.status = (run.result or {}).get("status", "error")
+    if new_run and run.session_id and run.status in {"needs_info", "waiting_review", "approved", "rejected"}:
+        _supersede_waiting(session, run)
     session.commit()
     return run
 
 
-def _invoke(session: Session, run: AgentRun, payload) -> AgentRun:
+def _invoke(session: Session, run: AgentRun, payload, *, new_run: bool = False) -> AgentRun:
     try:
         get_graph().invoke(payload, _config(run.id))
     except Exception as exc:
@@ -45,28 +47,73 @@ def _invoke(session: Session, run: AgentRun, payload) -> AgentRun:
         run.result = {"error": type(exc).__name__}
         session.commit()
         return run
-    return _sync(session, run)
+    return _sync(session, run, new_run=new_run)
 
 
-def _previous_canvas(session: Session, session_id: str | None) -> dict:
-    """Canvas của lượt gần nhất trong cùng phiên chat: mỗi tin nhắn là một lượt, canvas nối tiếp qua các lượt."""
+def with_canvas(query: Select) -> Select:
+    canvas = AgentRun.proposal["canvas"].as_string()
+    return query.where(canvas.is_not(None), canvas != "{}")
+
+
+def _supersede_waiting(session: Session, run: AgentRun) -> None:
+    in_session = select(AgentRun).where(AgentRun.session_id == run.session_id)
+    # Serialize successful turns in PostgreSQL on the same session row. SQLite
+    # serializes writers when the pending changes are flushed.
+    with session.no_autoflush:
+        session.execute(
+            select(AgentRun.id)
+            .where(AgentRun.session_id == run.session_id)
+            .order_by(AgentRun.created_at, AgentRun.id)
+            .limit(1)
+            .with_for_update()
+        ).first()
+    session.flush()
+    newest = session.scalar(
+        with_canvas(in_session).order_by(AgentRun.created_at.desc(), AgentRun.id.desc()).limit(1)
+    )
+    if newest is None:
+        return
+    waiting = session.scalars(
+        in_session.where(AgentRun.status == "waiting_review", AgentRun.id != newest.id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    for previous in waiting:
+        previous.status = "rejected"
+        previous.result = {
+            "status": "rejected",
+            "verdict": previous.proposal["verdict"],
+            "title": previous.proposal["title"],
+            "steps": [],
+            "note": "Đã có lượt trao đổi mới hơn",
+            "handoff": None,
+            "canvas": previous.proposal["canvas"],
+        }
+
+
+def _previous_canvas(session: Session, session_id: str | None, request: str) -> dict:
+    """Đọc Canvas gần nhất và kiểm tra tin nhắn đã được xử lý trong phiên."""
     if not session_id:
         return {}
-    rows = session.scalars(
-        select(AgentRun).where(AgentRun.session_id == session_id).order_by(AgentRun.created_at.desc()).limit(10)
-    ).all()
-    for row in rows:
-        if row.proposal and row.proposal.get("canvas"):
-            return {"canvas": row.proposal["canvas"], "flags": row.proposal.get("flags") or {}}
-    return {}
+    query = with_canvas(select(AgentRun).where(AgentRun.session_id == session_id))
+    latest = session.scalar(query.order_by(AgentRun.created_at.desc(), AgentRun.id.desc()).limit(1))
+    if latest is None:
+        return {}
+    repeated = session.scalar(query.with_only_columns(AgentRun.id).where(AgentRun.request == request).limit(1))
+    return {
+        "canvas": latest.proposal["canvas"],
+        "flags": latest.proposal.get("flags") or {},
+        "source": latest.source or "fallback",
+        "repeated_request": repeated is not None,
+    }
 
 
 def start_run(session: Session, request: str, session_id: str | None = None) -> AgentRun:
-    carried = _previous_canvas(session, session_id)
+    carried = _previous_canvas(session, session_id, request)
     run = AgentRun(id=uuid4().hex, session_id=session_id, request=request, status="running")
     session.add(run)
     session.commit()
-    return _invoke(session, run, {"request": request, **carried})
+    return _invoke(session, run, {"request": request, **carried}, new_run=True)
 
 
 def review_run(session: Session, run: AgentRun, review: ReviewIn) -> AgentRun:

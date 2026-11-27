@@ -6,6 +6,8 @@ os.environ.update(
     APP_ENV="test",
     DATABASE_URL="sqlite://",
     GOOGLE_API_KEY="",
+    OPENROUTER_API_KEY="",
+    LLM_PROVIDER="auto",
     DEMO_MODE="false",
     MOCK_NODES="",
     SEED_ON_START="true",

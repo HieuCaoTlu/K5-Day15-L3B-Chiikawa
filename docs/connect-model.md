@@ -138,6 +138,27 @@ def call_provider(system, user):
     raise RuntimeError("Chưa điền: chép ví dụ quickstart vào call_provider()")
 ```
 
+### 2.5 OpenRouter
+
+OpenRouter dùng API tương thích OpenAI tại `https://openrouter.ai/api/v1/chat/completions`.
+
+- **Backend Thinking agent** (`codebase/agent.py` và web `/chat`): thêm vào `.env` ở thư mục gốc repo:
+
+```dotenv
+LLM_PROVIDER=openrouter
+OPENROUTER_API_KEY=<key OpenRouter của nhóm, không dấu ngoặc kép>
+OPENROUTER_MODEL_FAST=google/gemini-2.5-flash
+OPENROUTER_MODEL_PRO=google/gemini-2.5-pro
+```
+
+- **`codebase/ai.py`** (khi gọi trực tiếp `call_model()`):
+
+```dotenv
+MODEL_PROVIDER=openrouter
+MODEL_NAME=google/gemini-2.5-flash
+API_KEY=<key OpenRouter của nhóm, không dấu ngoặc kép>
+```
+
 ## 3. Thử
 
 1. `python run.py` → gõ 1 câu → thấy câu trả lời thật và dòng `(model: … · token vào … / ra …)`.

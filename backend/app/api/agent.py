@@ -19,13 +19,20 @@ def create_run(body: RunCreate, session: Session = Depends(get_session)):
 
 
 @router.get("/runs", response_model=list[RunOut])
-def list_runs(status: str | None = None, session_id: str | None = None, session: Session = Depends(get_session)):
+def list_runs(
+    status: str | None = None,
+    session_id: str | None = None,
+    has_canvas: bool = False,
+    session: Session = Depends(get_session),
+):
     """`?status=waiting_review` = hàng chờ duyệt. `?session_id=…` = các lượt của một phiên chat (mới nhất trước)."""
-    query = select(AgentRun).order_by(AgentRun.created_at.desc()).limit(50)
+    query = select(AgentRun).order_by(AgentRun.created_at.desc(), AgentRun.id.desc()).limit(50)
     if status:
         query = query.where(AgentRun.status == status)
     if session_id:
         query = query.where(AgentRun.session_id == session_id)
+    if has_canvas:
+        query = service.with_canvas(query)
     return session.scalars(query).all()
 
 
@@ -40,7 +47,7 @@ def get_run(run_id: str, session: Session = Depends(get_session)):
 @router.post("/runs/{run_id}/review", response_model=RunOut)
 def review_run(run_id: str, body: ReviewIn, session: Session = Depends(get_session)):
     """Bước HITL: người duyệt đồng ý / từ chối đề xuất → agent chạy tiếp tới hết."""
-    run = session.get(AgentRun, run_id)
+    run = session.get(AgentRun, run_id, with_for_update=True)
     if run is None:
         raise HTTPException(404, "Không tìm thấy lượt chạy")
     if run.status != "waiting_review":
