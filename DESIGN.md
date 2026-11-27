@@ -15,6 +15,7 @@
 | `--blue` | `#0a9cf0` | Product thinking |
 | `--green` | `#14b86a` | Planning |
 | `--orange` | `#ff8a1f` | Pitching |
+| `--indigo` | `#4d5bf0` | Quality. Cùng giá trị với màu liên kết và focus; trong tab Quality, phân biệt bằng chấm màu, chip và dải cạnh thay vì chữ màu |
 | `--violet` | `#a24ce8` | Maintaining |
 | `--red` / `--yellow` | `#ff4d5e` / `#ffc21a` | Màu phổ Tầng, điểm cảnh báo hoặc điểm nhấn agent |
 
