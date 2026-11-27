@@ -31,6 +31,9 @@ const ICONS: Record<string, string> = {
   home: 'M3 9l7-5 7 5v8H3z',
   refresh: 'M16 10a6 6 0 11-1.8-4.3M16 3.5v3h-3',
   wallet: 'M3 6h12a2 2 0 012 2v7a2 2 0 01-2 2H5a2 2 0 01-2-2zM3 6l9-2.5V6M13 11.5h2',
+  copy: 'M7 7h9v10H7zM4 13V4h9',
+  share: 'M13 4l4 4-4 4M17 8H9a4 4 0 00-4 4v4',
+  link: 'M8.5 11.5l3-3M7 14a3.5 3.5 0 010-5l2-2a3.5 3.5 0 015 5l-1 1M13 6a3.5 3.5 0 010 5l-2 2a3.5 3.5 0 01-5-5l1-1',
 };
 
 export function Icon({ name, size = 18 }: { name: keyof typeof ICONS | string; size?: number }) {

@@ -33,7 +33,7 @@
     { color: 'yellow', name: 'Agent AI Builder', text: 'Người đồng hành đặt câu hỏi đúng ở từng bước.' },
     { color: 'blue', name: 'Product thinking', text: 'Chốt người dùng, vấn đề và phạm vi MVP.' },
     { color: 'green', name: 'Planning', text: 'Vai trò, task, công nghệ và chi phí.' },
-    { color: 'orange', name: 'Pitching', text: 'Form, dashboard, slide, kịch bản và quảng cáo.' },
+    { color: 'orange', name: 'Pitching', text: 'Form, dashboard, slide và quảng cáo.' },
     { color: 'violet', name: 'Quality và Maintaining', text: 'Theo dõi chất lượng, chi phí và lịch bảo trì.' },
     { color: 'indigo', name: 'Một nơi quản lý', text: 'Toàn bộ tiến độ trong một công trình 3D.' }
   ];
@@ -105,12 +105,16 @@
       log: []
     },
     pitch: {
+      sections: [
+        { id: 's0', title: 'Phần 1 · Bối cảnh & tần suất', description: 'Kênh phản hồi và mức độ phiền hiện tại' },
+        { id: 's1', title: 'Phần 2 · Mức độ tin tưởng & giá', description: 'Điều kiện duyệt dùng và mức sẵn sàng chi trả' }
+      ],
       form: [
-        { id: 'q0', type: 'choice', q: 'Bạn thường trả lời khách qua kênh nào nhiều nhất?', options: ['Facebook Messenger', 'Zalo', 'Website chat', 'Sàn TMĐT'] },
-        { id: 'q1', type: 'scale', q: 'Mức độ phiền khi phải trả lời câu hỏi lặp lại (1 là không, 5 là rất phiền)', options: [] },
-        { id: 'q2', type: 'choice', q: 'Bạn có tin AI soạn nháp rồi mình duyệt không?', options: ['Có, nếu thấy nguồn', 'Có, nếu sai ít', 'Chưa chắc', 'Không'] },
-        { id: 'q3', type: 'choice', q: 'Mức giá mỗi tháng bạn thấy hợp lý', options: ['Dưới 20 USD', '20 đến 40 USD', '40 đến 80 USD', 'Trên 80 USD'] },
-        { id: 'q4', type: 'text', q: 'Điều gì khiến bạn ngại dùng công cụ này nhất?', options: [] }
+        { id: 'q0', section_id: 's0', type: 'choice', q: 'Bạn thường trả lời khách qua kênh nào nhiều nhất?', options: ['Facebook Messenger', 'Zalo', 'Website chat', 'Sàn TMĐT'] },
+        { id: 'q1', section_id: 's0', type: 'scale', q: 'Mức độ phiền khi phải trả lời câu hỏi lặp lại (1 là không, 5 là rất phiền)', options: [] },
+        { id: 'q2', section_id: 's1', type: 'choice', q: 'Bạn có tin AI soạn nháp rồi mình duyệt không?', options: ['Có, nếu thấy nguồn', 'Có, nếu sai ít', 'Chưa chắc', 'Không'] },
+        { id: 'q3', section_id: 's1', type: 'choice', q: 'Mức giá mỗi tháng bạn thấy hợp lý', options: ['Dưới 20 USD', '20 đến 40 USD', '40 đến 80 USD', 'Trên 80 USD'] },
+        { id: 'q4', section_id: 's1', type: 'text', q: 'Điều gì khiến bạn ngại dùng công cụ này nhất?', options: [] }
       ],
       responses: [
         { answers: { q0: 'Facebook Messenger', q1: '5', q2: 'Có, nếu thấy nguồn', q3: '20 đến 40 USD', q4: 'Sợ trả lời sai giá làm mất khách.' } },
@@ -123,17 +127,13 @@
         { answers: { q0: 'Zalo', q1: '2', q2: 'Không', q3: 'Dưới 20 USD', q4: 'Shop ít tin nhắn, tự trả lời được.' } }
       ],
       overview: 'Tín hiệu chính: 5 trên 8 người chấm mức phiền từ 4 trở lên, và 5 người sẵn sàng thử nếu thấy nguồn hoặc sai ít. Mức giá được chọn nhiều nhất là 20 đến 40 USD.\n\nChưa kết luận được: mẫu mới 8 người, chủ yếu từ mạng quen của nhóm, nên chưa đại diện cho thị trường.\n\nNên làm tiếp:\n1. Thu thêm ít nhất 20 phản hồi từ shop không quen biết.\n2. Phỏng vấn sâu 3 người nêu rào cản về giá và sàn TMĐT.\n3. Thử bản nháp trên loại câu hỏi hỏi đơn hàng, vì đây là loại lặp lại nhiều nhất.',
-      deck: [
-        { title: 'Đáp Nhanh: trợ lý CSKH cho shop online', body: 'Bản nháp trả lời khách trong vài giây, nhân viên duyệt rồi mới gửi.' },
-        { title: 'Vấn đề', body: 'Khoảng 60% tin nhắn là câu hỏi lặp lại về đơn hàng, đổi trả, size. Khách chờ lâu vào giờ cao điểm (ước tính của nhóm, cần đo lại).' },
-        { title: 'Bằng chứng từ người dùng', body: '5 trên 8 chủ shop chấm mức phiền từ 4 trên 5. 5 người sẵn sàng thử nếu thấy nguồn hoặc sai ít.' },
-        { title: 'Giải pháp', body: 'AI soạn nháp từ chính sách và trạng thái đơn. Giá và ngày giao lấy từ API, không để model tự nhớ.' },
-        { title: 'Đo thành công', body: 'Thời gian phản hồi trung vị giảm 50%. Ít nhất 70% bản nháp được gửi mà chỉ sửa nhẹ.' },
-        { title: 'Mô hình thu', body: 'Thuê bao 39 USD mỗi shop mỗi tháng. Hòa vốn hạ tầng ở khoảng 3 shop.' },
-        { title: 'Kế hoạch 4 tuần', body: 'Tuần 1 dữ liệu và đánh giá, tuần 2 nháp, tuần 3 duyệt và nguồn, tuần 4 thử với 3 shop.' }
-      ],
-      script: '',
-      ads: ''
+      deck: null,
+      deckShown: false,
+      deckSlug: '',
+      deckTitle: '',
+      deckSource: '',
+      ads: '',
+      adPosts: []
     },
     maintain: {
       schedule: [
