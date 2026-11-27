@@ -27,6 +27,32 @@
     if (raw && raw.S) Object.assign(S, raw.S);
     if (raw && raw.local) Object.assign(local, raw.local);
   } catch (e) { /* bộ nhớ trình duyệt không dùng được */ }
+  function migrate() {
+    const seed = SEED();
+    if (!S.plan || typeof S.plan !== 'object') S.plan = seed.plan;
+    if (!S.plan.cost || typeof S.plan.cost !== 'object') S.plan.cost = seed.plan.cost;
+    Object.entries(seed.plan.cost).forEach(([k, v]) => {
+      if (S.plan.cost[k] === undefined || S.plan.cost[k] === null) S.plan.cost[k] = v;
+    });
+    if (!S.quality || typeof S.quality !== 'object') S.quality = seed.quality;
+    if (!['sub', 'usage', 'setup'].includes(S.quality.revenueModel)) S.quality.revenueModel = seed.quality.revenueModel;
+    if (!Array.isArray(S.quality.runs)) S.quality.runs = seed.quality.runs;
+    S.quality.runs = S.quality.runs.filter(r => r && typeof r === 'object');
+    S.quality.runs.forEach((r, i) => {
+      if (!r.values || typeof r.values !== 'object') r.values = {};
+      if (r.id === undefined || r.id === null) r.id = 'r' + Date.now().toString(36) + i;
+      if (('inTok' in r || 'outTok' in r) && (r.actTok === undefined || r.actTok === null)) {
+        r.actTok = (+r.inTok || 0) + (+r.outTok || 0);
+        if (r.estTok === undefined) r.estTok = null;
+      }
+      delete r.inTok;
+      delete r.outTok;
+    });
+    if (!S.maintain || typeof S.maintain !== 'object') S.maintain = seed.maintain;
+    if (!Array.isArray(S.maintain.suggest)) S.maintain.suggest = seed.maintain.suggest;
+    if (!Array.isArray(S.maintain.schedule)) S.maintain.schedule = seed.maintain.schedule;
+  }
+  migrate();
   let db = null, canWrite = true, owner = true;
   const synced = {}, dirty = new Set(), writing = new Set();
   let saveTimer;
@@ -83,7 +109,7 @@
           changed = true;
         } catch (e) { /* bỏ qua tài liệu hỏng */ }
       });
-      if (changed) refresh();
+      if (changed) { migrate(); refresh(); }
     }, () => toast('Mất kết nối dữ liệu chung. Bạn đang xem bản trên máy này.'));
   }
   function refresh() {
@@ -120,7 +146,7 @@
   }
   function qualityProgress() {
     const q = S.quality, c = S.plan.cost;
-    return 0.3 * (q.metrics.length > 0) + 0.5 * Math.min(1, q.runs.length / 3) + 0.2 * ((+c.priceIn || +c.priceOut) > 0);
+    return 0.3 * (q.metrics.length > 0) + 0.5 * Math.min(1, q.runs.length / 3) + 0.2 * ((+c.pricePerM) > 0);
   }
   function nextAction(i) {
     if (i === 0) { const m = SCORE.find(([k]) => !S.score[k].text.trim()); return m ? `Còn thiếu mục ${m[1]} trong scorecard` : 'Scorecard đã đủ 7 mục'; }
@@ -174,23 +200,53 @@
   const nowLocal = () => { const d = new Date(); return `${iso(d)}T${two(d.getHours())}:${two(d.getMinutes())}`; };
   const shortDate = at => { const [d, t] = String(at).split('T'); const [, m, dd] = (d || '').split('-'); return `${dd}/${m}${t ? ' ' + t : ''}`; };
   const usd = v => (!isFinite(v) ? '?' : (Math.abs(v) < 1 && v !== 0 ? String(+v.toPrecision(2)) : Math.abs(v) < 10 ? v.toFixed(2) : Math.round(v).toLocaleString('vi-VN')) + ' USD');
-  const runCost = (r, c) => ((+r.inTok || 0) * c.priceIn + (+r.outTok || 0) * c.priceOut) / 1e6;
-  /* Chi phí tính bằng code từ token đã khai và đơn giá do đội nhập ở Planning; không dùng bảng giá của nhà cung cấp nào. */
+  /* Làm tròn lên theo đúng độ chính xác hiển thị, để giá mục tiêu không bị hụt biên lãi. */
+  const usdUp = v => {
+    if (!isFinite(v)) return '?';
+    if (v >= 10) return usd(Math.ceil(v));
+    if (v >= 1) return usd(Math.ceil(v * 100) / 100);
+    if (v <= 0) return usd(v);
+    const f = 10 ** (1 - Math.floor(Math.log10(v)));
+    return usd(Math.ceil(v * f) / f);
+  };
+  const usdShort = v => (!isFinite(v) ? '' : String(+(+v).toPrecision(2)).replace('.', ','));
+  function fmtK(n) {
+    if (n === null || n === undefined || !isFinite(+n)) return '';
+    const v = +n, a = Math.abs(v);
+    const fmt = (x, sfx) => {
+      const r = Math.round(x * 10) / 10;
+      return (Number.isInteger(r) ? String(r) : r.toFixed(1).replace('.', ',')) + sfx;
+    };
+    if (a >= 1e6) return fmt(v / 1e6, 'M');
+    if (a >= 1e3) return Math.round((a / 1e3) * 10) / 10 >= 1000 ? fmt(v / 1e6, 'M') : fmt(v / 1e3, 'k');
+    const r = Math.round(v * 10) / 10;
+    return Number.isInteger(r) ? String(r) : r.toFixed(1).replace('.', ',');
+  }
+  const runCost = (r, c) => ((+r.actTok || 0) * (+c.pricePerM || 0)) / 1e6;
+  /* Chi phí và doanh thu tính bằng code từ token thực tế và giả định do đội nhập; không dùng bảng giá của nhà cung cấp nào. */
   function money() {
     const c = Object.fromEntries(Object.entries(S.plan.cost).map(([k, v]) => [k, +v || 0]));
-    const rs = sortedRuns().filter(r => +r.total > 0 && ((+r.inTok || 0) + (+r.outTok || 0)) > 0);
-    if (!rs.length || !(c.priceIn || c.priceOut)) return null;
-    const recent = rs.slice(-3), each = r => runCost(r, c) / +r.total;
-    const perCase = recent.reduce((a, r) => a + each(r), 0) / recent.length;
-    const outCost = recent.reduce((a, r) => a + (+r.outTok || 0) * c.priceOut, 0), allCost = recent.reduce((a, r) => a + runCost(r, c) * 1e6, 0);
-    const perUser = perCase * c.tickets, last = rs[rs.length - 1], prev = rs[rs.length - 2];
-    return {
-      c, perCase, perUser, lastRun: runCost(last, c), outShare: allCost ? outCost / allCost : 0,
-      trend: prev && each(prev) > 0 ? each(last) / each(prev) - 1 : 0,
-      margin: c.price > 0 ? (c.price - perUser) / c.price : null,
-      breakEven: perUser + (c.teams > 0 ? c.infra / c.teams : 0),
-      targetPrice: perUser / (1 - PROFIT.targetMargin)
-    };
+    const runs = sortedRuns(), priced = c.pricePerM > 0;
+    // Chi phí mỗi lượt gọi: trung bình tối đa 3 lần chạy gần nhất có token thực tế và tổng số test.
+    const valid = runs.filter(r => +r.total > 0 && num(r.actTok) !== null).slice(-3);
+    const perCase = priced && valid.length ? valid.reduce((a, r) => a + runCost(r, c) / +r.total, 0) / valid.length : null;
+    const lastKnown = runs.filter(r => num(r.actTok) !== null).pop();
+    const lastRun = priced && lastKnown ? runCost(lastKnown, c) : null;
+    const aiMonthly = c.apiCalls === 0 ? 0 : perCase === null ? null : perCase * c.apiCalls;
+    const totalCost = aiMonthly === null ? null : aiMonthly + c.infra;
+    const model = ['sub', 'usage', 'setup'].includes(S.quality.revenueModel) ? S.quality.revenueModel : 'sub';
+    const revenue = model === 'usage' ? c.apiCalls * c.pricePerCall : model === 'setup' ? c.setupFee * c.newCustomers : c.teams * c.price;
+    const known = totalCost !== null;
+    const profit = known ? revenue - totalCost : null;
+    const margin = known && revenue > 0 ? profit / revenue : null;
+    const breakEven = !known ? null : model === 'usage' ? (c.apiCalls > 0 ? totalCost / c.apiCalls : null)
+      : model === 'setup' ? (c.setupFee > 0 ? Math.ceil(totalCost / c.setupFee) : null)
+      : (c.price > 0 ? Math.ceil(totalCost / c.price) : null);
+    const targetRev = known ? totalCost / (1 - PROFIT.targetMargin) : null;
+    const targetPrice = !known ? null : model === 'usage' ? (c.apiCalls > 0 ? targetRev / c.apiCalls : null)
+      : model === 'setup' ? (c.newCustomers > 0 ? targetRev / c.newCustomers : null)
+      : (c.teams > 0 ? targetRev / c.teams : null);
+    return { c, model, priced, perCase, lastRun, aiMonthly, totalCost, revenue, profit, margin, breakEven, targetPrice, known };
   }
   function signals() {
     const runs = sortedRuns(), last = runs[runs.length - 1], prev = runs[runs.length - 2], m = money();
@@ -219,36 +275,41 @@
     if (lastLevel && LEVELS.indexOf(h.level) > LEVELS.indexOf(lastLevel)) toast(`Sức khỏe sản phẩm chuyển sang ${HNAMES[h.level].toLowerCase()}. Xem lý do ở tab Maintaining.`);
     lastLevel = h.level;
   }
-  function profitTips(m) {
-    if (!m) return ['Cần ít nhất một lần chạy có token và tổng số test, cùng đơn giá token, để tính chi phí.'];
-    const t = PROFIT.targetMargin, tips = [];
-    if (!(m.c.price > 0)) tips.push(`Chưa có giá bán. Với chi phí hiện tại, giá hòa vốn là ${usd(m.breakEven)} và giá để đạt biên ${pct(t)} là ${usd(m.targetPrice)} mỗi khách mỗi tháng.`);
-    else if (m.margin < 0) tips.push(`Chi phí AI đang cao hơn giá bán ${usd(m.perUser - m.c.price)} mỗi khách mỗi tháng. Cần giá ít nhất ${usd(m.breakEven)}, hoặc giảm token mỗi lượt gọi.`);
-    else if (m.margin < t) tips.push(`Biên hiện tại ${pct(m.margin)}, dưới mục tiêu ${pct(t)}. Hai hướng: nâng giá lên khoảng ${usd(m.targetPrice)}, hoặc giảm khoảng ${pct(1 - m.c.price * (1 - t) / m.perUser)} token mỗi lượt gọi.`);
-    else tips.push(`Biên ${pct(m.margin)} đã đạt mục tiêu ${pct(t)}. Có thể giữ giá, hoặc dành phần dư cho model tốt hơn ở bước khó.`);
-    tips.push(m.outShare > 0.5 ? 'Token ra chiếm phần lớn chi phí. Giới hạn độ dài câu trả lời hoặc yêu cầu định dạng ngắn hơn.' : 'Token vào chiếm phần lớn chi phí. Cache phần prompt lặp lại hoặc rút gọn ngữ cảnh gửi kèm.');
-    if (m.trend > 0.1) tips.push(`Chi phí mỗi lượt gọi tăng ${pct(m.trend)} so với lần chạy trước. Kiểm tra model hoặc prompt vừa đổi.`);
-    if (m.c.price > 0 && m.c.infra > 0) tips.push(`Giá hòa vốn đã tính phần hạ tầng chia đều cho ${m.c.teams || 0} khách: ${usd(m.breakEven)} mỗi khách mỗi tháng.`);
-    return tips;
-  }
   /* Biểu đồ đường bằng SVG, không cần thư viện. series: [{ name, color, values[], target? }] */
   const PALETTE = ['var(--ink)', 'var(--indigo)', 'var(--blue)', 'var(--green)', 'var(--orange)', 'var(--violet)', 'var(--yellow)'];
-  const tick = v => (Math.abs(v) >= 1e6 ? +(v / 1e6).toFixed(1) + 'M' : Math.abs(v) >= 1e3 ? Math.round(v / 1e3) + 'k' : String(+v.toFixed(1)));
   function lineChart(xs, series, label) {
-    const W = 640, H = 230, L = 46, R = 14, T = 12, B = 30;
+    const W = 640, H = 230, L = 50, R = 26, T = 22, B = 30;
     const vals = series.flatMap(s => [...s.values, s.target]).filter(v => v !== null && v !== undefined && isFinite(v));
     if (!xs.length || !vals.length) return '<p class="muted">Chưa có lần chạy nào để vẽ.</p>';
     const hi = Math.max(...vals, 0), mag = hi > 0 ? 10 ** Math.floor(Math.log10(hi)) : 1, max = Math.ceil(hi * 1.08 / mag) * mag || 1, min = Math.min(0, ...vals);
     const x = i => L + (xs.length === 1 ? (W - L - R) / 2 : i * (W - L - R) / (xs.length - 1));
     const y = v => T + (H - T - B) * (1 - (v - min) / (max - min || 1));
     const every = Math.ceil(xs.length / 7);
-    const grid = [0, 0.25, 0.5, 0.75, 1].map(t => min + (max - min) * t).map(v => `<line class="g" x1="${L}" x2="${W - R}" y1="${y(v).toFixed(1)}" y2="${y(v).toFixed(1)}"/><text x="${L - 6}" y="${(y(v) + 4).toFixed(1)}" text-anchor="end">${tick(v)}</text>`).join('');
+    const grid = [0, 0.25, 0.5, 0.75, 1].map(t => min + (max - min) * t).map(v => `<line class="g" x1="${L}" x2="${W - R}" y1="${y(v).toFixed(1)}" y2="${y(v).toFixed(1)}"/><text x="${L - 6}" y="${(y(v) + 4).toFixed(1)}" text-anchor="end">${esc(fmtK(v))}</text>`).join('');
     const xl = xs.map((l, i) => (i % every && i !== xs.length - 1 ? '' : `<text x="${x(i).toFixed(1)}" y="${H - 8}" text-anchor="middle">${esc(l.split(' ')[0])}</text>`)).join('');
+    const placed = [];
     const lines = series.map(s => {
       let d = '', prev = false;
       s.values.forEach((v, i) => { if (v === null || v === undefined || !isFinite(v)) { prev = false; return; } d += `${prev ? 'L' : 'M'}${x(i).toFixed(1)} ${y(v).toFixed(1)}`; prev = true; });
       const target = s.target !== null && s.target !== undefined && isFinite(s.target) ? `<line class="tg" x1="${L}" x2="${W - R}" y1="${y(s.target).toFixed(1)}" y2="${y(s.target).toFixed(1)}" style="stroke:${s.color}"/>` : '';
-      const dots = s.values.map((v, i) => (v === null || v === undefined || !isFinite(v) ? '' : `<circle cx="${x(i).toFixed(1)}" cy="${y(v).toFixed(1)}" r="3.6" style="fill:${s.color}"><title>${esc(s.name)}, ${esc(xs[i])}: ${+(+v).toFixed(2)}</title></circle>`)).join('');
+      const dots = s.values.map((v, i) => {
+        if (v === null || v === undefined || !isFinite(v)) return '';
+        const px = x(i), py = y(v);
+        const lx = Math.max(L + 2, Math.min(W - 18, px));
+        let ly = Math.max(12, Math.min(H - B - 4, py - 8));
+        if (placed.some(p => Math.abs(p.x - lx) < 28 && Math.abs(p.y - ly) < 11)) {
+          let up = ly - 11;
+          while (up >= 12 && placed.some(p => Math.abs(p.x - lx) < 28 && Math.abs(p.y - up) < 11)) up -= 11;
+          if (up >= 12) ly = up;
+          else {
+            const dn = Math.min(H - B - 4, py + 15);
+            if (!placed.some(p => Math.abs(p.x - lx) < 28 && Math.abs(p.y - dn) < 11)) ly = dn;
+          }
+        }
+        placed.push({ x: lx, y: ly });
+        const fillCol = s.color === 'var(--yellow)' ? 'var(--mute)' : s.color;
+        return `<circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="3.6" style="fill:${s.color}"><title>${esc(s.name)}, ${esc(xs[i])}: ${+(+v).toFixed(2)}</title></circle><text class="val" x="${lx.toFixed(1)}" y="${ly.toFixed(1)}" text-anchor="middle" style="fill:${fillCol}">${esc((s.fmt || fmtK)(v))}</text>`;
+      }).join('');
       return `${target}<path class="ln" d="${d}" style="stroke:${s.color}"/>${dots}`;
     }).join('');
     const legend = series.map(s => `<span style="--c:${s.color}"><i></i>${esc(s.name)}${s.target !== null && s.target !== undefined && isFinite(s.target) ? `, mục tiêu ${+s.target}` : ''}</span>`).join('');
@@ -315,23 +376,15 @@
     setTimeout(() => { if (b.isConnected && b.textContent === label) b.textContent = old; }, 4000);
     return false;
   }
-  function ruleTech() {
-    const s = signals(), m = money(), out = [];
-    if (s.passDrop > 0) out.push({ title: 'Khóa phiên bản model và prompt đang chạy tốt', why: `Tỉ lệ pass giảm ${pct(s.passDrop)} ở lần chạy gần nhất. Giữ bản cũ để quay lại trong khi tìm nguyên nhân.`, level: 'Cao' });
-    if (s.metricMiss > 0) out.push({ title: 'Đưa các ca chưa đạt vào bộ kiểm thử hồi quy', why: `${s.metricMiss} metric chưa đạt mục tiêu. Ca lỗi thật giúp phát hiện sớm khi đổi model.`, level: 'Cao' });
-    if (m && m.margin !== null && m.margin < PROFIT.targetMargin) out.push({ title: 'Thử model nhỏ hơn cho bước đơn giản', why: `Biên lãi ${pct(m.margin)} dưới mục tiêu ${pct(PROFIT.targetMargin)}. Chạy lại bộ kiểm thử trước khi đổi (cần kiểm tra lại chất lượng).`, level: 'Vừa' });
-    if (s.staleDays !== null && s.staleDays >= RULES.staleDays.warn) out.push({ title: 'Chạy bộ kiểm thử tự động mỗi khi merge', why: `Đã ${s.staleDays} ngày chưa có lần chạy mới.`, level: 'Vừa' });
-    out.push({ title: 'Ghi log có che thông tin cá nhân', why: 'Cần log để sửa lỗi chất lượng mà không giữ dữ liệu cá nhân của khách.', level: 'Cao' },
-      { title: 'Thêm phương án dự phòng khi model lỗi', why: 'Người dùng vẫn làm việc được khi dịch vụ AI chậm hoặc gián đoạn.', level: 'Vừa' });
-    return { items: out };
-  }
+  /* Tìm gợi ý theo ID; gợi ý cũ chưa có ID thì dùng vị trí. */
+  const pickSuggest = (list, b) => (b.dataset.id ? list.find(x => x.id === b.dataset.id) : list[+b.dataset.n]);
   function ruleCadence() {
     const s = signals(), m = money(), have = new Set(S.maintain.schedule.map(x => x.title)), out = [];
     const add = (title, every, why) => { if (!have.has(title)) out.push({ title, every, why }); };
     const low = (s.passRate !== null && s.passRate < RULES.passRate.warn) || (s.passDrop !== null && s.passDrop >= RULES.passDrop.warn);
     add('Chạy bộ kiểm thử và ghi vào Quality', low ? 3 : 7, low ? 'Chất lượng đang giảm, cần đo dày hơn cho tới khi ổn định.' : 'Giữ nhịp đo hằng tuần để thấy xu hướng.');
     if (new Set(S.quality.runs.map(r => r.model)).size > 1) add('Chạy đối chứng mỗi khi đổi model hoặc prompt', 14, 'Đội đã thử nhiều phiên bản. Mỗi lần đổi cần một lần chạy so với bản trước.');
-    if (m) add('Rà chi phí token và giá bán', m.margin !== null && m.margin < PROFIT.targetMargin ? 7 : 30, m.margin !== null && m.margin < PROFIT.targetMargin ? `Biên lãi ${pct(m.margin)} dưới mục tiêu, cần theo dõi hằng tuần.` : 'Đơn giá token và lượng dùng thay đổi theo thời gian.');
+    if (m.known) add('Rà chi phí token và giá bán', m.margin !== null && m.margin < PROFIT.targetMargin ? 7 : 30, m.margin !== null && m.margin < PROFIT.targetMargin ? `Biên lãi ${pct(m.margin)} dưới mục tiêu, cần theo dõi hằng tuần.` : 'Đơn giá token và lượng dùng thay đổi theo thời gian.');
     if (s.overdueDays >= RULES.overdueDays.warn) add('Dọn các việc bảo trì trễ hạn', 7, `Có việc trễ ${s.overdueDays} ngày.`);
     add('Kiểm tra bản cập nhật thư viện và model', 30, 'Đọc ghi chú phát hành trước khi nâng cấp. Phiên bản cụ thể cần đội kiểm tra lại.');
     return { items: out };
@@ -369,7 +422,7 @@
     quality: {
       metrics: S.quality.metrics.map(m => `${m.name} (${(KIND[m.kind] || KIND.value)[0]}): hiện trạng ${num(m.baseline) === null ? 'chưa đo' : m.baseline + m.unit}, mục tiêu ${m.target}${m.unit}, cách đo: ${m.method || 'chưa ghi'}`),
       metricTips: checkMetrics(),
-      runs: sortedRuns().slice(-5).map(r => `${r.at} ${r.model}: pass ${r.passed}/${r.total}, token ${r.inTok}/${r.outTok}${r.sample ? ' (dữ liệu mẫu)' : ''}`),
+      runs: sortedRuns().slice(-5).map(r => `${r.at} ${r.model}: pass ${r.passed}/${r.total}, token dự kiến ${num(r.estTok) === null ? 'chưa khai' : r.estTok} / thực tế ${num(r.actTok) === null ? 'chưa khai' : r.actTok}${r.sample ? ' (dữ liệu mẫu)' : ''}`),
       health: HNAMES[health().level], reasons: health().reasons.map(reasonText)
     },
     chat: S.chat.slice(-14).map(m => `${m.who === 'agent' ? 'Agent' : (member(m.who) || {}).name}: ${m.text}`)
@@ -540,12 +593,35 @@
       const units = new Set(['%', ...q.metrics.map(k => k.unit)]);
       const samples = q.runs.filter(r => r.sample).length;
       const val = (r, k) => (editing ? r[k] ?? '' : '');
-      const field = (name, label, value, attrs = 'type="number" min="0" step="any"') => `<label>${label}<input name="${name}" ${attrs} value="${esc(value)}"></label>`;
-      const c = S.plan.cost, unit = { priceIn: +c.priceIn || 0, priceOut: +c.priceOut || 0 }, priced = unit.priceIn || unit.priceOut;
-      const costIn = Object.entries({ priceIn: 'USD / 1 triệu token vào', priceOut: 'USD / 1 triệu token ra', tickets: 'Câu hỏi mỗi shop/tháng', price: 'Giá mỗi shop USD/tháng', infra: 'Hạ tầng USD/tháng', teams: 'Số shop trả phí' })
-        .map(([k, l]) => `<label>${l}<input type="number" min="0" step="any" data-bind="cost" data-id="${k}" value="${+c[k] || 0}"></label>`).join('');
+      const field = (name, label, value, attrs = 'type="number" min="0" step="any"') => `<label>${label}<input name="${esc(name)}" ${attrs} value="${esc(value)}"></label>`;
+      const c = S.plan.cost, unit = { pricePerM: +c.pricePerM || 0 }, priced = unit.pricePerM > 0;
+      const latestId = runs.length ? runs[runs.length - 1].id : null;
+      const revModel = ['sub', 'usage', 'setup'].includes(q.revenueModel) ? q.revenueModel : 'sub';
+      const numField = (k, l, step = 'any') => `<label>${l}<input type="number" min="0" step="${step}" data-bind="cost" data-id="${k}" value="${+c[k] || 0}"></label>`;
+      const revInputs = revModel === 'usage'
+        ? numField('pricePerCall', 'Giá mỗi lượt gọi USD')
+        : revModel === 'setup'
+          ? numField('setupFee', 'Phí triển khai mỗi khách USD') + numField('newCustomers', 'Số khách mới mỗi tháng', '1')
+          : numField('price', 'Giá mỗi khách USD/tháng') + numField('teams', 'Số khách trả phí', '1');
+      const NEED = 'Cần chi phí AI';
+      const beText = !m.known ? NEED : revModel === 'usage'
+        ? (m.breakEven !== null ? `${usd(m.breakEven)} / lượt` : 'Cần số lượt gọi')
+        : revModel === 'setup'
+          ? (m.breakEven !== null ? `${m.breakEven.toLocaleString('vi-VN')} khách/tháng` : 'Cần phí triển khai')
+          : (m.breakEven !== null ? `${m.breakEven.toLocaleString('vi-VN')} khách` : 'Cần giá bán');
+      const tpText = !m.known ? NEED : revModel === 'usage'
+        ? (m.targetPrice !== null ? `${usdUp(m.targetPrice)} / lượt` : 'Cần số lượt gọi')
+        : revModel === 'setup'
+          ? (m.targetPrice !== null ? `${usdUp(m.targetPrice)} / khách` : 'Cần số khách mới')
+          : (m.targetPrice !== null ? `${usdUp(m.targetPrice)} / khách` : 'Cần số khách');
+      const costPart = m.known ? ` Tổng chi ${usd(m.totalCost)}, ${m.profit >= 0 ? 'lãi' : 'lỗ'} ${usd(Math.abs(m.profit))}${m.margin !== null ? ` (${pct(m.margin)})` : ''}.` : ' Chưa tính được lãi vì thiếu chi phí AI.';
+      const revSummary = revModel === 'usage'
+        ? `${(+c.apiCalls || 0).toLocaleString('vi-VN')} lượt gọi × ${usd(+c.pricePerCall || 0)} = ${usd(m.revenue)}/tháng.`+costPart
+        : revModel === 'setup'
+          ? `${(+c.newCustomers || 0).toLocaleString('vi-VN')} khách mới × ${usd(+c.setupFee || 0)} = ${usd(m.revenue)}/tháng.`+costPart
+          : `${(+c.teams || 0).toLocaleString('vi-VN')} khách × ${usd(+c.price || 0)} = ${usd(m.revenue)}/tháng.`+costPart;
       return head(3, 'Mỗi lần đổi model hay prompt là một lần chạy thử. Ghi lại để thấy chất lượng, token và chi phí đi về đâu.') + `<div class="stack">
-        <div class="cols"><div class="panel">${panelHead('Chỉ số cần đạt', btn('metrics', q.metrics.length ? 'Agent lấy lại chỉ số' : 'Agent lấy chỉ số', 'tone small'))}
+        <div class="panel">${panelHead('Chỉ số cần đạt', btn('metrics', q.metrics.length ? 'Lấy lại chỉ số' : 'Lấy chỉ số', 'tone small'))}
           <p class="muted">Agent đọc mục Metric trong scorecard và tách thành từng chỉ số. Mỗi lần chạy thử, đội nhập con số đo được để so với mục tiêu ở đây.</p>
           <div class="prose" style="margin:8px 0">${src ? esc(src) : 'Mục Metric đang trống. Điền ở tab Product thinking trước.'}</div>
           ${stale ? `<p class="note-warn">Scorecard đã đổi sau lần lấy chỉ số gần nhất. Bấm lấy lại để cập nhật.</p>` : ''}
@@ -558,36 +634,46 @@
               <label class="field">Đo bằng cách nào<input ${b('method')} value="${esc(k.method || '')}" placeholder="Ví dụ: đếm trong log chat mỗi tuần"></label></div></details></div>`; }).join('') || '<p class="muted">Chưa có chỉ số nào.</p>'}</div>
           ${(() => { const tips = checkMetrics(); return tips.length ? `<div class="tips"><h4>Gợi ý cho bộ chỉ số</h4><ul>${tips.map(t => `<li>${esc(t)}</li>`).join('')}</ul></div>` : ''; })()}
           <p style="margin-top:10px">${btn('addmetric', 'Thêm chỉ số', 'soft small')}</p></div>
-        <div class="panel">${panelHead(editing ? 'Sửa lần chạy thử' : 'Khai lần chạy thử', samples ? `<span class="muted">${samples} lần chạy là dữ liệu mẫu</span>` : '')}
+        <div class="panel">${panelHead(editing ? 'Lịch sử AI: đang sửa một lần chạy' : 'Lịch sử AI', samples ? `<span class="muted">${samples} lần chạy là dữ liệu mẫu</span>` : '')}
           <form class="stack" style="gap:10px" data-form="run"><div class="cost">
             ${field('at', 'Thời điểm', editing ? editing.at : nowLocal(), 'type="datetime-local" required')}
             ${field('model', 'Model hoặc phiên bản', val(editing || {}, 'model'), 'required maxlength="80" placeholder="Ví dụ: Model A, prompt v4"')}
             ${q.metrics.map(k => field('m_' + k.id, `${esc(k.name)}${k.unit ? ' (' + esc(k.unit) + ')' : ''}`, editing ? editing.values[k.id] ?? '' : '', 'type="number" step="any"')).join('')}
             ${field('passed', 'Số test pass', val(editing || {}, 'passed'), 'type="number" min="0" step="1"')}
             ${field('total', 'Tổng số test', val(editing || {}, 'total'), 'type="number" min="0" step="1"')}
-            ${field('inTok', 'Token vào (cả lần chạy)', val(editing || {}, 'inTok'))}
-            ${field('outTok', 'Token ra (cả lần chạy)', val(editing || {}, 'outTok'))}
+            ${field('estTok', 'Tổng số token dự kiến', val(editing || {}, 'estTok'), 'type="number" min="0" step="1"')}
+            ${field('actTok', 'Tổng số token thực tế', val(editing || {}, 'actTok'), 'type="number" min="0" step="1"')}
           </div><textarea name="note" rows="2" maxlength="300" placeholder="Ghi chú: lần này đổi gì so với lần trước" aria-label="Ghi chú">${esc(editing ? editing.note : '')}</textarea>
-          <div class="row"><button class="btn tone small">${editing ? 'Lưu thay đổi' : 'Thêm lần chạy'}</button>${editing ? btn('cancelrun', 'Hủy sửa', 'soft small') : ''}</div></form></div></div>
+          <div class="row"><button class="btn tone small">${editing ? 'Lưu thay đổi' : 'Thêm lần chạy'}</button>${editing ? btn('cancelrun', 'Hủy sửa', 'soft small') : ''}</div></form></div>
         <div class="panel">${panelHead('Chất lượng model theo thời gian', `<div class="seg" role="group" aria-label="Đường hiển thị">${[{ id: 'all', name: 'Tất cả' }, ...series].map(s => `<button data-act="qline" data-id="${esc(s.id)}" class="${s.id === qline ? 'on' : ''}">${esc(s.id === 'all' ? 'Tất cả' : s.name.replace(/ \(.*\)$/, ''))}</button>`).join('')}</div>`)}
           ${qline === 'all' && units.size > 1 ? '<p class="note-warn" style="margin-bottom:8px">Các metric khác đơn vị đang chung một trục. Chọn từng đường để xem đúng tỉ lệ.</p>' : ''}
           ${lineChart(xs, shown, 'Biểu đồ chất lượng model theo lần chạy')}${samples ? '<p class="muted" style="margin-top:6px">Có dữ liệu mẫu trong biểu đồ. Xóa mẫu trước khi dùng số này để kết luận.</p>' : ''}</div>
-        <div class="cols"><div class="panel">${panelHead('Token mỗi lần chạy')}${lineChart(xs, [{ name: 'Token vào', color: 'var(--blue)', values: runs.map(r => num(r.inTok)) }, { name: 'Token ra', color: 'var(--orange)', values: runs.map(r => num(r.outTok)) }], 'Biểu đồ token theo lần chạy')}</div>
-        <div class="panel">${panelHead('Chi phí mỗi lần chạy', '<span class="muted">Token nhân đơn giá do đội nhập</span>')}${priced ? lineChart(xs, [{ name: 'Chi phí (USD)', color: 'var(--violet)', values: runs.map(r => +runCost(r, unit).toFixed(4)) }], 'Biểu đồ chi phí theo lần chạy') : '<p class="muted">Cần đơn giá token ở phần chi phí bên dưới.</p>'}</div></div>
-        <div class="panel">${panelHead('Các lần chạy thử', samples ? btn('clearsample', 'Xóa dữ liệu mẫu', 'soft small') : '')}<div class="scroll"><table><thead><tr><th>Thời điểm</th><th>Model</th>${q.metrics.map(k => `<th>${esc(k.name)}</th>`).join('')}<th>Pass</th><th>Token vào / ra</th><th>Chi phí</th><th>Ghi chú</th><th></th></tr></thead><tbody>
-          ${runs.slice().reverse().map(r => `<tr data-row="${esc(r.id)}"><td>${esc(shortDate(r.at))}${r.sample ? ' <span class="tag" style="--c:var(--yellow)">Mẫu</span>' : ''}</td><td>${esc(r.model)}</td>
+        <div class="cols"><div class="panel">${panelHead('Token mỗi lần chạy')}${lineChart(xs, [{ name: 'Token dự kiến', color: 'var(--blue)', values: runs.map(r => num(r.estTok)) }, { name: 'Token thực tế', color: 'var(--orange)', values: runs.map(r => num(r.actTok)) }], 'Biểu đồ token theo lần chạy')}</div>
+        <div class="panel">${panelHead('Chi phí mỗi lần chạy', '<span class="muted">Token thực tế nhân đơn giá do đội nhập</span>')}${priced ? lineChart(xs, [{ name: 'Chi phí (USD)', color: 'var(--violet)', fmt: usdShort, values: runs.map(r => (num(r.actTok) === null ? null : +runCost(r, unit).toFixed(4))) }], 'Biểu đồ chi phí theo lần chạy') : '<p class="muted">Cần đơn giá token ở phần chi phí bên dưới.</p>'}</div></div>
+        <div class="panel">${panelHead('Các lần chạy thử', samples ? btn('clearsample', 'Xóa dữ liệu mẫu', 'soft small') : '')}<div class="scroll"><table><thead><tr><th>Thời điểm</th><th>Model</th>${q.metrics.map(k => `<th>${esc(k.name)}</th>`).join('')}<th>Pass</th><th>Token dự kiến / thực tế</th><th>Chi phí</th><th>Ghi chú</th><th></th></tr></thead><tbody>
+          ${runs.slice().reverse().map(r => `<tr data-row="${esc(r.id)}" class="${r.id === latestId ? 'latest' : ''}"><td>${esc(shortDate(r.at))}${r.id === latestId ? ' <span class="tag" style="--c:var(--indigo)">Mới nhất</span>' : ''}${r.sample ? ' <span class="tag" style="--c:var(--yellow)">Mẫu</span>' : ''}</td><td>${esc(r.model)}</td>
             ${q.metrics.map(k => { const v = num(r.values[k.id]); return `<td>${v === null ? '<span class="muted">Chưa khai</span>' : `${+v.toFixed(2)}${esc(k.unit)}${meets(k, v) ? '' : ' <span class="tag" style="--c:var(--orange)">Chưa đạt</span>'}`}</td>`; }).join('')}
             <td>${rate(r) === null ? '<span class="muted">Chưa khai</span>' : `${+r.passed}/${+r.total}<br><span class="muted">${pct(rate(r))}</span>`}</td>
-            <td>${(+r.inTok || 0).toLocaleString('vi-VN')} / ${(+r.outTok || 0).toLocaleString('vi-VN')}</td><td>${priced ? usd(runCost(r, unit)) : '<span class="muted">Cần đơn giá</span>'}</td>
+            <td>${num(r.estTok) === null ? '—' : fmtK(num(r.estTok))} / ${num(r.actTok) === null ? '—' : fmtK(num(r.actTok))}</td><td>${!priced ? '<span class="muted">Cần đơn giá</span>' : num(r.actTok) === null ? '—' : usd(runCost(r, unit))}</td>
             <td><span class="muted">${esc(r.note)}</span></td><td><div class="row" style="gap:6px;flex-wrap:nowrap">${btn('editrun', 'Sửa', 'soft small', `data-id="${esc(r.id)}"`)}${btn('delrun', 'Xóa', 'soft small', `data-id="${esc(r.id)}"`)}</div></td></tr>`).join('') || `<tr><td colspan="${7 + q.metrics.length}" class="muted">Chưa có lần chạy nào.</td></tr>`}</tbody></table></div></div>
-        <div class="panel">${panelHead('Chi phí và gợi ý lợi nhuận', '<span class="muted">Đơn giá và giá bán dùng chung với Planning, đều là giả định của đội</span>')}<div class="cost">${costIn}</div>
-          <div class="kpis">${(m ? [['Chi phí lần chạy gần nhất', usd(m.lastRun)], ['Chi phí mỗi lượt gọi', usd(m.perCase)], ['Chi phí AI mỗi shop/tháng', usd(m.perUser)], ['Biên lãi gộp (chỉ chi phí AI)', m.margin === null ? 'Cần giá bán' : pct(m.margin)], ['Giá hòa vốn mỗi shop', usd(m.breakEven)], [`Giá để đạt biên ${pct(PROFIT.targetMargin)}`, usd(m.targetPrice)]] : [['Chi phí', 'Cần đơn giá và lần chạy có token']]).map(k => `<div class="kpi"><b>${k[1]}</b><span>${k[0]}</span></div>`).join('')}</div>
-          <div class="stack" style="gap:6px;margin-top:14px">${profitTips(m).map(t => `<p>${esc(t)}</p>`).join('')}</div>
+        <div class="panel">${panelHead('Chi phí', '<span class="muted">Đơn giá và hạ tầng là giả định của đội</span>')}<div class="cost">${numField('pricePerM', 'USD / 1 triệu token')}${numField('apiCalls', 'Số lượt gọi API/tháng', '1')}<div class="cost-field"><div class="label-row"><label for="q-infra">Hạ tầng USD/tháng</label><span class="tip-wrap"><button type="button" class="tip-btn" aria-label="Hạ tầng là gì?" aria-describedby="tip-infra">?</button><span class="tip-pop" id="tip-infra" role="tooltip">Chi phí chạy sản phẩm ngoài tiền token, ví dụ VPS, tên miền, GPU, cơ sở dữ liệu.</span></span></div><input id="q-infra" type="number" min="0" step="any" data-bind="cost" data-id="infra" value="${+c.infra || 0}"></div></div>
+          <div class="kpis">${[['Chi phí lần chạy gần nhất', m.lastRun], ['Chi phí mỗi lượt gọi', m.perCase], ['Chi phí AI/tháng', m.aiMonthly], ['Tổng chi/tháng', m.totalCost]].map(([l, v]) => `<div class="kpi"><b>${v === null ? '—' : usd(v)}</b><span>${l}</span></div>`).join('')}</div>
+          ${m.known ? '' : `<p class="muted" style="margin-top:8px">${m.priced ? 'Cần ít nhất một lần chạy có tổng số test và token thực tế.' : 'Cần đơn giá token để tính chi phí.'}</p>`}
           <details style="margin-top:12px"><summary class="muted">Giả định trong phép tính</summary><ul class="muted">
-            <li>Một ca test ứng với một lượt gọi thật của người dùng. Chi phí mỗi lượt gọi là trung bình của 3 lần chạy gần nhất có token.</li>
-            <li>Chi phí AI mỗi shop bằng chi phí mỗi lượt gọi nhân số câu hỏi mỗi shop mỗi tháng.</li>
-            <li>Biên lãi chỉ trừ chi phí AI. Giá hòa vốn cộng thêm hạ tầng chia đều cho số shop trả phí.</li>
-            <li>Biên mục tiêu ${pct(PROFIT.targetMargin)} đặt trong file tang/health.js.</li></ul></details></div></div>`;
+            <li>Chi phí một lần chạy bằng tổng số token thực tế nhân đơn giá USD / 1 triệu token.</li>
+            <li>Một ca test ứng với một lượt gọi API thật. Chi phí mỗi lượt gọi là trung bình của tối đa 3 lần chạy gần nhất có token thực tế và tổng số test.</li>
+            <li>Chi phí AI/tháng bằng chi phí mỗi lượt gọi nhân số lượt gọi API/tháng. Tổng chi/tháng bằng chi phí AI cộng hạ tầng.</li></ul></details></div>
+        <div class="panel">${panelHead('Kế hoạch kiếm tiền')}<div class="cost">
+          <label>Mô hình thu<select data-bind="revmodel"><option value="sub" ${revModel === 'sub' ? 'selected' : ''}>Thuê bao theo khách</option><option value="usage" ${revModel === 'usage' ? 'selected' : ''}>Theo lượt dùng</option><option value="setup" ${revModel === 'setup' ? 'selected' : ''}>Gói triển khai</option></select></label>
+          ${revInputs}</div>
+          ${`<div class="kpis">${[
+            ['Doanh thu/tháng', usd(m.revenue), false],
+            ['Tổng chi/tháng', m.known ? usd(m.totalCost) : NEED, false],
+            ['Lãi hoặc lỗ/tháng', m.known ? usd(m.profit) : NEED, m.known && m.profit < 0],
+            ['Biên lãi', !m.known ? NEED : m.margin === null ? 'Cần doanh thu' : pct(m.margin), m.margin !== null && m.margin < 0],
+            ['Hòa vốn', beText, false],
+            [`Giá để đạt biên ${pct(PROFIT.targetMargin)}`, tpText, false]
+          ].map(([lbl, valTxt, warn]) => `<div class="kpi${warn ? ' is-warn' : ''}"><b>${valTxt}</b><span>${lbl}</span></div>`).join('')}</div><p style="margin-top:12px">${esc(revSummary)}</p>`}</div></div>`;
     },
 
     maintaining() {
@@ -600,9 +686,15 @@
           ${h.missing.length ? `<p class="muted" style="margin-top:8px">Chưa đủ dữ liệu cho: ${h.missing.map(k => esc(RULES[k].label.toLowerCase())).join('; ')}.</p>` : ''}
           <div class="row" style="margin-top:12px"><span class="muted">Xem thử mô hình 3D</span><div class="seg" role="group" aria-label="Xem thử trạng thái">${[['real', 'Theo số liệu'], ...LEVELS.map(l => [l, HNAMES[l]])].map(([id, n]) => `<button data-act="preview" data-id="${id}" class="${(preview || 'real') === id ? 'on' : ''}">${n}</button>`).join('')}</div></div>
           <details style="margin-top:12px"><summary class="muted">Bảng ngưỡng (sửa trong file tang/health.js)</summary><div class="scroll"><table><thead><tr><th>Luật</th>${LEVELS.slice(1).map(l => `<th>${HNAMES[l]}</th>`).join('')}</tr></thead><tbody>${rules}</tbody></table></div></details></div>
-        <div class="panel">${panelHead('Gợi ý cập nhật công nghệ', btn('tech', 'Agent gợi ý mới', 'tone small'))}<p class="muted" style="margin-bottom:10px">Gợi ý dựa trên xu hướng metric và chi phí ở Quality. Tên phiên bản thư viện hoặc model cụ thể cần đội kiểm tra lại trước khi làm.</p><div class="cards">${m.tech.map((t, i) => `<div class="card"><span class="tag" style="--c:var(--${['red', 'orange', 'blue'].includes(t.color) ? t.color : 'blue'})">Ưu tiên ${esc(t.level)}</span><span>${esc(t.title)}</span><span class="muted">${esc(t.why)}</span>${t.added ? '<span class="muted">Đã có trong lịch</span>' : btn('schedule', 'Thêm vào lịch', 'soft small', `data-n="${i}"`)}</div>`).join('')}</div></div>
-        <div class="panel">${panelHead('Gợi ý lịch bảo trì', btn('cadence', 'Agent gợi ý lịch', 'soft small'))}${suggest.length ? `<div class="cards">${suggest.map((x, i) => `<div class="card"><span class="tag">Mỗi ${+x.every} ngày</span><span>${esc(x.title)}</span><span class="muted">${esc(x.why)}</span>${btn('addsuggest', 'Thêm vào lịch', 'soft small', `data-n="${i}"`)}</div>`).join('')}</div>` : '<p class="muted">Agent đề xuất chu kỳ kiểm tra dựa trên chất lượng, chi phí và việc đang trễ. Đội duyệt từng việc trước khi đưa vào lịch.</p>'}</div>
-        <div class="panel">${panelHead('Lịch bảo trì')}<div class="scroll"><table><thead><tr><th>Việc</th><th>Chu kỳ</th><th>Hạn tới</th><th>Người làm</th><th></th></tr></thead><tbody>${m.schedule.slice().sort((a, b) => a.next.localeCompare(b.next)).map(x => `<tr data-row="${esc(x.id)}"><td>${esc(x.title)}<br><span class="muted">Đã làm ${+x.runs || 0} lần</span></td><td>${+x.every} ngày</td><td><span class="tag" style="--c:var(${x.next <= today ? '--red' : '--violet'})">${x.next <= today ? 'Đến hạn ' : ''}${esc(x.next.split('-').reverse().join('/'))}</span></td><td><select data-bind="mowner" data-id="${esc(x.id)}" aria-label="Người làm">${options(x.owner)}</select></td><td>${btn('ran', 'Đã làm', 'tone small', `data-id="${esc(x.id)}"`)}</td></tr>`).join('')}</tbody></table></div></div></div>`;
+        <div class="panel">${panelHead('Lịch bảo trì', btn('cadence', 'Agent gợi ý lịch', 'soft small'))}
+          ${suggest.length ? `<div class="suggest-list">${suggest.map((x, i) => `<div class="suggest-row"><div class="suggest-info"><div class="row" style="gap:8px"><span>${esc(x.title)}</span><span class="tag" style="--c:var(--violet)">Mỗi ${+x.every} ngày</span></div><span class="muted">${esc(x.why)}</span></div><div class="row" style="gap:6px">${btn('addsuggest', 'Thêm vào lịch', 'soft small', `data-id="${esc(x.id || '')}" data-n="${i}"`)}${btn('dismisssuggest', 'Bỏ qua', 'soft small', `data-id="${esc(x.id || '')}" data-n="${i}"`)}</div></div>`).join('')}</div>` : ''}
+          <div class="scroll"><table><thead><tr><th>Việc</th><th>Chu kỳ</th><th>Hạn tới</th><th>Người làm</th><th></th></tr></thead><tbody>${m.schedule.slice().sort((a, b) => a.next.localeCompare(b.next)).map(x => `<tr data-row="${esc(x.id)}"><td>${esc(x.title)}<br><span class="muted">Đã làm ${+x.runs || 0} lần</span></td><td>${+x.every} ngày</td><td><span class="tag" style="--c:var(${x.next <= today ? '--orange' : '--violet'})">${x.next <= today ? 'Đến hạn ' : ''}${esc(x.next.split('-').reverse().join('/'))}</span></td><td><select data-bind="mowner" data-id="${esc(x.id)}" aria-label="Người làm">${options(x.owner)}</select></td><td><div class="row" style="gap:6px;flex-wrap:nowrap">${btn('ran', 'Đã làm', 'tone small', `data-id="${esc(x.id)}"`)}${btn('delmaint', 'Xóa', 'soft small danger', `data-id="${esc(x.id)}"`)}</div></td></tr>`).join('') || '<tr><td colspan="5" class="muted">Chưa có việc nào trong lịch bảo trì.</td></tr>'}</tbody></table></div>
+          <form class="maint-form stack" style="gap:10px" data-form="maint" novalidate><div class="cost">
+            <label>Việc cần làm<input name="title" required maxlength="120" placeholder="Ví dụ: Rà lại câu trả lời sai chính sách"></label>
+            <label>Chu kỳ (ngày)<input name="every" type="number" min="1" max="365" step="1" value="7" required></label>
+            <label>Hạn đầu tiên<input name="next" type="date" value="${today}" required></label>
+            <label>Người làm<select name="owner">${options('')}</select></label>
+          </div><div><button class="btn tone small">Thêm vào lịch</button></div></form></div></div>`;
     }
   };
 
@@ -713,26 +805,15 @@
       S.pitch.ads = out.ads; save('pitch');
       return ['pitch', () => rise($$('#view .prose'))];
     },
-    async tech() {
-      const h = health();
-      const out = await generate('Gợi ý 3 việc cập nhật công nghệ cho sản phẩm này, không lặp các gợi ý: ' + S.maintain.tech.map(t => t.title).join('; ') + `. Tình trạng hiện tại (tính bằng code): ${HNAMES[h.level]}; ${h.reasons.map(reasonText).join('; ') || 'chưa chạm ngưỡng nào'}. Ưu tiên việc xử lý đúng các vấn đề này. level là "Cao" hoặc "Vừa". Không nêu phiên bản cụ thể nếu chưa chắc; nếu có nêu tên phiên bản thư viện hoặc model, thêm "(cần kiểm tra lại)" vào cuối why.`,
-        '{"items":[{"title":"","why":"","level":"Vừa"}]}', o => o && Array.isArray(o.items) && o.items.length && o.items.every(t => str(t.title) && str(t.why)),
-        ruleTech);
-      const have = new Set(S.maintain.tech.map(t => t.title));
-      const fresh = out.items.filter(t => !have.has(t.title)).slice(0, 3).map(t => ({ title: String(t.title), why: String(t.why), level: t.level === 'Cao' ? 'Cao' : 'Vừa', color: t.level === 'Cao' ? 'red' : 'orange' }));
-      if (!fresh.length) toast('Chưa có gợi ý mới.');
-      S.maintain.tech = [...fresh, ...S.maintain.tech].slice(0, 9); save('maintain');
-      return ['maintain', () => rise($$('#view .card'))];
-    },
     async cadence() {
       const have = S.maintain.schedule.map(x => x.title);
       const out = await generate(`Gợi ý tối đa 4 việc bảo trì định kỳ cho sản phẩm, dựa trên tình trạng chất lượng và chi phí trong dữ liệu dự án. Không lặp các việc đã có: ${have.join('; ')}. every là số ngày giữa hai lần làm, từ 1 đến 180. why nói rõ dựa trên số liệu nào.`,
         '{"items":[{"title":"","every":7,"why":""}]}', o => o && Array.isArray(o.items) && o.items.length && o.items.every(t => str(t.title) && str(t.why) && +t.every >= 1),
         ruleCadence);
-      const fresh = out.items.filter(t => !have.includes(t.title)).slice(0, 5).map(t => ({ title: String(t.title).slice(0, 120), every: Math.max(1, Math.min(180, Math.round(+t.every))), why: String(t.why).slice(0, 240) }));
+      const fresh = out.items.filter(t => !have.includes(t.title)).slice(0, 5).map(t => ({ title: String(t.title).slice(0, 120), every: Math.max(1, Math.min(180, Math.round(+t.every))), why: String(t.why).slice(0, 240), id: 's' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6) }));
       if (!fresh.length) toast('Lịch hiện tại đã bao gồm các gợi ý.');
       S.maintain.suggest = fresh; save('maintain');
-      return ['maintain', () => rise($$('#view .card'))];
+      return ['maintain', () => rise($$('#view .suggest-row'))];
     },
     async metrics() {
       const src = S.score.metric.text.trim();
@@ -982,13 +1063,6 @@ nature là bản chất problem: "behavior" nếu là problem hành vi (duy trì
       try { await navigator.clipboard.writeText(text); toast('Đã sao chép'); } catch (e) { toast('Trình duyệt chặn sao chép. Hãy bôi đen văn bản để chép tay.'); }
     },
     async download() { try { await downloads.save({ filename: 'pitching.html', data: deckHTML() }); toast('Đã tải pitching.html'); } catch (e) { toast('Chưa tải được file. Dùng nút Sao chép HTML.'); } },
-    schedule(b) {
-      const t = S.maintain.tech[+b.dataset.n];
-      t.added = true;
-      const id = 'm' + Date.now().toString(36);
-      S.maintain.schedule.push({ id, title: t.title, every: 30, next: inDays(7), owner: '', runs: 0 });
-      save('maintain'); rerender(); anim($(`[data-row="${id}"]`, view), { opacity: [0, 1], x: [-30, 0] }, { duration: 0.6 }); toast('Đã thêm vào lịch, hạn sau 7 ngày');
-    },
     qline(b) { qline = b.dataset.id; rerender(); anim($$('.chart .ln', view), { opacity: [0, 1] }, { duration: 0.5 }); },
     editrun(b) { runEdit = b.dataset.id; rerender(); const f = $('[data-form="run"]', view); if (f) { f.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'center' }); f.elements.model.focus(); } },
     cancelrun() { runEdit = null; rerender(); },
@@ -1010,12 +1084,22 @@ nature là bản chất problem: "behavior" nếu là problem hành vi (duy trì
     },
     preview(b) { preview = b.dataset.id === 'real' ? null : b.dataset.id; applyHealth(); rerender(); },
     addsuggest(b) {
-      const list = S.maintain.suggest || [], x = list[+b.dataset.n];
-      if (!x) return;
+      const list = S.maintain.suggest || [], x = pickSuggest(list, b);
+      if (!x) return toast('Gợi ý này đã thay đổi. Xem lại danh sách.');
       const id = 'm' + Date.now().toString(36);
       S.maintain.schedule.push({ id, title: x.title, every: x.every, next: inDays(Math.min(7, x.every)), owner: '', runs: 0 });
       S.maintain.suggest = list.filter(y => y !== x);
       save('maintain'); rerender(); anim($(`[data-row="${id}"]`, view), { opacity: [0, 1], x: [-30, 0] }, { duration: 0.6 }); toast(`Đã thêm vào lịch, chu kỳ ${x.every} ngày`);
+    },
+    dismisssuggest(b) {
+      const list = S.maintain.suggest || [], x = pickSuggest(list, b);
+      S.maintain.suggest = list.filter(y => y !== x);
+      save('maintain'); rerender();
+    },
+    delmaint(b) {
+      if (!twice(b, 'maint' + b.dataset.id, 'Bấm lần nữa để xóa')) return;
+      S.maintain.schedule = S.maintain.schedule.filter(x => x.id !== b.dataset.id);
+      save('maintain'); rerender(); toast('Đã xóa khỏi lịch bảo trì');
     },
     ran(b) {
       const x = S.maintain.schedule.find(x => x.id === b.dataset.id);
@@ -1080,18 +1164,34 @@ nature là bản chất problem: "behavior" nếu là problem hành vi (duy trì
     if (kind === 'run') {
       const g = n => (f.elements[n] ? String(f.elements[n].value).trim() : '');
       const nn = n => (g(n) === '' || !isFinite(+g(n)) ? null : Math.max(0, +g(n)));
-      const run = { at: g('at') || nowLocal(), model: g('model').slice(0, 80), values: {}, passed: nn('passed'), total: nn('total'), inTok: nn('inTok') || 0, outTok: nn('outTok') || 0, note: g('note').slice(0, 300) };
+      const est = nn('estTok'), act = nn('actTok');
+      const run = { at: g('at') || nowLocal(), model: g('model').slice(0, 80), values: {}, passed: nn('passed'), total: nn('total'), estTok: est === null ? null : Math.round(est), actTok: act === null ? null : Math.round(act), note: g('note').slice(0, 300) };
       if (!run.model) return toast('Nhập tên model hoặc phiên bản.');
       if (run.passed !== null) run.passed = Math.round(run.passed);
       if (run.total !== null) run.total = Math.round(run.total);
       if (run.passed !== null && run.total !== null && run.passed > run.total) return toast('Số test pass không được lớn hơn tổng số test.');
       S.quality.metrics.forEach(k => { const v = g('m_' + k.id); if (v !== '' && isFinite(+v)) run.values[k.id] = +v; });
       const old = S.quality.runs.find(r => r.id === runEdit);
-      if (old) Object.assign(old, run); else S.quality.runs.push(Object.assign({ id: 'r' + Date.now().toString(36) }, run));
+      if (old) { Object.assign(old, run); delete old.inTok; delete old.outTok; }
+      else S.quality.runs.push(Object.assign({ id: 'r' + Date.now().toString(36) }, run));
       S.quality.runs = S.quality.runs.slice(-200);
       toast(old ? 'Đã lưu lần chạy' : 'Đã thêm lần chạy');
       runEdit = null; save('quality'); rerender();
       anim($$('.chart .ln', view), { opacity: [0, 1] }, { duration: 0.6 });
+    }
+    if (kind === 'maint') {
+      const title = f.elements.title.value.trim().slice(0, 120);
+      if (!title) return toast('Nhập tên việc cần làm.');
+      const everyRaw = Number(f.elements.every.value);
+      if (!Number.isInteger(everyRaw) || everyRaw < 1 || everyRaw > 365) return toast('Chu kỳ phải là số nguyên từ 1 đến 365 ngày.');
+      const next = f.elements.next.value;
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(next)) return toast('Chọn hạn đầu tiên hợp lệ.');
+      const owner = f.elements.owner.value || '';
+      const id = 'm' + Date.now().toString(36);
+      S.maintain.schedule.push({ id, title, every: everyRaw, next, owner, runs: 0 });
+      save('maintain'); rerender();
+      anim($(`[data-row="${id}"]`, view), { opacity: [0, 1], x: [-30, 0] }, { duration: 0.6 });
+      toast('Đã thêm vào lịch bảo trì');
     }
     if (kind === 'answer') {
       const answers = Object.fromEntries([...new FormData(f)].filter(([, v]) => String(v).trim()));
@@ -1113,6 +1213,10 @@ nature là bản chất problem: "behavior" nếu là problem hành vi (duy trì
     if (k === 'cost') {
       S.plan.cost[id] = Math.max(0, +v || 0); save('plan');
       if ($('#kpis')) { $('#kpis').innerHTML = kpis(); anim($$('#kpis b'), { opacity: [0.2, 1], y: [6, 0] }, { duration: 0.4 }); } else rerender();
+    }
+    if (k === 'revmodel') {
+      S.quality.revenueModel = ['sub', 'usage', 'setup'].includes(v) ? v : 'sub';
+      save('quality'); rerender();
     }
     if (k === 'qmetric') {
       const x = S.quality.metrics.find(x => x.id === id), fl = t.dataset.field;
