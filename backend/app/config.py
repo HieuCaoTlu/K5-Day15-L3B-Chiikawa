@@ -58,7 +58,7 @@ class Settings(BaseSettings):
     push_vapid_public_key: str = ""
     push_vapid_private_key: str = ""
     push_vapid_subject: str = ""
-    planning_push_auto: bool = True  # trống khóa VAPID ở trên thì Tầng tự tạo; false = tắt thông báo
+    planning_push_auto: bool = True  # trống khóa VAPID ở trên thì ProductPilot tự tạo; false = tắt thông báo
     planning_vapid_file: str = "data/planning-vapid.json"
 
     @property

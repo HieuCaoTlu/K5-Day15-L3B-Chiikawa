@@ -3,44 +3,145 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Tầng: từ Engineer thành AI Builder</title>
+<title>ProductPilot: từ Engineer thành AI Builder</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@300;400;500;600&display=swap">
 <link rel="stylesheet" href="/tang/style.css">
+<link rel="stylesheet" href="/tang/landing.css">
+<link rel="stylesheet" href="/tang/xmas.css">
 </head>
 <body>
 
 <!-- MÀN 1: LANDING PAGE -->
 <section id="landing">
   <header class="land-nav">
-    <div class="brand"><span class="logo" aria-hidden="true"><i></i><i></i><i></i></span>Tầng</div>
-    <div class="row">
-      <button class="btn ghost" data-act="flow">Xem 5 bước</button>
-      <button class="btn primary" data-act="enter">Mở workstation</button>
-    </div>
+    <a class="brand" href="#landing" aria-label="ProductPilot, về đầu trang"><span class="logo" aria-hidden="true"><i></i><i></i><i></i></span>ProductPilot</a>
+    <nav class="land-links" aria-label="Các phần trong trang">
+      <a href="#flow">5 bước</a>
+      <a href="#features">Tính năng</a>
+      <a href="#models">Mô hình 3D</a>
+      <a href="#roles">Product Engineer</a>
+    </nav>
+    <button type="button" class="xmas-toggle" id="xmasToggle" role="switch" aria-checked="false" aria-label="Giao diện Giáng Sinh" title="Bật hoặc tắt giao diện Giáng Sinh" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 2v20M3.340 7l17.320 10M3.340 17 20.660 7M9.500 3.500 12 6l2.500-2.500M9.500 20.500 12 18l2.500 2.500M3.300 10.200l3.400-.9-.9-3.400M20.700 13.800l-3.400.9.9 3.400M5.800 18.100l.9-3.400-3.400-.9M18.200 5.900l-.9 3.400 3.4.9"/></svg></button>
+    <button class="btn primary" data-act="enter">Vào buồng lái</button>
   </header>
+
   <div class="hero">
-    <canvas id="heroCanvas" aria-label="Tòa nhà 7 tầng, mỗi tầng một màu"></canvas>
+    <canvas id="heroCanvas" tabindex="0" aria-label="Tòa nhà 7 tầng, mỗi tầng một màu. Rê chuột, chạm hoặc dùng mũi tên lên xuống để xem từng tầng."></canvas>
     <div class="hero-copy">
       <h1>Từ người viết code đến người xây sản phẩm AI</h1>
       <p>Cả đội bàn ý tưởng cùng agent, lập kế hoạch, pitching và vận hành sản phẩm tại một nơi duy nhất.</p>
       <div class="row">
-        <button class="btn primary big" data-act="enter">Mở workstation</button>
-        <button class="btn soft big" data-act="replay">Xem lại góc quay</button>
+        <button class="btn primary big" data-act="enter">Vào buồng lái</button>
+        <button class="btn ghost big" data-act="enter-demo">Xem bản demo</button>
       </div>
     </div>
-    <div class="floor-tip" id="floorTip" role="status"><i></i><span>Bấm vào một tầng để xem tầng đó làm gì</span></div>
+    <div class="floor-card" id="floorCard" role="status"><span class="floor-no"></span><h2></h2><p></p></div>
   </div>
-  <div class="flow" id="flow">
-    <div class="flow-head">
-      <h2>Năm bước, mỗi bước đổi một cách nghĩ</h2>
-      <p>Agent đóng vai chuyên gia AI Builder, hiểu cả cách phối hợp đồng đội lẫn cách vận hành một sản phẩm AI.</p>
+
+  <section class="sec soft" id="flow" aria-labelledby="flowTitle">
+    <div class="wrap">
+      <div class="sec-head">
+        <h2 id="flowTitle">Đi qua năm bước, bạn sẽ bắt đầu nghĩ khác</h2>
+        <p>Bước nào cũng có một câu mà dân kỹ thuật tụi mình hay quên hỏi. Bấm vào từng bước để xem.</p>
+      </div>
+      <div class="steps">
+        <div class="step-tabs" id="stepTabs" role="tablist" aria-label="Năm bước"></div>
+        <div class="step-panels" id="stepPanels"></div>
+      </div>
     </div>
-    <ol id="flowList"></ol>
-    <div class="flow-end">
-      <h2>Sẵn sàng đặt tầng đầu tiên?</h2>
-      <button class="btn primary big" data-act="enter">Mở workstation</button>
+  </section>
+
+  <section class="sec" id="features" aria-labelledby="featTitle">
+    <div class="wrap">
+      <div class="sec-head">
+        <h2 id="featTitle">Cả sản phẩm nằm gọn trong một buồng lái</h2>
+        <p>Ý tưởng, kế hoạch, bằng chứng và chi phí nằm chung một dự án.</p>
+      </div>
+      <div class="grid g2">
+        <article class="card">
+          <h3>Đi liền từ ý tưởng đến vận hành</h3>
+          <p>Năm khu vực Thinking, Planning, Pitching, Quality và Maintaining dùng chung ngữ cảnh dự án.</p>
+        </article>
+        <article class="card">
+          <h3>Có bằng chứng thật mới được GO</h3>
+          <p>AI MVP Canvas chỉ đánh dấu đạt khi có người dùng thật, lần gặp thật và đoạn trích nguyên văn.</p>
+        </article>
+        <article class="card">
+          <h3>Task đổi trạng thái theo pull request</h3>
+          <p>Tạo nhánh từ task, trạng thái tự cập nhật theo GitHub và cả đội thấy ai đang làm gì.</p>
+        </article>
+        <article class="card">
+          <h3>Biết mỗi lần thử model tốn bao nhiêu</h3>
+          <p>Ghi từng lần chạy thử, so chất lượng, token và chi phí khi đổi model hoặc prompt.</p>
+        </article>
+      </div>
     </div>
-  </div>
+  </section>
+
+  <section class="sec soft" id="models" aria-labelledby="modelTitle">
+    <div class="wrap">
+      <div class="sec-head">
+        <h2 id="modelTitle">Tiến độ được trực quan hoá bằng mô hình</h2>
+        <p>Đội làm xong tới đâu, mô hình sáng lên tới đó. Bạn cứ chọn kiểu mình thích.</p>
+      </div>
+      <div class="viewer">
+        <div class="viewer-tabs" id="modelTabs" role="group" aria-label="Kiểu mô hình">
+          <button type="button" data-act="model-pick" data-pick="house" aria-pressed="true">Nhà tầng</button>
+          <button type="button" data-act="model-pick" data-pick="rubik" aria-pressed="false">Khối Rubik</button>
+          <button type="button" data-act="model-pick" data-pick="uni" aria-pressed="false">University</button>
+          <button type="button" data-act="model-pick" data-pick="tree" aria-pressed="false">Cây thông</button>
+        </div>
+        <div class="viewer-stage">
+          <canvas id="modelCanvas" aria-label="Mô hình 3D với tiến độ mẫu. Kéo để xoay."></canvas>
+        </div>
+        <div class="viewer-foot">
+          <p id="modelNote" role="status"></p>
+          <button class="btn primary" data-act="enter-model">Mở với mô hình này</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec" id="roles" aria-labelledby="roleTitle">
+    <div class="wrap">
+      <div class="sec-head center">
+        <h2 id="roleTitle">Chúng tôi sẽ giúp bạn đi từ người làm kỹ thuật đến người am hiểu sản phẩm</h2>
+        <p>Làm Product Engineer là mỗi ngày đội thêm vài chiếc mũ. Bạn đội chiếc nào cũng có chỗ để bắt đầu.</p>
+      </div>
+      <div class="orbit">
+        <p class="orbit-core">Product<br>Engineer</p>
+        <ul class="orbit-list">
+          <li class="orbit-card o1" style="--c:var(--blue)"><h3>Product owner</h3><p>Đi gặp người dùng thật, giữ MVP đủ gọn và chốt khi nào được làm tiếp.</p></li>
+          <li class="orbit-card o2" style="--c:var(--indigo)"><h3>AI engineer</h3><p>Viết prompt, soạn bộ câu để thử, canh tỉ lệ đạt và tiền token.</p></li>
+          <li class="orbit-card o3" style="--c:var(--green)"><h3>Full-stack</h3><p>Biến nhu cầu của người dùng thành task, mở nhánh rồi đưa code lên.</p></li>
+          <li class="orbit-card o4" style="--c:var(--orange)"><h3>UX và pitching</h3><p>Hỏi ý kiến người dùng, đọc phản hồi và kể lại cho người khác hiểu.</p></li>
+          <li class="orbit-card o5 orbit-agent" style="--c:var(--yellow)"><h3>Agent ProductPilot</h3><p>Hỏi vặn đúng lúc, nhắc lịch bảo trì và báo sớm khi sản phẩm đuối dần.</p></li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec soft cta" aria-labelledby="ctaTitle">
+    <div class="wrap">
+      <h2 id="ctaTitle">Bạn đã có ý tưởng gì chưa?</h2>
+      <div class="row">
+        <button class="btn primary big" data-act="enter">Vào buồng lái</button>
+        <button class="btn ghost big" data-act="enter-demo">Xem bản demo</button>
+      </div>
+    </div>
+  </section>
+
+  <footer class="land-foot">
+    <div class="wrap">
+      <span class="brand"><span class="logo" aria-hidden="true"><i></i><i></i><i></i></span>ProductPilot</span>
+      <nav aria-label="Trang khác">
+        <a href="/workstation">Buồng lái</a>
+        <a href="/chat">Chat với agent</a>
+        <a href="/planning">Planning</a>
+        <a href="/admin">Quản trị</a>
+      </nav>
+    </div>
+  </footer>
 </section>
 
 <div id="toast" role="status" aria-live="polite"></div>
@@ -51,5 +152,8 @@
 <script src="/tang/data.js"></script>
 <script src="/tang/health.js"></script>
 <script src="/tang/app.js"></script>
+<script src="/tang/xmas.js"></script>
+<script src="/tang/reveal.js"></script>
+<script src="/tang/scroll.js"></script>
 </body>
 </html>

@@ -1,7 +1,7 @@
 // Tên và mô tả dùng trong các trang Next.js.
 export const SITE = {
-  name: 'Tầng',
-  title: 'Tầng — từ Engineer thành AI Builder',
+  name: 'ProductPilot',
+  title: 'ProductPilot — từ Engineer thành AI Builder',
   description: 'Không gian làm việc cho đội xây sản phẩm AI, từ bàn ý tưởng đến vận hành.',
 };
 

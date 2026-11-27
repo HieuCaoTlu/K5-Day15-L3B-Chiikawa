@@ -257,7 +257,7 @@ export function SprintBoard({ sprints, members, me, leader, onOpen }: {
 // Kết quả khi GitHub chuyển về sau nút Bắt đầu task.
 export const START_RESULTS: Record<string, string> = {
   pr_created: 'Đã tạo nhánh và PR nháp đứng tên bạn.',
-  pr_exists: 'Nhánh của task đã có PR đang mở. Tầng đã liên kết PR đó.',
+  pr_exists: 'Nhánh của task đã có PR đang mở. ProductPilot đã liên kết PR đó.',
   pr_permission: 'Chưa tạo được PR vì thiếu quyền ghi. Bạn cần được thêm vào repo và đã chấp nhận lời mời, còn GitHub App cần quyền ghi Contents và Pull requests.',
   pr_empty: 'Nhánh đang theo dõi chưa có commit nào. Tạo commit đầu tiên trên GitHub rồi thử lại.',
   pr_draft: 'Repo này không hỗ trợ PR nháp. Nhánh đã được tạo; bạn tự mở PR trên GitHub khi sẵn sàng.',

@@ -28,7 +28,7 @@ const SUCCESS_RETURNS = new Set(['discovered', 'ready', 'configured']);
 
 function message(error: unknown) {
   return error instanceof Error && error.message !== 'Failed to fetch'
-    ? error.message : 'Chưa kết nối được với Tầng. Thử lại sau ít phút.';
+    ? error.message : 'Chưa kết nối được với ProductPilot. Thử lại sau ít phút.';
 }
 
 export function Planning() {

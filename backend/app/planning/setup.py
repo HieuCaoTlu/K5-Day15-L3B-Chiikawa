@@ -1,4 +1,4 @@
-"""Tạo GitHub App bằng manifest: người cài đặt bấm một nút, Tầng tự nhận và lưu khóa."""
+"""Tạo GitHub App bằng manifest: người cài đặt bấm một nút, ProductPilot tự nhận và lưu khóa."""
 
 import hashlib
 import json
@@ -63,7 +63,7 @@ def _web_origin(value: str) -> str | None:
 def _manifest(origin: str) -> dict:
     base = origin + "/api/v1/planning"
     manifest = {
-        "name": f"Tang Planning {secrets.token_hex(2)}",
+        "name": f"ProductPilot Planning {secrets.token_hex(2)}",
         "url": origin,
         "redirect_url": origin + github.SETUP_CALLBACK,
         "callback_urls": [origin + github.AUTH_CALLBACK],

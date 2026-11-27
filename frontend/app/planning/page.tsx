@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import { Planning } from '@/components/planning/Planning';
 import './planning.css';
 
-export const metadata: Metadata = { title: 'Planning · Tầng' };
+export const metadata: Metadata = { title: 'Planning · ProductPilot' };
 
 export default function PlanningPage() {
   return (

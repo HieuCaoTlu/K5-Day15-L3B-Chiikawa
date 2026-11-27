@@ -1,4 +1,4 @@
-# Tầng
+# ProductPilot
 
 > Không gian làm việc cho đội xây sản phẩm AI, từ bàn ý tưởng đến vận hành.
 
@@ -24,7 +24,7 @@ docker compose up -d --build --wait
 
 | Trang | Địa chỉ |
 |---|---|
-| Trang giới thiệu và workstation Tầng | http://localhost |
+| Trang giới thiệu và workstation ProductPilot | http://localhost |
 | Chat (agent + duyệt đề xuất) | http://localhost/chat |
 | Planning (thành viên, sprint, PR, nhắc hạn) | http://localhost/planning |
 | Admin (tổng quan, chi phí & token, phiên chat, hàng chờ duyệt) | http://localhost/admin |
@@ -40,21 +40,21 @@ Mở **Planning → Đội, sprint và PR** trong Workstation hoặc vào `/work
 
 Không cần sửa `.env`. Làm ngay trong tab Planning:
 
-1. **Tạo kết nối** (một lần cho cả máy chủ). Bấm **Kết nối GitHub** rồi xác nhận tạo app trên GitHub. Repo thuộc tổ chức thì mở mục chọn tổ chức trước khi bấm. Tầng tự nhận và lưu khóa. Trên VPS (`APP_ENV=production` hoặc `SITE_ADDRESS` khác `:80`), Tầng hỏi thêm **mã cài đặt**: lấy mã mới nhất bằng `docker compose logs backend`.
+1. **Tạo kết nối** (một lần cho cả máy chủ). Bấm **Kết nối GitHub** rồi xác nhận tạo app trên GitHub. Repo thuộc tổ chức thì mở mục chọn tổ chức trước khi bấm. ProductPilot tự nhận và lưu khóa. Trên VPS (`APP_ENV=production` hoặc `SITE_ADDRESS` khác `:80`), ProductPilot hỏi thêm **mã cài đặt**: lấy mã mới nhất bằng `docker compose logs backend`.
 2. **Đăng nhập bằng GitHub** và lưu đội. Người tạo đội là trưởng nhóm.
-3. **Chọn repo.** Bấm **Cấp quyền trên GitHub**, chọn repo. Khi quay về, Tầng tự tải danh sách. Chọn repo và bấm **Kết nối repo đã chọn**.
+3. **Chọn repo.** Bấm **Cấp quyền trên GitHub**, chọn repo. Khi quay về, ProductPilot tự tải danh sách. Chọn repo và bấm **Kết nối repo đã chọn**.
 
-**Bắt đầu task bằng một nút:** người được giao mở chi tiết task, bấm **Bắt đầu task** và xác nhận trên GitHub. Tầng tạo nhánh `task/t-<số>` (thêm một commit rỗng) và PR nháp `[T-<số>] …` đứng tên người đó, bằng token của họ; token dùng một lượt rồi bỏ. Cần: GitHub App có quyền **Contents** và **Pull requests: Read and write** (app tạo trước đây phải tự sửa quyền rồi chấp nhận quyền mới ở trang app đã cài; kết nối mới xin sẵn), và người bấm có quyền ghi vào repo.
+**Bắt đầu task bằng một nút:** người được giao mở chi tiết task, bấm **Bắt đầu task** và xác nhận trên GitHub. ProductPilot tạo nhánh `task/t-<số>` (thêm một commit rỗng) và PR nháp `[T-<số>] …` đứng tên người đó, bằng token của họ; token dùng một lượt rồi bỏ. Cần: GitHub App có quyền **Contents** và **Pull requests: Read and write** (app tạo trước đây phải tự sửa quyền rồi chấp nhận quyền mới ở trang app đã cài; kết nối mới xin sẵn), và người bấm có quyền ghi vào repo.
 
-**Thêm thành viên vào repo:** mã mời của Tầng không cấp quyền trên GitHub. Tab **Thành viên → Quyền trên GitHub** cho trưởng nhóm biết ai chưa có quyền ghi và hướng dẫn: thêm ở `github.com/<repo>/settings/access`, rồi người được mời tự chấp nhận tại `github.com/<repo>/invitations`. Tầng không tự gửi lời mời vì việc đó cần quyền quản trị repo.
+**Thêm thành viên vào repo:** mã mời của ProductPilot không cấp quyền trên GitHub. Tab **Thành viên → Quyền trên GitHub** cho trưởng nhóm biết ai chưa có quyền ghi và hướng dẫn: thêm ở `github.com/<repo>/settings/access`, rồi người được mời tự chấp nhận tại `github.com/<repo>/invitations`. ProductPilot không tự gửi lời mời vì việc đó cần quyền quản trị repo.
 
-Tầng lấy 50 PR cập nhật gần nhất khi kết nối hoặc khi bấm **Đọc lại PR**. Trong mỗi PR, đặt mã như `[T-23]` ở tiêu đề hoặc mô tả. Trưởng nhóm xem các PR cần đối chiếu trong tab **Pull request**.
+ProductPilot lấy 50 PR cập nhật gần nhất khi kết nối hoặc khi bấm **Đọc lại PR**. Trong mỗi PR, đặt mã như `[T-23]` ở tiêu đề hoặc mô tả. Trưởng nhóm xem các PR cần đối chiếu trong tab **Pull request**.
 
 GitHub chỉ gửi webhook tới địa chỉ HTTPS công khai. Trên localhost, backend tự đọc PR sau mỗi `PLANNING_POLL_SECONDS` giây (mặc định 60, `0` = tắt), kể cả khi không ai mở trang; backend phải đang chạy. Webhook được chọn theo địa chỉ lúc tạo kết nối, nên máy chủ thật cần tạo kết nối riêng trên đúng tên miền của nó.
 
 Khóa bí mật được mã hóa trong database. Khóa giải mã nằm ở `data/planning.key` (volume `appdata`). Muốn kết nối lại: chạy `docker compose exec backend python -m app.planning.reset_github` (khi chạy dev: `uv run python -m app.planning.reset_github` trong `backend/`), rồi xóa app cũ trên GitHub.
 
-Đã có GitHub App cấu hình bằng biến `GITHUB_*` thì vẫn dùng được: khi có `GITHUB_CLIENT_ID` và `GITHUB_CLIENT_SECRET`, Tầng ưu tiên các biến này.
+Đã có GitHub App cấu hình bằng biến `GITHUB_*` thì vẫn dùng được: khi có `GITHUB_CLIENT_ID` và `GITHUB_CLIENT_SECRET`, ProductPilot ưu tiên các biến này.
 
 **Mời người vào đội:** trưởng nhóm mở tab **Thành viên**, bấm **Tạo mã mời** và gửi mã. Người nhận đăng nhập bằng tài khoản của họ, chọn **Nhập mã để vào đội**, điền hồ sơ và vào ngay với quyền thành viên. Trưởng nhóm có thể đổi mã, tắt mã hoặc xóa thành viên (người còn đứng tên task phải được giao lại trước). Mã mời không cấp quyền trên GitHub. Thử trên một máy: mở cửa sổ ẩn danh, chọn dùng thử rồi nhập mã của đội dùng thử.
 
@@ -62,7 +62,7 @@ Khóa bí mật được mã hóa trong database. Khóa giải mã nằm ở `da
 
 Bản nháp sprint dùng Gemini qua LLM gateway nếu đã đặt `GOOGLE_API_KEY`. Chế độ demo và cấu hình thiếu key sẽ tạo bản nháp từ luật dự phòng. Mỗi tài khoản tham gia một đội Planning, còn mỗi đội theo dõi một repo. Đổi repo sẽ xóa tiến độ và giữ hồ sơ thuộc đội.
 
-**Thông báo trình duyệt:** bấm nút chuông trên đầu tab Planning, chọn **Bật thông báo** và **Cho phép**, rồi **Gửi thử**. Mỗi người được nhắc khi task của mình còn tối đa 24 giờ và 1 giờ, kể cả khi đã đóng tab (trình duyệt và máy chủ phải đang chạy; mở bằng HTTPS hoặc localhost). Không cần sửa `.env`: Tầng tự tạo cặp khóa VAPID ở `data/planning-vapid.json`. Đã có khóa riêng thì điền đủ ba biến `PUSH_VAPID_*`; `PLANNING_PUSH_AUTO=false` để tắt.
+**Thông báo trình duyệt:** bấm nút chuông trên đầu tab Planning, chọn **Bật thông báo** và **Cho phép**, rồi **Gửi thử**. Mỗi người được nhắc khi task của mình còn tối đa 24 giờ và 1 giờ, kể cả khi đã đóng tab (trình duyệt và máy chủ phải đang chạy; mở bằng HTTPS hoặc localhost). Không cần sửa `.env`: ProductPilot tự tạo cặp khóa VAPID ở `data/planning-vapid.json`. Đã có khóa riêng thì điền đủ ba biến `PUSH_VAPID_*`; `PLANNING_PUSH_AUTO=false` để tắt.
 
 Nguồn cấu hình [GitHub App từ manifest](https://docs.github.com/en/apps/sharing-github-apps/registering-a-github-app-from-a-manifest) · [Sự kiện PR](https://docs.github.com/en/webhooks/webhook-events-and-payloads#pull_request) · [Khóa VAPID](https://github.com/web-push-libs/vapid) · [Web Push](https://developer.mozilla.org/en-US/docs/Web/API/Push_API)
 
@@ -185,7 +185,7 @@ make eval         # backend/eval/cases.json → "agent đúng X%"
 
 ```
 backend/     FastAPI + LangGraph (app/agent: graph, nodes, mocks, llm, guardrails) · tests · eval · prompts
-frontend/    public/ (trang giới thiệu và workstation Tầng) · Next.js (chat, admin) · components/kit (bộ component nhóm) · globals.css (token)
+frontend/    public/ (trang giới thiệu và workstation ProductPilot) · Next.js (chat, admin) · components/kit (bộ component nhóm) · globals.css (token)
 deploy/      Caddyfile · deploy.sh · bootstrap-vps.sh · README (hướng dẫn VPS + secrets cho GitHub Actions)
 .github/     workflows/ci-cd.yml · PR template
 ```

@@ -54,7 +54,7 @@ export function ConnectGitHub({ codeRequired, busy, mutate }: { codeRequired: bo
   return (
     <form className="pl-connect" onSubmit={submit}>
       <p className="d-muted">
-        Chỉ làm một lần cho cả máy chủ. GitHub sẽ hỏi bạn xác nhận tạo một app chỉ đọc pull request, rồi đưa bạn về Tầng.
+        Chỉ làm một lần cho cả máy chủ. GitHub sẽ hỏi bạn xác nhận tạo một app chỉ đọc pull request, rồi đưa bạn về ProductPilot.
         Bạn không cần chép khóa nào.
       </p>
       {codeRequired && (

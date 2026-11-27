@@ -54,7 +54,7 @@
   }
 
   /* ---------- Tòa nhà 7 tầng ở trang giới thiệu ---------- */
-  function hero(canvas, floors, onPick) {
+  function hero(canvas, floors, onHover, onAnchor) {
     const r = renderer(canvas), scene = new T.Scene(), cam = new T.PerspectiveCamera(34, 1, 0.1, 400);
     lights(scene);
     const white = mat(0xffffff), glass = mat(0xdff3ff, { emissive: 0x335577 }), warm = mat(0xfff0b8, { emissive: 0x665522 });
@@ -129,14 +129,9 @@
     grid.position.y = -0.35;
     world.add(grid);
     const colors = Object.values(HEX);
-    const rings = [11.8, 13.2, 14.8].map((rad, k) => {
-      const m = mesh(new T.TorusGeometry(rad, 0.035, 8, 160), flat([HEX.blue, HEX.violet, HEX.orange][k], { transparent: true, opacity: 0.55 }), 0, -0.2, 0, world);
-      m.rotation.x = Math.PI / 2;
-      return m;
-    });
     [[-8.4, 3], [-7, 6], [7.6, 5], [9, 1], [-9, -3], [8, -5]].forEach(([x, z], k) => {
       cyl(0.12, 0.16, 1, trunk, x, 0.6, z, world);
-      ball(0.75, mat([HEX.violet, HEX.green, HEX.orange][k % 3]), x, 1.6, z, world);
+      ball(k % 2 ? 0.62 : 0.75, leaf, x, 1.6, z, world);
       ball(0.45, leaf, x + 0.4, 1.2, z + 0.2, world);
     });
     [[-4.6, 6.3], [4.6, 6.3]].forEach(([x, z]) => {
@@ -148,24 +143,46 @@
       p.position.set(x, 0.1, z);
       movers.push(t => { p.position.x = x + Math.sin(t * 0.6 + k * 2) * 0.7; });
     });
-    colors.forEach((c, k) => {
-      const b = new T.Group(), side = k % 2 ? 1 : -1;
-      ball(0.45, mat(c, { emissive: c, emissiveIntensity: 0.12 }), 0, 0, 0, b).scale.y = 1.2;
-      cyl(0.012, 0.012, 1.3, trunk, 0, -1.15, 0, b, 5);
-      const x = side * (6.8 + (k % 3) * 1.1), y = 5 + k * 1.75;
-      b.position.set(x, y, -2 + (k % 4) * 1.2);
-      world.add(b);
-      movers.push(t => { b.position.y = y + Math.sin(t * 0.9 + k) * 0.45; });
-    });
-    for (let k = 0; k < 46; k++) {
-      const a = k * 2.399, rad = 9 + (k % 9), p = box(0.16, 0.16, 0.16, flat(colors[k % 7]),
-        Math.cos(a) * rad, 1, Math.sin(a) * rad * 0.6 - 3, world);
-      movers.push(t => { p.rotation.set(t * 0.5 + k, t * 0.7, 0); p.position.y = 1 + ((k * 0.41 + t * 0.25) % 19); });
-    }
-
     // p đi từ 0 (nghiêng đổ, ở xa) đến 1 (thẳng, lại gần)
     const state = { p: reduced ? 1 : 0 };
-    let wide = true, last = '', visible = true;
+    let wide = true, last = '', visible = true, active = -1;
+    const anchor = new T.Vector3();
+    // Mỗi tầng có bốn lò xo: cỡ, độ cao, độ bẹp (nhún dẻo) và độ nghiêng (lắc)
+    const spring = (value, stiff, drag) => ({ x: value, v: 0, to: value, stiff, drag });
+    const jelly = floors.map((_, i) => ({
+      size: spring(1, 190, 12), y: spring(0.5 + i * FH, 190, 12), squash: spring(0, 230, 7), tilt: spring(0, 150, 5.5)
+    }));
+    let before = performance.now();
+    function wobble() {
+      const now = performance.now(), dt = Math.min(0.05, (now - before) / 1000), steps = Math.max(1, Math.ceil(dt * 120));
+      before = now;
+      groups.forEach((g, i) => {
+        const j = jelly[i], on = i === active;
+        j.size.to = on ? 1.08 : 1;
+        j.y.to = 0.5 + i * FH + (active >= 0 && i > active ? 0.55 : on ? 0.18 : 0);
+        Object.values(j).forEach(k => {
+          if (reduced) { k.x = k.to; k.v = 0; return; }
+          for (let n = 0; n < steps; n++) {
+            k.v += ((k.to - k.x) * k.stiff - k.v * k.drag) * (dt / steps);
+            k.x += k.v * (dt / steps);
+          }
+        });
+        // Bẹp xuống thì phình ra hai bên, kéo cao thì thon lại
+        const wide = j.size.x * (1 + j.squash.x * 0.7);
+        g.scale.set(wide, 1 - j.squash.x, wide);
+        g.position.y = j.y.x;
+        g.rotation.z = j.tilt.x;
+      });
+    }
+    // Chạm vào một tầng: hích tầng đó, rung động lan sang các tầng gần nó rồi tắt dần
+    function poke(i) {
+      if (reduced || i < 0) return;
+      jelly.forEach((j, k) => {
+        const far = Math.abs(k - i), power = far ? 0.35 / far : 1;
+        j.squash.v += 3.4 * power;
+        j.tilt.v += 1.15 * power * (far % 2 ? -1 : 1);
+      });
+    }
     function place(t) {
       const p = state.p, half = Math.tan((cam.fov * Math.PI) / 360);
       const need = Math.max(11.6 / half, (wide ? 9.4 : 7.2) / (half * cam.aspect));
@@ -190,21 +207,49 @@
       movers.forEach(m => m(t));
       flag.rotation.y = Math.sin(t * 2.4) * 0.25;
       beacon.scale.setScalar(1 + Math.sin(t * 3) * 0.18);
-      rings.forEach((m, k) => m.scale.setScalar(1 + Math.sin(t * 0.8 + k * 1.7) * 0.025));
       place(t);
+      wobble();
       r.render(scene, cam);
+      if (active >= 0 && onAnchor) {
+        // Điểm giữa mép trái của tầng trên màn hình, để đặt card cạnh đó
+        anchor.set(-widths[active] / 2 - 0.5, 0.5 + active * FH + FH / 2, widths[active] * 0.31).project(cam);
+        onAnchor((anchor.x + 1) / 2 * w, (1 - anchor.y) / 2 * h);
+      }
     });
     const ray = new T.Raycaster(), pt = new T.Vector2();
-    canvas.addEventListener('click', e => {
+    // Hộp dò chuột đứng yên (không nằm trong cảnh), nên tầng nhấc lên cũng không làm hover nhấp nháy
+    const hitBoxes = widths.map((width, i) => {
+      const m = new T.Mesh(new T.BoxGeometry(width + 0.7, FH, width * 0.62 + 0.7));
+      m.position.y = 0.5 + i * FH + FH / 2 - 0.1;
+      m.userData.i = i;
+      m.updateMatrixWorld();
+      return m;
+    });
+    function setActive(i) {
+      if (i === active) return;
+      active = i;
+      poke(i);
+      canvas.style.cursor = i >= 0 ? 'pointer' : 'default';
+      onHover(i);
+    }
+    function pick(e) {
       const b = canvas.getBoundingClientRect();
       pt.set(((e.clientX - b.left) / b.width) * 2 - 1, -((e.clientY - b.top) / b.height) * 2 + 1);
       ray.setFromCamera(pt, cam);
-      const hit = ray.intersectObjects(groups, true)[0];
-      if (!hit) return;
-      let o = hit.object;
-      while (o && o.userData.i === undefined) o = o.parent;
-      if (o) onPick(o.userData.i, groups[o.userData.i]);
+      const hit = ray.intersectObjects(hitBoxes, false)[0];
+      setActive(hit ? hit.object.userData.i : -1);
+    }
+    canvas.addEventListener('pointermove', e => { if (e.pointerType === 'mouse') pick(e); });
+    canvas.addEventListener('pointerleave', e => { if (e.pointerType === 'mouse') setActive(-1); });
+    canvas.addEventListener('click', pick); // cảm ứng: chạm vào tầng
+    // Bàn phím: Tab vào cảnh rồi dùng mũi tên lên xuống
+    canvas.addEventListener('keydown', e => {
+      const next = { ArrowUp: Math.min(floors.length - 1, active + 1), ArrowDown: Math.max(0, active - 1), Escape: -1 }[e.key];
+      if (next === undefined) return;
+      e.preventDefault();
+      setActive(next);
     });
+    canvas.addEventListener('blur', () => setActive(-1));
     return { state };
   }
 
@@ -730,8 +775,10 @@
     ['pointerup', 'pointercancel'].forEach(n => canvas.addEventListener(n, () => { drag = null; }));
 
     const clock = new T.Clock(), v3 = new T.Vector3();
+    let onScreen = true;
+    new IntersectionObserver(e => { onScreen = e[0].isIntersecting; }).observe(canvas);
     r.setAnimationLoop(() => {
-      if (!fit(r, cam, canvas)) return;
+      if (!onScreen || !fit(r, cam, canvas)) return;
       const t = reduced ? 0 : clock.getElapsedTime();
       if (healthFrames.size) {
         const now = performance.now();

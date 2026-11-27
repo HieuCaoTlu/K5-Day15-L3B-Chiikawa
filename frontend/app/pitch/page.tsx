@@ -365,7 +365,7 @@ export default function PublicPitchPage() {
           )}
           <a href="/" className="d-btn d-b2 d-sm">
             <Icon name="back" size={16} />
-            Về Tầng
+            Về ProductPilot
           </a>
         </div>
       </div>

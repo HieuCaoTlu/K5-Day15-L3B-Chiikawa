@@ -23,7 +23,7 @@ function CopyButton({ value, label }: { value: string; label: string }) {
   return <button type="button" className="d-btn d-b2 pl-break" onClick={() => void copy()}>{done ?? label}</button>;
 }
 
-/** Mã mời của Tầng không cấp quyền trên GitHub: phần này cho trưởng nhóm biết ai còn thiếu và cách thêm. */
+/** Mã mời của ProductPilot không cấp quyền trên GitHub: phần này cho trưởng nhóm biết ai còn thiếu và cách thêm. */
 export function RepoAccess({ members }: { members: Member[] }) {
   const [info, setInfo] = useState<RepoAccessInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -36,7 +36,7 @@ export function RepoAccess({ members }: { members: Member[] }) {
     try {
       setInfo(await planning.repoAccess());
     } catch (err) {
-      setError(err instanceof Error && err.message !== 'Failed to fetch' ? err.message : 'Chưa kết nối được với Tầng.');
+      setError(err instanceof Error && err.message !== 'Failed to fetch' ? err.message : 'Chưa kết nối được với ProductPilot.');
     } finally {
       setLoading(false);
     }

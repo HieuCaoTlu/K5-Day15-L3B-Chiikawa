@@ -57,7 +57,7 @@ def _stored_keys(path: Path) -> dict:
 
 
 def vapid() -> Vapid | None:
-    """Khóa gửi thông báo: lấy từ biến môi trường, nếu trống thì Tầng tự tạo (không cần sửa .env)."""
+    """Khóa gửi thông báo: lấy từ biến môi trường, nếu trống thì ProductPilot tự tạo (không cần sửa .env)."""
     settings = get_settings()
     configured = Vapid(settings.push_vapid_public_key, settings.push_vapid_private_key, settings.push_vapid_subject)
     if all(configured):
@@ -97,7 +97,7 @@ def subscribe(data: PushSubscription, request: Request, db: Session = Depends(ge
     if not db.get(PlanningMember, session.github_id):
         raise HTTPException(409, "Thiết lập đội trước khi bật nhắc việc.")
     if not _allowed_endpoint(data.endpoint):
-        raise HTTPException(422, "Trình duyệt hiện tại chưa hỗ trợ nhắc việc cho Tầng.")
+        raise HTTPException(422, "Trình duyệt hiện tại chưa hỗ trợ nhắc việc cho ProductPilot.")
     try:
         key_bytes = base64.urlsafe_b64decode(data.keys.p256dh.rstrip("=") + "=")
         ec.EllipticCurvePublicKey.from_encoded_point(ec.SECP256R1(), key_bytes)
@@ -173,7 +173,7 @@ def send_test(request: Request, db: Session = Depends(get_session)):
     if not rows:
         raise HTTPException(409, "Bật thông báo trên trình duyệt này trước khi gửi thử.")
     payload = {
-        "title": "Tầng đã gửi được thông báo",
+        "title": "ProductPilot đã gửi được thông báo",
         "body": "Task của bạn sẽ được nhắc trước hạn 24 giờ và 1 giờ.",
         "url": "/planning",
         "tag": "tang-test",
