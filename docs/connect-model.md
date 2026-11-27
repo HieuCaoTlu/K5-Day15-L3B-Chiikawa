@@ -138,25 +138,18 @@ def call_provider(system, user):
     raise RuntimeError("Chưa điền: chép ví dụ quickstart vào call_provider()")
 ```
 
-### 2.5 OpenRouter
+### 2.5 OpenRouter (agent Thinking)
 
-OpenRouter dùng API tương thích OpenAI tại `https://openrouter.ai/api/v1/chat/completions`.
+Agent Thinking gọi model qua `backend/app/agent/llm.py`, không qua `codebase/ai.py`. `codebase/agent.py` chạy thẳng graph Thinking của backend, nên `python run.py eval` đo đúng agent thật.
 
-- **Backend Thinking agent** (`codebase/agent.py` và web `/chat`): thêm vào `.env` ở thư mục gốc repo:
+Thêm vào `.env` ở thư mục gốc repo, hoặc đặt biến môi trường:
 
 ```dotenv
-LLM_PROVIDER=openrouter
 OPENROUTER_API_KEY=<key OpenRouter của nhóm, không dấu ngoặc kép>
-OPENROUTER_MODEL_FAST=google/gemini-2.5-flash
-OPENROUTER_MODEL_PRO=google/gemini-2.5-pro
-```
-
-- **`codebase/ai.py`** (khi gọi trực tiếp `call_model()`):
-
-```dotenv
-MODEL_PROVIDER=openrouter
-MODEL_NAME=google/gemini-2.5-flash
-API_KEY=<key OpenRouter của nhóm, không dấu ngoặc kép>
+# Tùy chọn; mặc định như dưới đây:
+# LLM_PROVIDER=auto            # auto: có GOOGLE_API_KEY thì dùng Gemini, chỉ có OPENROUTER_API_KEY thì dùng OpenRouter
+# OPENROUTER_MODEL_FAST=google/gemini-3.5-flash-lite
+# OPENROUTER_MODEL_PRO=google/gemini-3.5-flash-lite
 ```
 
 ## 3. Thử
