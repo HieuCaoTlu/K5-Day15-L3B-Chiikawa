@@ -32,11 +32,16 @@ a{color:var(--indigo)}
 .logo i:nth-child(2){background:var(--yellow);margin:0 3px}
 
 /* khung workstation */
-.top{position:relative;z-index:20;display:flex;gap:14px;align-items:center;height:var(--top);padding:0 18px;background:#fff}
-.top::after{content:"";position:absolute;inset:auto 0 0 0;height:2px;background:var(--spectrum);opacity:.55}
-#projectName{background:transparent;flex:0 1 220px;width:220px;min-width:90px;text-overflow:ellipsis}
+.top{position:relative;z-index:20;display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:14px;align-items:center;height:var(--top);padding:0 18px;background:#fff}
+.top-left{display:flex;align-items:center;gap:14px;min-width:0}
+.top .team{justify-self:end}
+.brand-mark{width:34px;height:34px;flex:none;display:block}
+.brand-name{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.top-left .brand{flex:0 1 auto;min-width:0}
+.top-left #projectName{flex:0 1 260px;width:260px;min-width:90px;font-size:16px;font-weight:500}
+#projectName{background:transparent;flex:0 1 220px;width:220px;min-width:40px;text-overflow:ellipsis}
 #projectName:focus{background:var(--soft)}
-#nav{display:flex;gap:2px;margin:0 auto;min-width:0;flex:0 1 auto}
+#nav{display:flex;gap:2px;margin:0;min-width:0;justify-self:center}
 .nav-item{position:relative;display:flex;align-items:center;border:0;background:transparent;border-radius:10px;padding:8px clamp(8px,1vw,14px);cursor:pointer;white-space:nowrap;font-size:14px;font-weight:500;color:var(--mute);min-width:0}
 .nav-item:hover{color:var(--ink);background:var(--soft)}
 .nav-item::after{content:"";position:absolute;left:clamp(8px,1vw,14px);right:clamp(8px,1vw,14px);bottom:0;height:3px;border-radius:3px;background:var(--c);transform:scaleX(0);transition:transform .2s}
@@ -69,17 +74,14 @@ button.av{cursor:pointer}
 .ov-title .btn,.ov-cards,.ov-team{pointer-events:auto}
 .ov-team{font-size:13px}
 #overlay .ov-team{position:absolute;right:clamp(16px,3vw,40px);top:110px;display:grid;gap:9px}
-.ov-team div{display:flex;gap:10px;align-items:center;background:rgba(255,255,255,.9);border:1px solid var(--line);border-radius:99px;padding:5px 16px 5px 6px}
+.ov-team div{display:flex;gap:10px;align-items:center;background:rgba(255,255,255,.9);border:1px solid var(--line);border-radius:calc(76 * .68px * .28);padding:5px 16px 5px 6px}
 .ov-cards{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px}
 #overlay .ov-cards{position:absolute;inset:auto clamp(12px,3vw,40px) 18px}
 #view{position:absolute;inset:0 0 0 var(--stage);overflow:auto;padding:24px clamp(14px,2.4vw,34px) 120px;outline:0}
-.view-head{display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;align-items:flex-end;margin-bottom:14px}
+.view-head{display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;align-items:center;min-height:56px;margin-bottom:14px}
 .view-head h2{display:flex;align-items:center;gap:12px}
 .view-head h2::before{content:"";width:12px;height:12px;border-radius:50%;background:var(--c)}
 .view-head p{color:var(--mute);max-width:70ch;font-weight:300}
-.mind{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px;font-size:14px}
-.mind>span{background:var(--soft);border-radius:99px;padding:6px 15px;color:var(--mute)}
-.mind>span+span{background:color-mix(in srgb,var(--c) 11%,#fff);color:var(--ink)}
 .panel{background:#fff;border:1px solid var(--line);border-radius:20px;padding:20px;min-width:0}
 .stack{display:grid;gap:18px;grid-template-columns:minmax(0,1fr)}
 .cols{display:grid;gap:18px;grid-template-columns:repeat(2,minmax(0,1fr));align-items:start}
@@ -89,7 +91,7 @@ button.av{cursor:pointer}
 
 #planningLive{margin:18px 0;min-width:0}
 .head-actions{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
-.head-icon{position:relative;display:grid;place-items:center;width:36px;height:36px;border:0;border-radius:50%;background:var(--soft);color:var(--ink);cursor:pointer;padding:0}
+.head-icon{position:relative;display:grid;place-items:center;width:44px;height:44px;border:0;border-radius:50%;background:var(--soft);color:var(--ink);cursor:pointer;padding:0}
 .head-dot{position:absolute;right:1px;top:1px;width:9px;height:9px;border-radius:50%;border:2px solid #fff;box-sizing:content-box;background:#a6afc7}
 .head-dot.ok{background:var(--green)}
 .head-dot.warn{background:var(--orange)}
@@ -381,7 +383,9 @@ a.task-tag{color:var(--indigo)}
 .nav-item .short{display:none}
 .ov-cards .bar{display:block}
 @media (max-width:1000px){
-  .top{height:56px;padding:0 12px;gap:8px}
+  .top{height:56px;padding:0 12px;gap:8px;display:flex}
+  .top-left{flex:1 1 0}
+  .brand-name{display:none}
   #projectName{flex:1 1 0;width:auto}
   .brand{font-size:18px}
   #nav{position:fixed;z-index:35;inset:auto 0 0 0;margin:0;gap:0;justify-content:space-around;background:rgba(255,255,255,.96);backdrop-filter:blur(14px);border-top:1px solid var(--line);padding:6px 4px calc(6px + env(safe-area-inset-bottom))}
@@ -453,8 +457,8 @@ details ul{margin:8px 0 0;padding-left:18px;display:grid;gap:4px}
 
 /* Thinking: vừa một màn hình, mỗi khối chiếm trọn một dòng, không đổ bóng */
 #view[data-tab="product"]{overflow:hidden;padding-bottom:16px}
-#view[data-tab="product"] #viewContent{height:100%}
-.think{display:grid;grid-template-rows:auto auto minmax(0,1fr);gap:12px;height:100%;min-height:0}
+#view[data-tab="product"] #viewContent{height:100%;display:flex;flex-direction:column}
+.think{flex:1 1 auto;height:auto;min-height:0}
 .tk-box{background:#fff;border:1px solid var(--line);border-radius:20px;padding:14px 16px;min-width:0;box-shadow:none}
 .tk-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}
 .tk-head h3{margin:0;font-size:16px;font-weight:500}
@@ -481,9 +485,8 @@ details ul{margin:8px 0 0;padding-left:18px;display:grid;gap:4px}
 .tk-msg.me .tk-bubble{background:var(--blue);color:#fff;border-radius:16px 4px 16px 16px}
 .tk-compose{display:flex;gap:8px}.tk-compose input{flex:1}
 .head-tools{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-.lock-note{background:color-mix(in srgb,var(--orange) 12%,#fff);border-radius:12px;padding:8px 14px;margin-bottom:12px;font-size:14px}
 @media (max-height:760px){.tk-cell p{-webkit-line-clamp:1}}
-@media (max-width:1000px){#view[data-tab="product"]{overflow:auto}.think{height:auto}.tk-chat{min-height:340px}.tk-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:1000px){#view[data-tab="product"]{overflow:auto}.think{height:auto}.tk-cols{grid-template-columns:minmax(0,1fr);height:auto}.tk-col1{overflow:visible}.tk-chat{min-height:420px}}
 @media (max-width:560px){.tk-grid{grid-template-columns:minmax(0,1fr)}}
 
 /* Tổng quan: luồng milestone nối nhau, lơ lửng phía trên công trình */
@@ -527,6 +530,34 @@ details ul{margin:8px 0 0;padding-left:18px;display:grid;gap:4px}
   #app.on-overview #overlay .ov-team{top:50%;translate:0 -50%}
 }
 
+/* Tổng quan lần đầu: chọn mô hình, đặt tên nhóm, kết nối GitHub */
+.ov-setup{position:absolute;left:clamp(16px,3vw,40px);top:50%;translate:0 -50%;width:min(460px,calc(100% - 32px));display:grid;gap:16px;padding:26px 28px;background:rgba(255,255,255,.94);border:1px solid var(--line);border-radius:20px;pointer-events:auto}
+.ov-setup h2{font-size:26px;line-height:1.2}
+.ov-setup p{margin:0;color:var(--mute);font-weight:300}
+.ob-steps{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:6px 14px;font-size:13px;color:var(--mute)}
+.ob-steps li{display:flex;align-items:center;gap:6px}
+.ob-steps li span{display:grid;place-items:center;width:22px;height:22px;border-radius:50%;border:1px solid #cfd6ea;font-size:12px}
+.ob-steps li.now{color:var(--ink);font-weight:500}
+.ob-steps li.now span,.ob-steps li.done span{background:var(--ink);border-color:var(--ink);color:#fff}
+.ob-models{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.ob-model{display:grid;gap:2px;align-content:start;text-align:left;padding:12px 14px;border:0;border-radius:14px;background:var(--soft);font:inherit;cursor:pointer;transition:background .2s,color .2s}
+.ob-model b{font-weight:500}
+.ob-model span{font-size:12px;line-height:1.45;color:var(--mute)}
+.ob-model:hover{background:#eaeefa}
+.ob-model.on{background:var(--ink);color:#fff}
+.ob-model.on span{color:rgba(255,255,255,.72)}
+.ob-model:focus-visible{outline:2px solid var(--indigo);outline-offset:2px}
+.ob-form{display:grid;gap:16px}
+.ob-form input{padding:12px 14px;font-size:16px}
+.ob-actions{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.ob-actions .btn.big{padding:12px 20px;font-size:15px;white-space:nowrap}
+.ob-links{display:flex;justify-content:space-between;gap:12px;margin-top:10px}
+.ob-link{border:0;background:none;padding:6px 2px;font:inherit;font-size:14px;color:var(--mute);cursor:pointer;border-radius:8px}
+.ob-link:hover{color:var(--ink);text-decoration:underline}
+.ob-link:focus-visible{outline:2px solid var(--indigo);outline-offset:2px}
+@media (max-width:1000px){.ov-setup{position:static;translate:none;width:auto}}
+@media (max-width:420px){.ob-models{grid-template-columns:minmax(0,1fr)}}
+
 /* Thanh trên cùng chật: dùng nhãn ngắn thay vì cuộn ngang */
 @media (min-width:1001px) and (max-width:1280px){.nav-item .long{display:none}.nav-item .short{display:inline}#projectName{flex-basis:160px;width:160px}}
 
@@ -545,3 +576,142 @@ details ul{margin:8px 0 0;padding-left:18px;display:grid;gap:4px}
 }
 @media (prefers-reduced-motion:reduce){#sideToggle svg{transition:none}}
 @media (prefers-reduced-motion:reduce){.tip-pop,input,select,textarea{transition:none}}
+
+/* Thinking 2 cột: cột 1 = đánh giá + duyệt (trên cùng) và AI MVP Canvas, cột 2 = chat với agent */
+.think.pending{visibility:hidden}
+.think.intro{display:grid;align-content:start;padding-bottom:40px}
+.tk-cols{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:18px;height:100%;min-height:0}
+.tk-col1{display:flex;flex-direction:column;gap:12px;min-height:0;overflow-x:hidden;overflow-y:auto}
+.tk-col1>.tk-box{flex:none}
+/* Canvas chiếm hết phần chiều cao còn lại của cột, các ô giãn đều */
+.tk-col1>.tk-canvas{flex:1 1 auto;display:flex;flex-direction:column;min-height:0}
+.tk-canvas .tk-grid{flex:1 1 auto;grid-auto-rows:minmax(auto,1fr)}
+.tk-canvas .tk-cell{align-content:start;padding:10px 12px}
+.tk-canvas .tk-cell p{font-size:14px;-webkit-line-clamp:5}
+.tk-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+.tk-cell p{-webkit-line-clamp:3}
+.tk-eval{display:grid;gap:8px;align-items:start}
+.tk-eval .tk-reasons{min-width:0}
+.tk-eval .tk-actions{margin-left:0;flex-wrap:wrap}
+.tk-chat .tk-head{margin-bottom:0}
+.think.intro .tk-cols{display:none}
+.think:not(.intro) .tk-intro{display:none}
+.tk-intro{display:block;max-width:none;margin:0;padding:20px}
+.ti-cell{display:flex;gap:6px;align-items:center;min-height:62px;padding:8px 10px;border:1px solid var(--line);border-radius:12px;background:var(--soft);font-size:13px;font-weight:500;opacity:0;transform:translateY(10px) scale(.96);animation:ti-in .5s cubic-bezier(.2,.8,.2,1) forwards;animation-delay:calc(var(--i) * 110ms + 200ms)}
+.ti-cell b{color:var(--mute);font-weight:400;font-variant-numeric:tabular-nums}
+.ti-cell.core{background:color-mix(in srgb,var(--green) 12%,#fff);border-color:color-mix(in srgb,var(--green) 45%,#fff);animation:ti-in .5s cubic-bezier(.2,.8,.2,1) forwards,ti-pulse 2.4s ease-in-out 1.6s infinite;animation-delay:calc(var(--i) * 110ms + 200ms),calc(var(--i) * 110ms + 1.4s)}
+.ti-cell.core::after{content:"*";color:var(--green)}
+@keyframes ti-in{to{opacity:1;transform:none}}
+@keyframes ti-pulse{0%,100%{box-shadow:0 0 0 0 transparent}50%{box-shadow:0 0 0 4px color-mix(in srgb,var(--green) 22%,transparent)}}
+@media (prefers-reduced-motion:reduce){.ti-cell,.ti-cell.core{animation:none;opacity:1;transform:none}}
+.health-chip[hidden]{display:none}
+
+/* Trạng thái trống: icon động, giải thích, nút tạo ở giữa */
+.empty-state{display:grid;justify-items:center;text-align:center;gap:8px;padding:28px 16px 24px;background:var(--soft);border-radius:14px}
+.empty-state h3{font-size:18px}
+.empty-state p{margin:0;max-width:52ch;color:var(--mute);font-size:14px;line-height:1.6}
+.es-action{margin-top:10px}
+.es-art{width:96px;height:96px;overflow:visible}
+@media (prefers-reduced-motion:no-preference){
+  .es-float{animation:es-bob 3s ease-in-out infinite}
+  .es-flame{transform-box:fill-box;transform-origin:50% 0;animation:es-flame .5s ease-in-out infinite alternate}
+  .es-star{animation:es-twinkle 2.2s ease-in-out infinite}.es-star.s2{animation-delay:-.7s}.es-star.s3{animation-delay:-1.4s}
+  .es-check{stroke-dasharray:22;animation:es-draw 2.6s ease-in-out infinite}.es-check.c2{animation-delay:.5s}
+  .es-wave{animation:es-wave 1.6s ease-in-out infinite}.es-wave.w2{animation-delay:.3s}
+}
+@keyframes es-bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+@keyframes es-flame{from{transform:scaleY(.7)}to{transform:scaleY(1.25)}}
+@keyframes es-twinkle{0%,100%{opacity:.3}50%{opacity:1}}
+@keyframes es-draw{0%{stroke-dashoffset:22}35%,80%{stroke-dashoffset:0}100%{stroke-dashoffset:22}}
+@keyframes es-wave{0%,100%{opacity:.25}50%{opacity:1}}
+
+/* Sprint hiện tại và Gantt */
+.sprint-now{display:flex;justify-content:space-between;gap:18px;flex-wrap:wrap;align-items:center;padding:14px 16px;background:var(--soft);border-radius:14px}
+.sprint-now h3{font-size:20px;margin:6px 0 2px}
+.sprint-prog{display:grid;gap:4px;min-width:180px}
+.sprint-prog b{font-size:22px;font-weight:500}
+.sprint-prog .bar{height:8px;border-radius:99px;background:#e4e9f6;overflow:hidden}
+.sprint-prog .bar i{display:block;height:100%;background:var(--sp);border-radius:99px}
+.gantt{margin-top:14px;overflow-x:auto}
+.gt-inner{min-width:640px;display:grid}
+.gt-row{display:grid;grid-template-columns:200px minmax(0,1fr);align-items:center;min-height:34px}
+.gt-label{padding-right:12px;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gt-sprint .gt-label{font-size:14px}
+.gt-track{position:relative;height:100%;min-height:34px;background:linear-gradient(90deg,var(--line) 1px,transparent 1px) 0 0/var(--wk) 100%}
+.gt-sprint .gt-track{background-color:var(--soft)}
+.gt-ticks{min-height:24px;background:none}
+.gt-ticks span{position:absolute;top:0;font-size:11px;color:var(--mute);translate:-1px 0;padding-left:4px;border-left:1px solid var(--line)}
+.gt-bar{position:absolute;top:50%;height:16px;translate:0 -50%;border-radius:99px;background:color-mix(in srgb,var(--sp) 25%,#fff);border:1.5px solid var(--sp)}
+.gt-bar.sprint{height:12px;background:var(--sp);opacity:.85}
+.gt-bar.review{background:color-mix(in srgb,var(--sp) 60%,#fff)}
+.gt-bar.done{background:var(--sp)}
+.gt-today{position:absolute;top:0;bottom:0;width:2px;background:var(--red);z-index:1;opacity:.7}
+.col-empty{margin:0;padding:22px 8px;text-align:center;color:var(--mute);font-size:13px}
+/* Đầu tab Planning: nút to hơn, Thành viên và Pull request mỗi nút một thanh bên riêng */
+.head-actions{gap:10px}
+.head-actions .btn{padding:11px 22px;font-size:15px}
+.head-icon svg{width:22px;height:22px}
+#planningLive.as-drawer[data-view="team"]{width:min(560px,calc(100vw - 24px))}
+#planningLive.as-drawer[data-view="pulls"]{width:min(720px,calc(100vw - 24px))}
+@media (max-width:1000px){#planningLive.as-drawer[data-view]{width:100%}}
+/* Tài khoản GitHub ở đầu trang, bên phải navbar */
+.top-right{display:flex;align-items:center;gap:14px;justify-self:end;min-width:0}
+.account{display:flex;align-items:center;gap:10px;min-width:0}
+.account:empty{display:none}
+.account-name{color:var(--mute);font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:150px}
+@media (max-width:1350px){.team{display:none}}
+@media (max-width:1000px){.account-name{display:none}.top-right{flex:none}}
+.live-close{display:grid;place-items:center;width:38px;height:38px;padding:0;border:1px solid var(--line);border-radius:50%;background:#fff;color:var(--ink);cursor:pointer;flex:none}
+.live-close:hover{background:var(--soft)}
+.live-close:focus-visible{outline:2px solid var(--indigo);outline-offset:2px}
+
+/* Quality và Maintaining: icon động thêm, thẻ chọn cách thu tiền */
+@media (prefers-reduced-motion:no-preference){
+  .es-needle{transform-origin:48px 66px;animation:es-needle 3.2s ease-in-out infinite}
+  .es-hand{transform-origin:48px 46px;animation:es-spin 6s linear infinite}
+  .es-spin{transform-origin:48px 48px;animation:es-spin 5s linear infinite}
+}
+@keyframes es-needle{0%,100%{transform:rotate(-24deg)}50%{transform:rotate(20deg)}}
+@keyframes es-spin{to{transform:rotate(360deg)}}
+.rev-cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.rev-card{display:grid;gap:4px;align-content:start;text-align:left;padding:14px 16px;border:0;border-radius:14px;background:var(--soft);font:inherit;cursor:pointer;transition:background .2s,color .2s}
+.rev-card b{font-weight:500}
+.rev-card span{font-size:13px;line-height:1.5;color:var(--mute)}
+.rev-card:hover{background:#eaeefa}
+.rev-card.on{background:var(--ink);color:#fff}
+.rev-card.on span{color:rgba(255,255,255,.72)}
+.rev-card:focus-visible{outline:2px solid var(--indigo);outline-offset:2px}
+@media (max-width:700px){.rev-cards{grid-template-columns:minmax(0,1fr)}}
+
+/* Nhóm nút chuyển khu vực to, cùng cỡ với nút trong khung Đội, sprint và PR */
+.seg.tabs-big{background:none;padding:0;gap:8px}
+.seg.tabs-big button{min-height:48px;padding:10px 22px;border:1px solid var(--line);border-radius:99px;background:#fff;font-size:16px;font-weight:500}
+.seg.tabs-big button:hover{background:var(--soft)}
+.seg.tabs-big button.on{background:var(--ink);border-color:var(--ink);color:#fff}
+
+/* Nhãn trạng thái bước nằm ngay cạnh tiêu đề */
+.view-head h2 .tag{padding:4px 14px;font-size:14px;font-weight:500;line-height:1.4;letter-spacing:0;color:var(--ink)}
+
+/* Danh sách thành viên ở Tổng quan: avatar to hơn */
+.ov-team{font-size:14px}
+.ov-team div{gap:12px;padding:6px 22px 6px 7px}
+.ov-team .member-face .pl-avatar{--pl-unit:.68px}
+
+/* Ô Canvas trống: câu hỏi gợi ý nằm giữa ô */
+.tk-canvas .tk-cell{grid-template-rows:auto 1fr}
+.tk-canvas .tk-cell .tk-hint{align-self:center;margin:0;padding:0 4px 4px;text-align:center;color:var(--mute);font-size:13px;line-height:1.45;display:block;-webkit-line-clamp:unset;overflow:visible}
+.ob-invite{margin:0 0 14px;font-size:14px}
+.ob-invite summary{cursor:pointer;color:var(--mute);width:max-content;padding:4px 0}
+.ob-invite summary:hover{color:var(--ink)}
+.ob-invite .field{margin-top:8px}
+.ob-invite p{margin:6px 0 0;font-size:13px}
+/* Thanh tiến độ dài, mỗi bước là một pill nằm trên thanh */
+.ob-steps{--progress:0;position:relative;flex-wrap:nowrap;justify-content:space-between;gap:10px;font-size:13px}
+.ob-steps::before,.ob-steps::after{content:"";position:absolute;left:20px;top:50%;height:4px;margin-top:-2px;border-radius:4px}
+.ob-steps::before{right:20px;background:#e4e8f4}
+.ob-steps::after{width:calc((100% - 40px) * var(--progress) / 100);background:var(--green);transition:width .4s ease}
+.ob-steps li{position:relative;z-index:1;background:#fff;border:1px solid #e4e8f4;border-radius:99px;padding:4px 12px 4px 4px;white-space:nowrap}
+.ob-steps li.now{border-color:var(--ink)}
+.ob-steps li.done{background:color-mix(in srgb,var(--green) 12%,#fff);border-color:transparent;color:var(--ink)}
+.ob-steps li.done span{background:var(--green);border-color:var(--green)}
+@media (prefers-reduced-motion:reduce){.ob-steps::after{transition:none}}

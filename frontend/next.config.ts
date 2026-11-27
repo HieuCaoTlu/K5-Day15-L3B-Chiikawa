@@ -13,6 +13,8 @@ export default function config(phase: string): NextConfig {
     const backend = ['/api/:path*', '/health', '/docs', '/openapi.json'];
     return {
       ...base,
+      // Tắt nút "N" của Next.js ở góc màn hình khi chạy dev.
+      devIndicators: false,
       // Agent gọi LLM có thể > 30 s (mặc định của proxy dev) → nâng lên 3 phút.
       experimental: { proxyTimeout: 180_000 },
       // Caddy phục vụ out/index.html tại / và out/workstation.html tại /workstation (try_files {path}.html). Dev cần trỏ tới file tĩnh tương ứng.

@@ -8,7 +8,7 @@ const STEPS = ['Tạo kết nối GitHub', 'Đăng nhập và lưu đội', 'Ch�
 
 export function Steps({ current }: { current: 1 | 2 | 3 }) {
   return (
-    <ol className="pl-steps" aria-label="Các bước kết nối GitHub">
+    <ol className="pl-steps" aria-label="Các bước kết nối GitHub" style={{ ['--progress' as string]: String(((current - 1) / (STEPS.length - 1)) * 100) }}>
       {STEPS.map((label, index) => {
         const done = index + 1 < current;
         return (

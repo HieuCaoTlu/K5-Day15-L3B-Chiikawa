@@ -16,7 +16,6 @@ from langgraph.types import interrupt
 
 from app.agent import llm
 from app.agent.canvas import (
-    QUESTIONS,
     REFUSALS,
     apply_update,
     build_proposal,
@@ -24,6 +23,7 @@ from app.agent.canvas import (
     empty_canvas,
     heuristic_update,
     normalize,
+    question_for,
     recompute,
 )
 from app.agent.guardrails import check_input, clean_proposal
@@ -101,7 +101,7 @@ def _refusal(intent: str) -> str:
 def ask_next(state: AgentState) -> dict:
     canvas, flags = state["canvas"], state.get("flags") or {}
     verdict, reasons, next_cell = decide(canvas, flags)
-    parts = [p for p in (_refusal(state.get("intent", "answer")), QUESTIONS.get(next_cell or "")) if p]
+    parts = [p for p in (_refusal(state.get("intent", "answer")), question_for(canvas, next_cell)) if p]
     reply = " ".join(parts) or "Bạn kể thêm về người dùng và vấn đề của họ nhé."
     proposal = clean_proposal(build_proposal(canvas, flags, verdict, reasons, next_cell, reply))
     return {

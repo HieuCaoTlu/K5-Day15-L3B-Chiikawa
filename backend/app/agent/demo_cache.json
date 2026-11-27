@@ -1,5 +1,5 @@
 {
-  "persona: chị lan, chủ shop mỹ phẩm 2 nhân viên. tuần trước chị mất 3 đơn vì trả lời tin nhắn trễ 2 giờ. hiện chị trả lời tay qua zalo, ghi đơn vào excel. mình muốn bot tự trả lời câu hỏi giá và tồn kho.": {
+  "persona: chị lan, chủ shop mỹ phẩm 2 nhân viên. tuần trước chị mất 3 đơn vì trả lời tin nhắn trễ 2 giờ. hiện chị trả lời tay qua zalo, ghi đơn vào excel. mình muốn bot tự trả lời câu hỏi giá và tồn kho. chị nói thẳng: chị chỉ cần khách vừa hỏi giá là có câu trả lời liền.": {
     "intent": "answer",
     "persona": {
       "content": "Chị Lan, chủ shop mỹ phẩm có 2 nhân viên",
@@ -8,10 +8,10 @@
       "quote": "chị Lan, chủ shop mỹ phẩm 2 nhân viên"
     },
     "jtbd": {
-      "content": "Trả lời khách kịp thời để không mất đơn",
+      "content": "Khách vừa hỏi giá là có câu trả lời liền",
       "who": "chị Lan",
       "when": "tuần trước",
-      "quote": "Tuần trước chị mất 3 đơn vì trả lời tin nhắn trễ 2 giờ"
+      "quote": "chị chỉ cần khách vừa hỏi giá là có câu trả lời liền"
     },
     "pain_point": {
       "content": "Mất 3 đơn vì trả lời tin nhắn trễ 2 giờ",

@@ -36,40 +36,44 @@ body:has(.pl-shell) :focus-visible { outline: 2px solid var(--indigo); outline-o
   align-items: center;
   flex-wrap: wrap;
   gap: 10px 18px;
-  padding: 2px 2px 14px;
+  padding: 2px 2px 10px;
   background: white;
 }
 
 .pl-account { margin-inline-start: auto; }
-.pl-tabs { display: flex; flex-wrap: wrap; gap: 2px; }
+.pl-tabs { display: flex; flex-wrap: wrap; gap: 8px; }
+/* Nút chuyển khu vực to, dễ bấm */
 .pl-tabs button {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 14px;
-  min-height: 36px;
+  gap: 10px;
+  padding: 10px 22px;
+  min-height: 48px;
   border-radius: 99px;
-  font-size: 14px;
+  border: 1px solid var(--line);
+  font-size: 16px;
+  font-weight: 500;
   cursor: pointer;
 }
 .pl-tabs button span {
   content: '';
-  inline-size: 9px;
-  block-size: 9px;
+  inline-size: 11px;
+  block-size: 11px;
   border-radius: 50%;
   background: var(--c);
   flex: none;
 }
-.pl-tabs button[aria-pressed='true'], .pl-tabs button:hover { background: var(--color-pale); }
+.pl-tabs button:hover { background: var(--color-pale); }
+.pl-tabs button[aria-pressed='true'] { background: var(--ink); border-color: var(--ink); color: white; }
 .pl-tabs button[aria-pressed='true'] span { box-shadow: none; }
 
 /* Nội dung nằm liền với trang Workstation: cùng chiều rộng, không cuộn riêng. Lề 2px giữ viền card. */
 .pl-page {
   width: 100%;
-  padding: 1px 2px 12px;
+  padding: 1px 2px 8px;
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 12px;
 }
 .pl-page h2, .pl-page h3 {
   line-height: 1.2;
@@ -87,11 +91,11 @@ body:has(.pl-shell) .d-modal { max-height: calc(var(--pl-view-height, 100vh) - 3
 .pl-between { justify-content: space-between; }
 
 body:has(.pl-shell) .d-card {
-  padding: 20px;
+  padding: 14px 16px;
   border-radius: 20px;
   box-shadow: 0 0 0 1px var(--line);
 }
-body:has(.pl-shell) .d-btn { min-height: 36px; font-size: 14px; }
+body:has(.pl-shell) .d-btn { min-height: 44px; padding-inline: 20px; font-size: 15px; }
 body:has(.pl-shell) .d-b1 { background: var(--ink); color: white; }
 body:has(.pl-shell) .d-b1:hover { background: color-mix(in srgb, var(--ink) 86%, var(--indigo)); }
 body:has(.pl-shell) .d-b2 { background: var(--soft); border-color: transparent; }
@@ -268,3 +272,29 @@ body:has(.pl-shell) .d-modal > .text-lg, body:has(.pl-shell) .d-modal > div > .t
   .pl-page .d-seg { max-width: 100%; flex-wrap: wrap; }
   .pl-page input[type="date"], .pl-page input[type="datetime-local"] { min-width: 0; max-width: 100%; }
 }
+
+/* Thẻ thành viên: avatar lớn ở cột 1, thông tin ở cột 2 */
+.pl-member-grid { grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); }
+.pl-member { position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 18px; align-items: center; }
+.pl-member-art { display: grid; place-items: center; align-self: stretch; }
+.pl-member-art .pl-avatar { --pl-unit: 1.7px; align-self: center; }
+@media (max-width: 480px) {
+  .pl-member-grid { grid-template-columns: minmax(0, 1fr); }
+  .pl-member-art .pl-avatar { --pl-unit: 1.2px; }
+}
+.pl-member-remove { position: absolute; top: 12px; right: 12px; display: grid; place-items: center; width: 38px; height: 38px; padding: 0; border: 1px solid #d9deee; border-radius: 50%; background: #fff; color: var(--color-muted, #6b7280); cursor: pointer; }
+.pl-member-remove svg { width: 18px; height: 18px; }
+.pl-member-remove:hover:not(:disabled) { background: #fdecee; border-color: #f3b6bd; color: #d92d3f; }
+.pl-member-remove:focus-visible { outline: 2px solid #4d5bf0; outline-offset: 2px; }
+.pl-member-remove:disabled { opacity: .5; cursor: default; }
+
+/* Các bước: một thanh tiến độ dài, mỗi bước là một pill nằm trên thanh */
+.pl-steps { --progress: 0; position: relative; flex-direction: row; align-items: center; justify-content: space-between; gap: 12px; padding: 0; margin: 0; list-style: none; }
+.pl-steps::before, .pl-steps::after { content: ''; position: absolute; left: 24px; top: 50%; height: 4px; margin-top: -2px; border-radius: 4px; }
+.pl-steps::before { right: 24px; background: #e4e8f4; }
+.pl-steps::after { width: calc((100% - 48px) * var(--progress) / 100); background: var(--color-go, #14b86a); transition: width .4s ease; }
+.pl-steps li { position: relative; z-index: 1; background: #fff; border: 1px solid #e4e8f4; padding: 6px 14px 6px 6px; white-space: nowrap; }
+.pl-steps li[aria-current='step'] { background: var(--color-pale); border-color: var(--ink); }
+.pl-steps li.done { background: var(--color-go-bg); border-color: transparent; color: var(--ink); }
+@media (max-width: 640px) { .pl-steps li { padding-right: 8px; font-size: 12px; } .pl-steps li > span:first-child { margin-right: -4px; } }
+@media (prefers-reduced-motion: reduce) { .pl-steps::after { transition: none; } }

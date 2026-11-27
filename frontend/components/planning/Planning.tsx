@@ -1,9 +1,9 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Empty, ErrorBox, Loading } from '@/components/kit/ui';
+import { ErrorBox, Loading } from '@/components/kit/ui';
 import { RepoAccess } from '@/components/planning/Access';
-import { DraftEditor, PlanForm, SprintBoard, START_RESULTS, TaskDetail } from '@/components/planning/Board';
+import { DraftEditor, PlanForm, START_RESULTS, TaskDetail } from '@/components/planning/Board';
 import { ConnectGitHub, Steps } from '@/components/planning/Connect';
 import { PullRequests, Repository } from '@/components/planning/Integrations';
 import { Avatar, InviteCard, JoinForm, TeamForm, TeamList } from '@/components/planning/Team';
@@ -24,6 +24,7 @@ const RETURN_MESSAGES: Record<string, string> = {
   repos: 'Cần kiểm tra quyền truy cập repo trên GitHub.',
   discovered: 'Đã tải các repo được cấp quyền.',
 };
+const INVITE_KEY = 'tang.invite';
 const SUCCESS_RETURNS = new Set(['discovered', 'ready', 'configured']);
 
 function message(error: unknown) {
@@ -49,6 +50,9 @@ export function Planning() {
   const working = useRef(false);
   const installReturn = useRef(false);
   const [justConnected, setJustConnected] = useState(false);
+  // Mã mời người dùng đã nhập ở bước đăng nhập (Workstation lưu trước khi chuyển sang GitHub).
+  const [inviteCode, setInviteCode] = useState('');
+  const forgetInvite = () => { try { window.localStorage.removeItem(INVITE_KEY); } catch { /* không có localStorage */ } };
   const [startResult, setStartResult] = useState<{ task: number; code: string } | null>(null);
 
   const reload = useCallback(async () => {
@@ -78,6 +82,10 @@ export function Planning() {
       if (event.data?.type === 'tang:planning-reload') void reload().catch(() => {});
       // Nút Đổi repo nằm ngoài trang: mở phần chọn repo trong khung.
       if (event.data?.type === 'tang:planning-repo') { setShowRepo(true); setEditTeam(false); setView('board'); }
+      // Nút Thành viên / Pull request ngoài trang chọn khu vực hiển thị trong khung.
+      if (event.data?.type === 'tang:planning-view' && ['board', 'team', 'pulls'].includes(event.data.view)) {
+        setEditTeam(false); setView(event.data.view);
+      }
       if (event.data?.type === 'tang:planning-viewport') {
         const { top, height } = event.data;
         if (!Number.isFinite(top) || !Number.isFinite(height)) return;
@@ -161,6 +169,17 @@ export function Planning() {
     }
   }, [state]);
 
+  // Có mã mời đã nhập ở bước đăng nhập thì mở sẵn form vào đội, đúng một lần.
+  const inviteApplied = useRef(false);
+  useEffect(() => {
+    if (inviteApplied.current || !state?.profile || state.role) return;
+    inviteApplied.current = true;
+    try {
+      const saved = window.localStorage.getItem(INVITE_KEY) ?? '';
+      if (saved) { setInviteCode(saved); setJoining(true); }
+    } catch { /* không có localStorage */ }
+  }, [state?.profile, state?.role]);
+
   const mutate: Mutate = async (action, success) => {
     if (working.current) return false;
     working.current = true;
@@ -197,7 +216,6 @@ export function Planning() {
   const tasks = state?.sprints.flatMap((sprint) => sprint.tasks) ?? [];
   const activeTask = tasks.find((task) => task.id === selectedTask);
   const toBoard = () => { setEditTeam(false); setView('board'); };
-  const openTask = (id: number) => { setError(null); setSelectedTask(id); setView('board'); };
 
   const needsRepo = Boolean(state && (!state.repo || !state.repo.access || showRepo));
 
@@ -205,8 +223,8 @@ export function Planning() {
 
   return (
     <div className="pl-shell" ref={shell}>
-      {(state?.role || profile) && <header className="pl-top">
-        {state?.role && (
+      {(state?.role || profile) && !embedded && <header className="pl-top">
+        {state?.role && !embedded && (
           <nav className="pl-tabs" aria-label="Khu vực Planning">
             {TABS.map(({ value, label }) => (
               <button key={value} type="button" aria-pressed={view === value}
@@ -253,20 +271,20 @@ export function Planning() {
         ) : !state.role ? (
           <>
             {!profile.demo && !joining && <Steps current={2} />}
-            <div className="pl-row" role="group" aria-label="Cách vào đội">
-              <button type="button" className={'d-btn ' + (joining ? 'd-b2' : 'd-b1')} aria-pressed={!joining}
-                onClick={() => setJoining(false)}>Tạo đội mới</button>
-              <button type="button" className={'d-btn ' + (joining ? 'd-b1' : 'd-b2')} aria-pressed={joining}
-                onClick={() => setJoining(true)}>Nhập mã để vào đội</button>
+            <div className="pl-row">
+              <button type="button" className="d-btn d-b2" onClick={() => setJoining(!joining)}>
+                {joining ? '← Quay lại lập đội' : 'Nhập mã để vào đội'}
+              </button>
             </div>
-            {joining ? <JoinForm key={profile.github_id} profile={profile} busy={busy} mutate={mutate} onComplete={toBoard} />
+            {joining ? <JoinForm key={profile.github_id} profile={profile} busy={busy} mutate={mutate} initialCode={inviteCode}
+              onComplete={() => { forgetInvite(); toBoard(); }} />
               : <TeamForm key={profile.github_id} profile={profile} members={state.members} busy={busy} mutate={mutate} onComplete={toBoard} />}
           </>
         ) : (
           <>
             {view === 'team' ? (
               <>
-                {leader && <div className="pl-row d-card"><h2 className="text-lg">Thành viên của đội</h2>
+                {leader && <div className="pl-between d-card"><h2 className="text-lg">Thành viên của đội</h2>
                   <button type="button" className="d-btn d-b2" onClick={() => setEditTeam(!editTeam)}>{editTeam ? 'Đóng chỉnh sửa' : 'Sửa thành viên'}</button></div>}
                 {editTeam && leader ? <TeamForm profile={profile} members={state.members} busy={busy} mutate={mutate} onComplete={() => setEditTeam(false)} />
                   : <TeamList members={state.members} busy={busy} mutate={leader ? mutate : undefined} />}
@@ -293,13 +311,8 @@ export function Planning() {
                           <button type="button" className="d-btn d-b1" onClick={() => setCompose(true)}>Lập thêm sprint</button>
                         </section>
                       )}
-                      {!!state.sprints.length
-                        ? <SprintBoard key={profile.github_id + ':' + state.repo_version} sprints={state.sprints}
-                          members={state.members} me={profile.github_id} leader={leader} onOpen={openTask} />
-                        : (!state.repo || !leader) && <section className="d-card">
-                          <h2 className="text-lg">Sprint</h2>
-                          <Empty>{state.repo ? 'Sprint sẽ hiện ở đây sau khi trưởng nhóm áp dụng kế hoạch.' : 'Đội có thể lập sprint sau khi kết nối repo.'}</Empty>
-                        </section>}
+                      {/* Danh sách sprint và Gantt nằm ở tab Planning; khung này chỉ để lập kế hoạch. */}
+                      {!leader && <section className="d-card"><p className="d-muted">Trưởng nhóm lập sprint ở đây. Sprint hiện ở tab Planning sau khi được áp dụng.</p></section>}
                     </>
                   )}
                 </div>
