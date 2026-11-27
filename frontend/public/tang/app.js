@@ -1,6 +1,7 @@
 /* Ứng dụng: điều hướng, bốn bước, agent, dữ liệu dùng chung và chuyển động. */
 (function () {
   const { STEPS, FLOORS, SCORE, ROLES, STATUS, SAMPLE_SCORE, SEED, STACK, MONEY, FILES, AGENT, inDays, iso } = window.DATA;
+  const { RULES, PROFIT, NAMES: HNAMES, LEVELS } = window.HEALTH;
   const $ = (s, p = document) => p.querySelector(s);
   const $$ = (s, p = document) => [...p.querySelectorAll(s)];
   const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -9,8 +10,8 @@
   const M = window.Motion;
   const canAnim = !!M && !reduced;
   const EASE = [0.22, 1, 0.36, 1];
-  const TABS = [{ id: 'overview', name: 'Tổng quan', short: 'Tổng quan', hex: '#4d5bf0' },
-    ...STEPS.map((s, i) => ({ id: s.id, name: s.name, short: ['Product', 'Plan', 'Pitch', 'Bảo trì'][i], hex: s.hex }))];
+  const TABS = [{ id: 'overview', name: 'Tổng quan', short: 'Tổng quan', hex: '#121a33' },
+    ...STEPS.map((s, i) => ({ id: s.id, name: s.name, short: ['Product', 'Plan', 'Pitch', 'Quality', 'Bảo trì'][i] || s.name, hex: s.hex }))];
 
   const anim = (el, kf, o) => (canAnim && el && (el.length === undefined || el.length) ? M.animate(el, kf, o) : null);
   const done = a => (a ? Promise.resolve(a.finished || a).catch(() => {}) : Promise.resolve());
@@ -113,8 +114,13 @@
       filled() / SCORE.length,
       0.2 * (ROLES.filter(r => S.plan.roles[r]).length / ROLES.length) + 0.8 * (t.reduce((a, x) => a + (STATUS[x.status] || [0, 0])[1], 0) / (t.length || 1)),
       [p.form, p.responses.length, p.overview, p.deck, p.script, p.ads].filter(Boolean).length / 6,
+      qualityProgress(),
       sc.filter(x => x.runs > 0).length / (sc.length || 1)
     ].map(v => Math.max(0, Math.min(1, v)));
+  }
+  function qualityProgress() {
+    const q = S.quality, c = S.plan.cost;
+    return 0.3 * (q.metrics.length > 0) + 0.5 * Math.min(1, q.runs.length / 3) + 0.2 * ((+c.priceIn || +c.priceOut) > 0);
   }
   function nextAction(i) {
     if (i === 0) { const m = SCORE.find(([k]) => !S.score[k].text.trim()); return m ? `Còn thiếu mục ${m[1]} trong scorecard` : 'Scorecard đã đủ 7 mục'; }
@@ -128,6 +134,13 @@
       const p = S.pitch;
       return !p.form ? 'Tạo form khảo sát' : !p.responses.length ? 'Thu phản hồi cho form' : !p.overview ? 'Tạo AI overview' : !p.deck ? 'Tạo slide pitching' : !p.script ? 'Viết kịch bản' : !p.ads ? 'Viết bài quảng cáo' : 'Bộ pitching đã đủ';
     }
+    if (i === 3) {
+      const q = S.quality;
+      if (!q.metrics.length) return 'Để agent lấy metric từ scorecard';
+      if (q.source !== S.score.metric.text) return 'Scorecard đã đổi, lấy lại metric';
+      if (!q.runs.length) return 'Ghi lần chạy thử đầu tiên';
+      return q.runs.some(r => !r.sample) ? `Đã ghi ${q.runs.length} lần chạy` : 'Mới có dữ liệu mẫu, ghi lần chạy thật';
+    }
     const due = S.maintain.schedule.slice().sort((a, b) => a.next.localeCompare(b.next))[0];
     return due ? `${due.next <= iso(new Date()) ? 'Đến hạn' : 'Sắp tới'}: ${due.title}` : 'Chưa có lịch';
   }
@@ -135,7 +148,7 @@
 
   let site = null, pins = [], shown = 0;
   function syncProgress() {
-    const v = progress(), total = v.reduce((a, b) => a + b, 0) / 4;
+    const v = progress(), total = v.reduce((a, b) => a + b, 0) / v.length;
     if (site) site.set(v);
     const el = $('#totalPct');
     if (canAnim) M.animate(shown, total, { duration: 0.9, ease: EASE, onUpdate: x => { el.textContent = pct(x); } });
@@ -149,6 +162,182 @@
       b.style.width = pct(x);
     });
     floorInfo(v);
+    applyHealth();
+  }
+
+  /* ---------- Quality: lần chạy, chi phí, tín hiệu sức khỏe ---------- */
+  const num = v => (v === null || v === undefined || v === '' || !isFinite(+v) ? null : +v);
+  const sortedRuns = () => S.quality.runs.slice().sort((a, b) => String(a.at).localeCompare(String(b.at)));
+  const rate = r => (r && +r.total > 0 && num(r.passed) !== null ? Math.min(1, +r.passed / +r.total) : null);
+  const meets = (m, v) => (m.direction === 'down' ? v <= +m.target : v >= +m.target);
+  const two = n => String(n).padStart(2, '0');
+  const nowLocal = () => { const d = new Date(); return `${iso(d)}T${two(d.getHours())}:${two(d.getMinutes())}`; };
+  const shortDate = at => { const [d, t] = String(at).split('T'); const [, m, dd] = (d || '').split('-'); return `${dd}/${m}${t ? ' ' + t : ''}`; };
+  const usd = v => (!isFinite(v) ? '?' : (Math.abs(v) < 1 && v !== 0 ? String(+v.toPrecision(2)) : Math.abs(v) < 10 ? v.toFixed(2) : Math.round(v).toLocaleString('vi-VN')) + ' USD');
+  const runCost = (r, c) => ((+r.inTok || 0) * c.priceIn + (+r.outTok || 0) * c.priceOut) / 1e6;
+  /* Chi phí tính bằng code từ token đã khai và đơn giá do đội nhập ở Planning; không dùng bảng giá của nhà cung cấp nào. */
+  function money() {
+    const c = Object.fromEntries(Object.entries(S.plan.cost).map(([k, v]) => [k, +v || 0]));
+    const rs = sortedRuns().filter(r => +r.total > 0 && ((+r.inTok || 0) + (+r.outTok || 0)) > 0);
+    if (!rs.length || !(c.priceIn || c.priceOut)) return null;
+    const recent = rs.slice(-3), each = r => runCost(r, c) / +r.total;
+    const perCase = recent.reduce((a, r) => a + each(r), 0) / recent.length;
+    const outCost = recent.reduce((a, r) => a + (+r.outTok || 0) * c.priceOut, 0), allCost = recent.reduce((a, r) => a + runCost(r, c) * 1e6, 0);
+    const perUser = perCase * c.tickets, last = rs[rs.length - 1], prev = rs[rs.length - 2];
+    return {
+      c, perCase, perUser, lastRun: runCost(last, c), outShare: allCost ? outCost / allCost : 0,
+      trend: prev && each(prev) > 0 ? each(last) / each(prev) - 1 : 0,
+      margin: c.price > 0 ? (c.price - perUser) / c.price : null,
+      breakEven: perUser + (c.teams > 0 ? c.infra / c.teams : 0),
+      targetPrice: perUser / (1 - PROFIT.targetMargin)
+    };
+  }
+  function signals() {
+    const runs = sortedRuns(), last = runs[runs.length - 1], prev = runs[runs.length - 2], m = money();
+    const today = new Date(iso(new Date()) + 'T00:00');
+    const late = S.maintain.schedule.filter(x => x.next < iso(new Date())).map(x => Math.round((today - new Date(x.next + 'T00:00')) / 864e5));
+    const a = rate(last), b = rate(prev);
+    return {
+      passRate: a,
+      passDrop: a !== null && b !== null ? Math.max(0, b - a) : null,
+      metricMiss: last ? S.quality.metrics.filter(k => num(last.values[k.id]) !== null && !meets(k, +last.values[k.id])).length : null,
+      margin: m ? m.margin : null,
+      overdueDays: late.length ? Math.max(...late) : 0,
+      staleDays: last ? Math.max(0, Math.floor((Date.now() - new Date(last.at)) / 864e5)) : null
+    };
+  }
+  const health = () => window.HEALTH.evaluate(signals());
+  const HCOLOR = { ok: 'var(--green)', warn: 'var(--yellow)', rescue: 'var(--orange)', collapse: 'var(--orange)' };
+  const fmtRule = (fmt, v) => (fmt === 'pct' ? Math.round(v * 100) + '%' : fmt === 'days' ? v + ' ngày' : String(v));
+  const reasonText = r => `${r.label}: ${fmtRule(r.fmt, r.value)} (ngưỡng ${HNAMES[r.level].toLowerCase()} là ${r.dir === 'below' ? 'dưới' : 'từ'} ${fmtRule(r.fmt, r.threshold)})`;
+  let preview = null, lastLevel = null;
+  function applyHealth() {
+    const h = health(), level = preview || h.level;
+    if (site && site.health) site.health(level);
+    const chip = $('#healthChip');
+    if (chip) { chip.dataset.level = level; chip.style.setProperty('--c', HCOLOR[level]); chip.innerHTML = `<i></i>${preview ? 'Xem thử' : 'Sức khỏe'}: ${HNAMES[level]}`; }
+    if (lastLevel && LEVELS.indexOf(h.level) > LEVELS.indexOf(lastLevel)) toast(`Sức khỏe sản phẩm chuyển sang ${HNAMES[h.level].toLowerCase()}. Xem lý do ở tab Maintaining.`);
+    lastLevel = h.level;
+  }
+  function profitTips(m) {
+    if (!m) return ['Cần ít nhất một lần chạy có token và tổng số test, cùng đơn giá token, để tính chi phí.'];
+    const t = PROFIT.targetMargin, tips = [];
+    if (!(m.c.price > 0)) tips.push(`Chưa có giá bán. Với chi phí hiện tại, giá hòa vốn là ${usd(m.breakEven)} và giá để đạt biên ${pct(t)} là ${usd(m.targetPrice)} mỗi khách mỗi tháng.`);
+    else if (m.margin < 0) tips.push(`Chi phí AI đang cao hơn giá bán ${usd(m.perUser - m.c.price)} mỗi khách mỗi tháng. Cần giá ít nhất ${usd(m.breakEven)}, hoặc giảm token mỗi lượt gọi.`);
+    else if (m.margin < t) tips.push(`Biên hiện tại ${pct(m.margin)}, dưới mục tiêu ${pct(t)}. Hai hướng: nâng giá lên khoảng ${usd(m.targetPrice)}, hoặc giảm khoảng ${pct(1 - m.c.price * (1 - t) / m.perUser)} token mỗi lượt gọi.`);
+    else tips.push(`Biên ${pct(m.margin)} đã đạt mục tiêu ${pct(t)}. Có thể giữ giá, hoặc dành phần dư cho model tốt hơn ở bước khó.`);
+    tips.push(m.outShare > 0.5 ? 'Token ra chiếm phần lớn chi phí. Giới hạn độ dài câu trả lời hoặc yêu cầu định dạng ngắn hơn.' : 'Token vào chiếm phần lớn chi phí. Cache phần prompt lặp lại hoặc rút gọn ngữ cảnh gửi kèm.');
+    if (m.trend > 0.1) tips.push(`Chi phí mỗi lượt gọi tăng ${pct(m.trend)} so với lần chạy trước. Kiểm tra model hoặc prompt vừa đổi.`);
+    if (m.c.price > 0 && m.c.infra > 0) tips.push(`Giá hòa vốn đã tính phần hạ tầng chia đều cho ${m.c.teams || 0} khách: ${usd(m.breakEven)} mỗi khách mỗi tháng.`);
+    return tips;
+  }
+  /* Biểu đồ đường bằng SVG, không cần thư viện. series: [{ name, color, values[], target? }] */
+  const PALETTE = ['var(--ink)', 'var(--indigo)', 'var(--blue)', 'var(--green)', 'var(--orange)', 'var(--violet)', 'var(--yellow)'];
+  const tick = v => (Math.abs(v) >= 1e6 ? +(v / 1e6).toFixed(1) + 'M' : Math.abs(v) >= 1e3 ? Math.round(v / 1e3) + 'k' : String(+v.toFixed(1)));
+  function lineChart(xs, series, label) {
+    const W = 640, H = 230, L = 46, R = 14, T = 12, B = 30;
+    const vals = series.flatMap(s => [...s.values, s.target]).filter(v => v !== null && v !== undefined && isFinite(v));
+    if (!xs.length || !vals.length) return '<p class="muted">Chưa có lần chạy nào để vẽ.</p>';
+    const hi = Math.max(...vals, 0), mag = hi > 0 ? 10 ** Math.floor(Math.log10(hi)) : 1, max = Math.ceil(hi * 1.08 / mag) * mag || 1, min = Math.min(0, ...vals);
+    const x = i => L + (xs.length === 1 ? (W - L - R) / 2 : i * (W - L - R) / (xs.length - 1));
+    const y = v => T + (H - T - B) * (1 - (v - min) / (max - min || 1));
+    const every = Math.ceil(xs.length / 7);
+    const grid = [0, 0.25, 0.5, 0.75, 1].map(t => min + (max - min) * t).map(v => `<line class="g" x1="${L}" x2="${W - R}" y1="${y(v).toFixed(1)}" y2="${y(v).toFixed(1)}"/><text x="${L - 6}" y="${(y(v) + 4).toFixed(1)}" text-anchor="end">${tick(v)}</text>`).join('');
+    const xl = xs.map((l, i) => (i % every && i !== xs.length - 1 ? '' : `<text x="${x(i).toFixed(1)}" y="${H - 8}" text-anchor="middle">${esc(l.split(' ')[0])}</text>`)).join('');
+    const lines = series.map(s => {
+      let d = '', prev = false;
+      s.values.forEach((v, i) => { if (v === null || v === undefined || !isFinite(v)) { prev = false; return; } d += `${prev ? 'L' : 'M'}${x(i).toFixed(1)} ${y(v).toFixed(1)}`; prev = true; });
+      const target = s.target !== null && s.target !== undefined && isFinite(s.target) ? `<line class="tg" x1="${L}" x2="${W - R}" y1="${y(s.target).toFixed(1)}" y2="${y(s.target).toFixed(1)}" style="stroke:${s.color}"/>` : '';
+      const dots = s.values.map((v, i) => (v === null || v === undefined || !isFinite(v) ? '' : `<circle cx="${x(i).toFixed(1)}" cy="${y(v).toFixed(1)}" r="3.6" style="fill:${s.color}"><title>${esc(s.name)}, ${esc(xs[i])}: ${+(+v).toFixed(2)}</title></circle>`)).join('');
+      return `${target}<path class="ln" d="${d}" style="stroke:${s.color}"/>${dots}`;
+    }).join('');
+    const legend = series.map(s => `<span style="--c:${s.color}"><i></i>${esc(s.name)}${s.target !== null && s.target !== undefined && isFinite(s.target) ? `, mục tiêu ${+s.target}` : ''}</span>`).join('');
+    return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(label)}">${grid}${xl}${lines}</svg><div class="legend">${legend}<span class="muted">Nét đứt là mục tiêu</span></div>`;
+  }
+  /* Khung Product thinking cho metric:
+     - đủ hiện trạng, mục tiêu, cách đo;
+     - metric mạnh (hành vi lặp lại, kết quả công việc) thay vì metric phù phiếm (lượt đăng ký, lượt tải, số tính năng);
+     - metric đi theo bản chất problem: hành vi thì đo retention, phiên, quay lại; năng suất thì đo thời gian, tỉ lệ chỉnh sửa, số lần dùng thật;
+     - có chỉ số chất lượng AI (câu trả lời đúng là gì, bắt đúng hay bắt đủ) và chỉ số khả thi (độ trễ, chi phí);
+     - tiêu chí thành công viết thành một câu "Nếu ... thì ...". */
+  const KIND = { value: ['Giá trị thật', 'var(--green)'], ai: ['Chất lượng AI', 'var(--indigo)'], feasibility: ['Khả thi', 'var(--orange)'] };
+  const NATURE = { behavior: 'Hành vi', productivity: 'Năng suất', other: 'Chưa rõ' };
+  const RX = {
+    vanity: /(đăng ký|lượt tải|tải app|download|số (tính năng|feature)|lượt truy cập|lượt xem|pageview|follower|lượt thích)/i,
+    ai: /(đúng|sai|chính xác|precision|recall|accuracy|bản nháp|ảo giác|trích dẫn|chỉnh sửa|sửa nhẹ|giữ lại|được dùng|chấp nhận|sinh ra)/i,
+    feasibility: /(độ trễ|latency|giây|ms|chi phí|token|USD|thời gian chờ)/i,
+    behavior: /(duy trì|động lực|thói quen|mất tập trung|bỏ giữa chừng|quay lại|tự học|tương tác)/i,
+    productivity: /(thủ công|lặp lại|mất thời gian|chờ|năng suất|tạo đề|soạn|trả lời|xử lý)/i,
+    behaviorMetric: /(quay lại|retention|phiên|hằng tuần|mỗi tuần|duy trì|hoàn thành)/i,
+    productivityMetric: /(thời gian|tỉ lệ (chỉnh )?sửa|số .{0,20}dùng thật|giảm|nhanh)/i
+  };
+  const kindOf = t => (RX.feasibility.test(t) && !/phản hồi/i.test(t) ? 'feasibility' : RX.ai.test(t) ? 'ai' : 'value');
+  const natureOf = t => (RX.behavior.test(t) ? 'behavior' : RX.productivity.test(t) ? 'productivity' : 'other');
+  const withUnit = (v, u) => `${+v}${u && u !== '%' ? ' ' + u : u || ''}`;
+  const ruleOf = k => `Nếu ${String(k.name).toLowerCase()} ${k.direction === 'down' ? 'không vượt' : 'đạt từ'} ${withUnit(k.target, k.unit)}${num(k.baseline) !== null ? ` (hiện trạng ${withUnit(k.baseline, k.unit)})` : ''} thì xem là đạt.`;
+  /* Tách metric từ văn bản khi chưa gọi được Claude. Chỉ lấy số có trong văn bản; không có hiện trạng thì để trống. */
+  function parseMetrics(text) {
+    return text.split(/[;\n]|\.\s/).map(t => t.trim()).filter(Boolean).map(seg => {
+      const range = seg.match(/từ\s*(-?\d+(?:[.,]\d+)?)\s*(%|giây|phút|ms|điểm|lần|USD)?\s*(xuống|lên|thành|còn)\s*(-?\d+(?:[.,]\d+)?)\s*(%|giây|phút|ms|điểm|lần|USD)?/i);
+      const m = range ? null : seg.match(/(-?\d+(?:[.,]\d+)?)\s*(%|giây|phút|ms|điểm|lần|USD)?/i);
+      if (!range && !m) return null;
+      const n = x => +String(x).replace(',', '.');
+      let name = seg.replace(range ? range[0] : m[0], ' ').replace(/(ít nhất|tối thiểu|tối đa|không quá|dưới|trên|đạt)/gi, ' ').replace(/\s+/g, ' ').replace(/^[\s,:;.\-]+|[\s,:;.\-]+$/g, '');
+      name = name ? name[0].toUpperCase() + name.slice(1) : seg;
+      const unit = range ? range[5] || range[2] || '' : m[2] || '';
+      const direction = range ? (/xuống|còn/i.test(range[3]) ? 'down' : 'up') : /(tối đa|không quá|dưới|ít hơn)/i.test(seg) ? 'down' : 'up';
+      const k = { name: name.slice(0, 60), baseline: range ? n(range[1]) : null, target: range ? n(range[4]) : n(m[1]), unit, direction, kind: kindOf(seg), method: '' };
+      return Object.assign(k, { rule: ruleOf(k) });
+    }).filter(Boolean);
+  }
+  /* Soát bộ metric theo khung Product thinking. Code chấm, không để LLM chấm. */
+  function checkMetrics() {
+    const q = S.quality, list = q.metrics, out = [];
+    const ok = (good, text, fix) => out.push({ good, text: good ? text : fix });
+    const nature = q.nature && q.nature !== 'other' ? q.nature : natureOf(S.score.problem.text);
+    if (!list.length) return [{ good: false, text: 'Chưa có metric. Để agent lấy từ scorecard hoặc thêm tay.' }];
+    const noBase = list.filter(k => num(k.baseline) === null), noMethod = list.filter(k => !String(k.method || '').trim());
+    ok(!noBase.length, 'Mọi metric đã có hiện trạng.', `Cần hiện trạng cho: ${noBase.map(k => k.name).join(', ')}. Không có hiện trạng thì không biết AI cải thiện được bao nhiêu.`);
+    ok(!noMethod.length, 'Mọi metric đã có cách đo.', `Cần ghi cách đo cho: ${noMethod.map(k => k.name).join(', ')}.`);
+    const vanity = list.filter(k => RX.vanity.test(k.name));
+    ok(!vanity.length, 'Không có metric phù phiếm.', `${vanity.map(k => k.name).join(', ')} giống metric phù phiếm. Đổi sang hành vi lặp lại hoặc kết quả công việc thật.`);
+    ok(list.some(k => k.kind === 'value'), 'Có metric giá trị thật cho người dùng.', 'Cần một metric giá trị thật: dấu hiệu nào chứng minh người dùng được lợi?');
+    ok(list.some(k => k.kind === 'ai'), 'Có metric chất lượng AI.', 'Cần một metric chất lượng AI: thế nào là câu trả lời đúng, và ưu tiên bắt đúng (precision) hay bắt đủ (recall)?');
+    if (nature === 'behavior') ok(list.some(k => RX.behaviorMetric.test(k.name)), 'Problem về hành vi và đã có metric quay lại hoặc duy trì.', 'Problem về hành vi: nên đo hoàn thành phiên đầu, quay lại phiên thứ hai, số phiên mỗi tuần.');
+    if (nature === 'productivity') ok(list.some(k => RX.productivityMetric.test(k.name)), 'Problem về năng suất và đã có metric thời gian hoặc tỉ lệ chỉnh sửa.', 'Problem về năng suất: nên đo thời gian làm xong việc, tỉ lệ chỉnh sửa, số lần dùng thật.');
+    ok(list.some(k => k.kind === 'feasibility'), 'Có metric khả thi (độ trễ hoặc chi phí).', 'Chưa có metric khả thi. Chi phí đã theo dõi bằng token ở dưới; nếu người dùng phải chờ, thêm metric độ trễ.');
+    return out;
+  }
+  const SOURCE = { agent: 'Agent', tu: 'Luật tách số', mau: 'Mẫu', tay: 'Nhập tay' };
+  let qline = 'all', runEdit = null, armedKey = '', armedAt = 0;
+  /* Thao tác xóa cần bấm hai lần trong 4 giây */
+  function twice(b, key, label) {
+    if (armedKey === key && Date.now() - armedAt < 4000) { armedKey = ''; return true; }
+    armedKey = key; armedAt = Date.now();
+    const old = b.textContent; b.textContent = label;
+    setTimeout(() => { if (b.isConnected && b.textContent === label) b.textContent = old; }, 4000);
+    return false;
+  }
+  function ruleTech() {
+    const s = signals(), m = money(), out = [];
+    if (s.passDrop > 0) out.push({ title: 'Khóa phiên bản model và prompt đang chạy tốt', why: `Tỉ lệ pass giảm ${pct(s.passDrop)} ở lần chạy gần nhất. Giữ bản cũ để quay lại trong khi tìm nguyên nhân.`, level: 'Cao' });
+    if (s.metricMiss > 0) out.push({ title: 'Đưa các ca chưa đạt vào bộ kiểm thử hồi quy', why: `${s.metricMiss} metric chưa đạt mục tiêu. Ca lỗi thật giúp phát hiện sớm khi đổi model.`, level: 'Cao' });
+    if (m && m.margin !== null && m.margin < PROFIT.targetMargin) out.push({ title: 'Thử model nhỏ hơn cho bước đơn giản', why: `Biên lãi ${pct(m.margin)} dưới mục tiêu ${pct(PROFIT.targetMargin)}. Chạy lại bộ kiểm thử trước khi đổi (cần kiểm tra lại chất lượng).`, level: 'Vừa' });
+    if (s.staleDays !== null && s.staleDays >= RULES.staleDays.warn) out.push({ title: 'Chạy bộ kiểm thử tự động mỗi khi merge', why: `Đã ${s.staleDays} ngày chưa có lần chạy mới.`, level: 'Vừa' });
+    out.push({ title: 'Ghi log có che thông tin cá nhân', why: 'Cần log để sửa lỗi chất lượng mà không giữ dữ liệu cá nhân của khách.', level: 'Cao' },
+      { title: 'Thêm phương án dự phòng khi model lỗi', why: 'Người dùng vẫn làm việc được khi dịch vụ AI chậm hoặc gián đoạn.', level: 'Vừa' });
+    return { items: out };
+  }
+  function ruleCadence() {
+    const s = signals(), m = money(), have = new Set(S.maintain.schedule.map(x => x.title)), out = [];
+    const add = (title, every, why) => { if (!have.has(title)) out.push({ title, every, why }); };
+    const low = (s.passRate !== null && s.passRate < RULES.passRate.warn) || (s.passDrop !== null && s.passDrop >= RULES.passDrop.warn);
+    add('Chạy bộ kiểm thử và ghi vào Quality', low ? 3 : 7, low ? 'Chất lượng đang giảm, cần đo dày hơn cho tới khi ổn định.' : 'Giữ nhịp đo hằng tuần để thấy xu hướng.');
+    if (new Set(S.quality.runs.map(r => r.model)).size > 1) add('Chạy đối chứng mỗi khi đổi model hoặc prompt', 14, 'Đội đã thử nhiều phiên bản. Mỗi lần đổi cần một lần chạy so với bản trước.');
+    if (m) add('Rà chi phí token và giá bán', m.margin !== null && m.margin < PROFIT.targetMargin ? 7 : 30, m.margin !== null && m.margin < PROFIT.targetMargin ? `Biên lãi ${pct(m.margin)} dưới mục tiêu, cần theo dõi hằng tuần.` : 'Đơn giá token và lượng dùng thay đổi theo thời gian.');
+    if (s.overdueDays >= RULES.overdueDays.warn) add('Dọn các việc bảo trì trễ hạn', 7, `Có việc trễ ${s.overdueDays} ngày.`);
+    add('Kiểm tra bản cập nhật thư viện và model', 30, 'Đọc ghi chú phát hành trước khi nâng cấp. Phiên bản cụ thể cần đội kiểm tra lại.');
+    return { items: out };
   }
   function floorInfo(v = progress()) {
     const box = $('#floorInfo'), i = STEPS.findIndex(s => s.id === tab);
@@ -180,6 +369,12 @@
     scorecard: Object.fromEntries(SCORE.map(([k, l]) => [l, S.score[k].text])),
     overview: S.plan.overview,
     tasks: S.tasks.list.map(t => `${t.id} ${t.title} (${(STATUS[t.status] || ['?'])[0]})`),
+    quality: {
+      metrics: S.quality.metrics.map(m => `${m.name} (${(KIND[m.kind] || KIND.value)[0]}): hiện trạng ${num(m.baseline) === null ? 'chưa đo' : m.baseline + m.unit}, mục tiêu ${m.target}${m.unit}, cách đo: ${m.method || 'chưa ghi'}`),
+      metricChecks: checkMetrics().filter(c => !c.good).map(c => c.text),
+      runs: sortedRuns().slice(-5).map(r => `${r.at} ${r.model}: pass ${r.passed}/${r.total}, token ${r.inTok}/${r.outTok}${r.sample ? ' (dữ liệu mẫu)' : ''}`),
+      health: HNAMES[health().level], reasons: health().reasons.map(reasonText)
+    },
     chat: S.chat.slice(-14).map(m => `${m.who === 'agent' ? 'Agent' : (member(m.who) || {}).name}: ${m.text}`)
   });
   function why(e) {
@@ -277,7 +472,7 @@
         return `<div class="stack"><div class="view-head"><div><h2>Tổng quan</h2><p>${esc(S.meta.name)}</p></div></div>
           <div class="ov-cards">${cards}</div>
           <div class="panel">${panelHead('Ai đang làm gì')}<div class="ov-team">${team}</div></div>
-          <div class="panel">${panelHead('Việc cần để ý')}${S.tasks.list.filter(t => t.status === 'review').map(t => `<p>${esc(t.id)} đang chờ review: ${esc(t.title)}</p>`).join('')}${late.map(x => `<p>Bảo trì đến hạn: ${esc(x.title)}</p>`).join('') || ''}${!late.length && !S.tasks.list.some(t => t.status === 'review') ? '<p class="muted">Không có việc gấp.</p>' : ''}</div></div>`;
+          <div class="panel">${panelHead('Việc cần để ý')}${health().reasons.slice(0, 2).map(r => `<p>Sức khỏe ${esc(HNAMES[r.level].toLowerCase())}: ${esc(reasonText(r))}</p>`).join('')}${S.tasks.list.filter(t => t.status === 'review').map(t => `<p>${esc(t.id)} đang chờ review: ${esc(t.title)}</p>`).join('')}${late.map(x => `<p>Bảo trì đến hạn: ${esc(x.title)}</p>`).join('') || ''}${!late.length && !S.tasks.list.some(t => t.status === 'review') && !health().reasons.length ? '<p class="muted">Không có việc gấp.</p>' : ''}</div></div>`;
       }
       return `<div class="ov-title"><h2>Công trình đang xây</h2><p>Mỗi tầng là một bước. Khối được đổ màu khi đội hoàn thành thêm việc.</p>${btn('tab', 'Làm tiếp', 'primary small', `data-id="${STEPS[Math.max(0, v.findIndex(x => x < 1))].id}"`)}</div>
         <div class="ov-team">${team}</div><div class="ov-cards">${cards}</div>`;
@@ -337,10 +532,82 @@
         <div class="cols">${textPanel('script', 'Pitching script', 'script', 'Kịch bản nói khoảng 3 phút, chia mốc thời gian.')}${textPanel('ads', 'Bài quảng cáo', 'ads', 'Ba bài cho ba kênh, giọng khác nhau.')}</div></div>`;
     },
 
+    quality() {
+      const q = S.quality, runs = sortedRuns(), src = S.score.metric.text.trim(), m = money();
+      const stale = q.metrics.length && q.source !== S.score.metric.text, editing = q.runs.find(r => r.id === runEdit);
+      const xs = runs.map(r => shortDate(r.at));
+      const series = [{ id: 'pass', name: 'Tỉ lệ test pass (%)', color: PALETTE[0], values: runs.map(r => (rate(r) === null ? null : +(rate(r) * 100).toFixed(1))) },
+        ...q.metrics.map((k, i) => ({ id: k.id, name: `${k.name}${k.unit ? ' (' + k.unit + ')' : ''}`, color: PALETTE[1 + (i % 6)], values: runs.map(r => num(r.values[k.id])), target: num(k.target) }))];
+      if (!series.some(s => s.id === qline)) qline = 'all';
+      const shown = qline === 'all' ? series : series.filter(s => s.id === qline);
+      const units = new Set(['%', ...q.metrics.map(k => k.unit)]);
+      const samples = q.runs.filter(r => r.sample).length;
+      const val = (r, k) => (editing ? r[k] ?? '' : '');
+      const field = (name, label, value, attrs = 'type="number" min="0" step="any"') => `<label>${label}<input name="${name}" ${attrs} value="${esc(value)}"></label>`;
+      const c = S.plan.cost, unit = { priceIn: +c.priceIn || 0, priceOut: +c.priceOut || 0 }, priced = unit.priceIn || unit.priceOut;
+      const costIn = Object.entries({ priceIn: 'USD / 1 triệu token vào', priceOut: 'USD / 1 triệu token ra', tickets: 'Câu hỏi mỗi shop/tháng', price: 'Giá mỗi shop USD/tháng', infra: 'Hạ tầng USD/tháng', teams: 'Số shop trả phí' })
+        .map(([k, l]) => `<label>${l}<input type="number" min="0" step="any" data-bind="cost" data-id="${k}" value="${+c[k] || 0}"></label>`).join('');
+      return head(3, 'Mỗi lần đổi model hay prompt là một lần chạy thử. Ghi lại để thấy chất lượng, token và chi phí đi về đâu.') + `<div class="stack">
+        <div class="cols"><div class="panel">${panelHead('Metric từ Product thinking', btn('metrics', q.metrics.length ? 'Agent lấy lại metric' : 'Agent lấy metric', 'tone small'))}
+          <p class="muted">Nguồn duy nhất là scorecard. Agent đọc mục Metric, đối chiếu với Problem và Feasibility. Mỗi metric cần đủ hiện trạng, mục tiêu và cách đo.</p>
+          <div class="prose" style="margin:8px 0">${src ? esc(src) : 'Mục Metric đang trống. Điền ở tab Product thinking trước.'}</div>
+          ${stale ? `<p class="note-warn">Scorecard đã đổi sau lần lấy metric gần nhất. Bấm lấy lại để cập nhật.</p>` : ''}
+          <div class="stack" style="gap:10px;margin-top:10px">${q.metrics.map(k => { const b = f => `data-bind="qmetric" data-id="${esc(k.id)}" data-field="${f}"`; return `<div class="metric" style="--c:${(KIND[k.kind] || KIND.value)[1]}">
+            <div class="metric-top"><input class="metric-name" ${b('name')} value="${esc(k.name)}" aria-label="Tên metric"><select ${b('kind')} aria-label="Loại metric">${Object.entries(KIND).map(([id, [n]]) => `<option value="${id}" ${k.kind === id ? 'selected' : ''}>${n}</option>`).join('')}</select>${btn('delmetric', 'Bỏ', 'soft small', `data-id="${esc(k.id)}"`)}</div>
+            <div class="cost"><label>Hiện trạng<input type="number" step="any" ${b('baseline')} value="${num(k.baseline) === null ? '' : +k.baseline}" placeholder="Chưa đo"></label>
+              <label>Mục tiêu<input type="number" step="any" ${b('target')} value="${esc(k.target)}"></label>
+              <label>Đơn vị<input ${b('unit')} value="${esc(k.unit)}"></label>
+              <label>Hướng tốt<select ${b('direction')}><option value="up" ${k.direction !== 'down' ? 'selected' : ''}>Càng cao càng tốt</option><option value="down" ${k.direction === 'down' ? 'selected' : ''}>Càng thấp càng tốt</option></select></label></div>
+            <label class="field">Cách đo<input ${b('method')} value="${esc(k.method || '')}" placeholder="Đo bằng gì, ở đâu, bao lâu một lần"></label>
+            <label class="field">Tiêu chí thành công<input ${b('rule')} value="${esc(k.rule || ruleOf(k))}"></label>
+            <span class="muted">Nguồn: ${SOURCE[k.from] || 'Nhập tay'}</span></div>`; }).join('') || '<p class="muted">Chưa có metric.</p>'}</div>
+          <div style="margin-top:14px"><h4 style="margin-bottom:4px">Soát theo Product thinking <span class="tag">Problem ${NATURE[q.nature && q.nature !== 'other' ? q.nature : natureOf(S.score.problem.text)].toLowerCase()}</span></h4>
+            ${checkMetrics().map(c => `<div class="check"><span class="tag" style="--c:${c.good ? 'var(--green)' : 'var(--orange)'}">${c.good ? 'Đủ' : 'Cần thêm'}</span><span>${esc(c.text)}</span></div>`).join('')}</div>
+          <p style="margin-top:10px">${btn('addmetric', 'Thêm metric tay', 'soft small')}</p></div>
+        <div class="panel">${panelHead(editing ? 'Sửa lần chạy thử' : 'Khai lần chạy thử', samples ? `<span class="muted">${samples} lần chạy là dữ liệu mẫu</span>` : '')}
+          <form class="stack" style="gap:10px" data-form="run"><div class="cost">
+            ${field('at', 'Thời điểm', editing ? editing.at : nowLocal(), 'type="datetime-local" required')}
+            ${field('model', 'Model hoặc phiên bản', val(editing || {}, 'model'), 'required maxlength="80" placeholder="Ví dụ: Model A, prompt v4"')}
+            ${q.metrics.map(k => field('m_' + k.id, `${esc(k.name)}${k.unit ? ' (' + esc(k.unit) + ')' : ''}`, editing ? editing.values[k.id] ?? '' : '', 'type="number" step="any"')).join('')}
+            ${field('passed', 'Số test pass', val(editing || {}, 'passed'), 'type="number" min="0" step="1"')}
+            ${field('total', 'Tổng số test', val(editing || {}, 'total'), 'type="number" min="0" step="1"')}
+            ${field('inTok', 'Token vào (cả lần chạy)', val(editing || {}, 'inTok'))}
+            ${field('outTok', 'Token ra (cả lần chạy)', val(editing || {}, 'outTok'))}
+          </div><textarea name="note" rows="2" maxlength="300" placeholder="Ghi chú: lần này đổi gì so với lần trước" aria-label="Ghi chú">${esc(editing ? editing.note : '')}</textarea>
+          <div class="row"><button class="btn tone small">${editing ? 'Lưu thay đổi' : 'Thêm lần chạy'}</button>${editing ? btn('cancelrun', 'Hủy sửa', 'soft small') : ''}</div></form></div></div>
+        <div class="panel">${panelHead('Chất lượng model theo thời gian', `<div class="seg" role="group" aria-label="Đường hiển thị">${[{ id: 'all', name: 'Tất cả' }, ...series].map(s => `<button data-act="qline" data-id="${esc(s.id)}" class="${s.id === qline ? 'on' : ''}">${esc(s.id === 'all' ? 'Tất cả' : s.name.replace(/ \(.*\)$/, ''))}</button>`).join('')}</div>`)}
+          ${qline === 'all' && units.size > 1 ? '<p class="note-warn" style="margin-bottom:8px">Các metric khác đơn vị đang chung một trục. Chọn từng đường để xem đúng tỉ lệ.</p>' : ''}
+          ${lineChart(xs, shown, 'Biểu đồ chất lượng model theo lần chạy')}${samples ? '<p class="muted" style="margin-top:6px">Có dữ liệu mẫu trong biểu đồ. Xóa mẫu trước khi dùng số này để kết luận.</p>' : ''}</div>
+        <div class="cols"><div class="panel">${panelHead('Token mỗi lần chạy')}${lineChart(xs, [{ name: 'Token vào', color: 'var(--blue)', values: runs.map(r => num(r.inTok)) }, { name: 'Token ra', color: 'var(--orange)', values: runs.map(r => num(r.outTok)) }], 'Biểu đồ token theo lần chạy')}</div>
+        <div class="panel">${panelHead('Chi phí mỗi lần chạy', '<span class="muted">Token nhân đơn giá do đội nhập</span>')}${priced ? lineChart(xs, [{ name: 'Chi phí (USD)', color: 'var(--violet)', values: runs.map(r => +runCost(r, unit).toFixed(4)) }], 'Biểu đồ chi phí theo lần chạy') : '<p class="muted">Cần đơn giá token ở phần chi phí bên dưới.</p>'}</div></div>
+        <div class="panel">${panelHead('Các lần chạy thử', samples ? btn('clearsample', 'Xóa dữ liệu mẫu', 'soft small') : '')}<div class="scroll"><table><thead><tr><th>Thời điểm</th><th>Model</th>${q.metrics.map(k => `<th>${esc(k.name)}</th>`).join('')}<th>Pass</th><th>Token vào / ra</th><th>Chi phí</th><th>Ghi chú</th><th></th></tr></thead><tbody>
+          ${runs.slice().reverse().map(r => `<tr data-row="${esc(r.id)}"><td>${esc(shortDate(r.at))}${r.sample ? ' <span class="tag" style="--c:var(--yellow)">Mẫu</span>' : ''}</td><td>${esc(r.model)}</td>
+            ${q.metrics.map(k => { const v = num(r.values[k.id]); return `<td>${v === null ? '<span class="muted">Chưa khai</span>' : `${+v.toFixed(2)}${esc(k.unit)}${meets(k, v) ? '' : ' <span class="tag" style="--c:var(--orange)">Chưa đạt</span>'}`}</td>`; }).join('')}
+            <td>${rate(r) === null ? '<span class="muted">Chưa khai</span>' : `${+r.passed}/${+r.total}<br><span class="muted">${pct(rate(r))}</span>`}</td>
+            <td>${(+r.inTok || 0).toLocaleString('vi-VN')} / ${(+r.outTok || 0).toLocaleString('vi-VN')}</td><td>${priced ? usd(runCost(r, unit)) : '<span class="muted">Cần đơn giá</span>'}</td>
+            <td><span class="muted">${esc(r.note)}</span></td><td><div class="row" style="gap:6px;flex-wrap:nowrap">${btn('editrun', 'Sửa', 'soft small', `data-id="${esc(r.id)}"`)}${btn('delrun', 'Xóa', 'soft small', `data-id="${esc(r.id)}"`)}</div></td></tr>`).join('') || `<tr><td colspan="${7 + q.metrics.length}" class="muted">Chưa có lần chạy nào.</td></tr>`}</tbody></table></div></div>
+        <div class="panel">${panelHead('Chi phí và gợi ý lợi nhuận', '<span class="muted">Đơn giá và giá bán dùng chung với Planning, đều là giả định của đội</span>')}<div class="cost">${costIn}</div>
+          <div class="kpis">${(m ? [['Chi phí lần chạy gần nhất', usd(m.lastRun)], ['Chi phí mỗi lượt gọi', usd(m.perCase)], ['Chi phí AI mỗi shop/tháng', usd(m.perUser)], ['Biên lãi gộp (chỉ chi phí AI)', m.margin === null ? 'Cần giá bán' : pct(m.margin)], ['Giá hòa vốn mỗi shop', usd(m.breakEven)], [`Giá để đạt biên ${pct(PROFIT.targetMargin)}`, usd(m.targetPrice)]] : [['Chi phí', 'Cần đơn giá và lần chạy có token']]).map(k => `<div class="kpi"><b>${k[1]}</b><span>${k[0]}</span></div>`).join('')}</div>
+          <div class="stack" style="gap:6px;margin-top:14px">${profitTips(m).map(t => `<p>${esc(t)}</p>`).join('')}</div>
+          <details style="margin-top:12px"><summary class="muted">Giả định trong phép tính</summary><ul class="muted">
+            <li>Một ca test ứng với một lượt gọi thật của người dùng. Chi phí mỗi lượt gọi là trung bình của 3 lần chạy gần nhất có token.</li>
+            <li>Chi phí AI mỗi shop bằng chi phí mỗi lượt gọi nhân số câu hỏi mỗi shop mỗi tháng.</li>
+            <li>Biên lãi chỉ trừ chi phí AI. Giá hòa vốn cộng thêm hạ tầng chia đều cho số shop trả phí.</li>
+            <li>Biên mục tiêu ${pct(PROFIT.targetMargin)} đặt trong file tang/health.js.</li></ul></details></div></div>`;
+    },
+
     maintaining() {
-      const m = S.maintain, today = iso(new Date());
-      return head(3, 'Sản phẩm AI cần được canh chừng. Việc đến hạn nằm trên cùng.') + `<div class="stack">
-        <div class="panel">${panelHead('Gợi ý cập nhật công nghệ', btn('tech', 'Agent gợi ý mới', 'tone small'))}<div class="cards">${m.tech.map((t, i) => `<div class="card"><span class="tag" style="--c:var(--${['red', 'orange', 'blue'].includes(t.color) ? t.color : 'blue'})">Ưu tiên ${esc(t.level)}</span><span>${esc(t.title)}</span><span class="muted">${esc(t.why)}</span>${t.added ? '<span class="muted">Đã có trong lịch</span>' : btn('schedule', 'Thêm vào lịch', 'soft small', `data-n="${i}"`)}</div>`).join('')}</div></div>
+      const m = S.maintain, today = iso(new Date()), h = health(), suggest = m.suggest || [];
+      const rules = Object.values(RULES).map(r => `<tr><td>${esc(r.label)}</td>${LEVELS.slice(1).map(l => `<td>${r.dir === 'below' ? 'Dưới' : 'Từ'} ${fmtRule(r.fmt, r[l])}</td>`).join('')}</tr>`).join('');
+      return head(4, 'Sản phẩm AI cần được canh chừng. Việc đến hạn nằm trên cùng, mô hình 3D báo khi sản phẩm xuống cấp.') + `<div class="stack">
+        <div class="panel">${panelHead('Sức khỏe sản phẩm', `<span class="tag" style="--c:${HCOLOR[h.level]}">${HNAMES[h.level]}</span>`)}
+          <p class="muted">Tính từ số liệu ở Quality và lịch bảo trì. Mô hình 3D đổi theo trạng thái này: xuống cấp thì nghiêng và nứt, cần cứu hộ thì xe cứu thương tới, sập thì các tầng trên đổ xuống.</p>
+          <div style="margin-top:8px">${h.reasons.map(r => `<div class="reason"><span class="tag" style="--c:${HCOLOR[r.level]}">${HNAMES[r.level]}</span><span>${esc(reasonText(r))}</span></div>`).join('') || '<div class="reason"><span class="muted">Chưa chạm ngưỡng nào.</span></div>'}</div>
+          ${h.missing.length ? `<p class="muted" style="margin-top:8px">Chưa đủ dữ liệu cho: ${h.missing.map(k => esc(RULES[k].label.toLowerCase())).join('; ')}.</p>` : ''}
+          <div class="row" style="margin-top:12px"><span class="muted">Xem thử mô hình 3D</span><div class="seg" role="group" aria-label="Xem thử trạng thái">${[['real', 'Theo số liệu'], ...LEVELS.map(l => [l, HNAMES[l]])].map(([id, n]) => `<button data-act="preview" data-id="${id}" class="${(preview || 'real') === id ? 'on' : ''}">${n}</button>`).join('')}</div></div>
+          <details style="margin-top:12px"><summary class="muted">Bảng ngưỡng (sửa trong file tang/health.js)</summary><div class="scroll"><table><thead><tr><th>Luật</th>${LEVELS.slice(1).map(l => `<th>${HNAMES[l]}</th>`).join('')}</tr></thead><tbody>${rules}</tbody></table></div></details></div>
+        <div class="panel">${panelHead('Gợi ý cập nhật công nghệ', btn('tech', 'Agent gợi ý mới', 'tone small'))}<p class="muted" style="margin-bottom:10px">Gợi ý dựa trên xu hướng metric và chi phí ở Quality. Tên phiên bản thư viện hoặc model cụ thể cần đội kiểm tra lại trước khi làm.</p><div class="cards">${m.tech.map((t, i) => `<div class="card"><span class="tag" style="--c:var(--${['red', 'orange', 'blue'].includes(t.color) ? t.color : 'blue'})">Ưu tiên ${esc(t.level)}</span><span>${esc(t.title)}</span><span class="muted">${esc(t.why)}</span>${t.added ? '<span class="muted">Đã có trong lịch</span>' : btn('schedule', 'Thêm vào lịch', 'soft small', `data-n="${i}"`)}</div>`).join('')}</div></div>
+        <div class="panel">${panelHead('Gợi ý lịch bảo trì', btn('cadence', 'Agent gợi ý lịch', 'soft small'))}${suggest.length ? `<div class="cards">${suggest.map((x, i) => `<div class="card"><span class="tag">Mỗi ${+x.every} ngày</span><span>${esc(x.title)}</span><span class="muted">${esc(x.why)}</span>${btn('addsuggest', 'Thêm vào lịch', 'soft small', `data-n="${i}"`)}</div>`).join('')}</div>` : '<p class="muted">Agent đề xuất chu kỳ kiểm tra dựa trên chất lượng, chi phí và việc đang trễ. Đội duyệt từng việc trước khi đưa vào lịch.</p>'}</div>
         <div class="panel">${panelHead('Lịch bảo trì')}<div class="scroll"><table><thead><tr><th>Việc</th><th>Chu kỳ</th><th>Hạn tới</th><th>Người làm</th><th></th></tr></thead><tbody>${m.schedule.slice().sort((a, b) => a.next.localeCompare(b.next)).map(x => `<tr data-row="${esc(x.id)}"><td>${esc(x.title)}<br><span class="muted">Đã làm ${+x.runs || 0} lần</span></td><td>${+x.every} ngày</td><td><span class="tag" style="--c:var(${x.next <= today ? '--red' : '--violet'})">${x.next <= today ? 'Đến hạn ' : ''}${esc(x.next.split('-').reverse().join('/'))}</span></td><td><select data-bind="mowner" data-id="${esc(x.id)}" aria-label="Người làm">${options(x.owner)}</select></td><td>${btn('ran', 'Đã làm', 'tone small', `data-id="${esc(x.id)}"`)}</td></tr>`).join('')}</tbody></table></div></div></div>`;
     }
   };
@@ -453,17 +720,58 @@
       return ['pitch', () => rise($$('#view .prose'))];
     },
     async tech() {
-      const out = await generate('Gợi ý 3 việc cập nhật công nghệ cho sản phẩm này, không lặp các gợi ý: ' + S.maintain.tech.map(t => t.title).join('; ') + '. level là "Cao" hoặc "Vừa". Không nêu phiên bản cụ thể nếu chưa chắc.',
+      const h = health();
+      const out = await generate('Gợi ý 3 việc cập nhật công nghệ cho sản phẩm này, không lặp các gợi ý: ' + S.maintain.tech.map(t => t.title).join('; ') + `. Tình trạng hiện tại (tính bằng code): ${HNAMES[h.level]}; ${h.reasons.map(reasonText).join('; ') || 'chưa chạm ngưỡng nào'}. Ưu tiên việc xử lý đúng các vấn đề này. level là "Cao" hoặc "Vừa". Không nêu phiên bản cụ thể nếu chưa chắc; nếu có nêu tên phiên bản thư viện hoặc model, thêm "(cần kiểm tra lại)" vào cuối why.`,
         '{"items":[{"title":"","why":"","level":"Vừa"}]}', o => o && Array.isArray(o.items) && o.items.length && o.items.every(t => str(t.title) && str(t.why)),
-        () => ({ items: [
-          { title: 'Ghi log có che thông tin cá nhân', why: 'Cần log để sửa lỗi chất lượng mà không giữ số điện thoại, địa chỉ khách.', level: 'Cao' },
-          { title: 'Thêm phương án dự phòng khi model lỗi', why: 'Nhân viên vẫn trả lời được khi dịch vụ AI chậm hoặc gián đoạn.', level: 'Vừa' },
-          { title: 'Đưa câu bị sửa nhiều vào bộ đánh giá', why: 'Bộ đánh giá bám sát lỗi thật hơn theo thời gian.', level: 'Vừa' }] }));
+        ruleTech);
       const have = new Set(S.maintain.tech.map(t => t.title));
       const fresh = out.items.filter(t => !have.has(t.title)).slice(0, 3).map(t => ({ title: String(t.title), why: String(t.why), level: t.level === 'Cao' ? 'Cao' : 'Vừa', color: t.level === 'Cao' ? 'red' : 'orange' }));
       if (!fresh.length) toast('Chưa có gợi ý mới.');
       S.maintain.tech = [...fresh, ...S.maintain.tech].slice(0, 9); save('maintain');
       return ['maintain', () => rise($$('#view .card'))];
+    },
+    async cadence() {
+      const have = S.maintain.schedule.map(x => x.title);
+      const out = await generate(`Gợi ý tối đa 4 việc bảo trì định kỳ cho sản phẩm, dựa trên tình trạng chất lượng và chi phí trong dữ liệu dự án. Không lặp các việc đã có: ${have.join('; ')}. every là số ngày giữa hai lần làm, từ 1 đến 180. why nói rõ dựa trên số liệu nào.`,
+        '{"items":[{"title":"","every":7,"why":""}]}', o => o && Array.isArray(o.items) && o.items.length && o.items.every(t => str(t.title) && str(t.why) && +t.every >= 1),
+        ruleCadence);
+      const fresh = out.items.filter(t => !have.includes(t.title)).slice(0, 5).map(t => ({ title: String(t.title).slice(0, 120), every: Math.max(1, Math.min(180, Math.round(+t.every))), why: String(t.why).slice(0, 240) }));
+      if (!fresh.length) toast('Lịch hiện tại đã bao gồm các gợi ý.');
+      S.maintain.suggest = fresh; save('maintain');
+      return ['maintain', () => rise($$('#view .card'))];
+    },
+    async metrics() {
+      const src = S.score.metric.text.trim();
+      if (!src) { toast('Mục Metric trong scorecard đang trống. Điền ở Product thinking trước.'); return ['quality', () => {}]; }
+      const card = ['problem', 'leverage', 'scope', 'feasibility'].map(k => `${k}: ${S.score[k].text}`).join('\n');
+      const out = await generate(`Đóng vai người thẩm định Product thinking. Tách mục Metric của scorecard thành danh sách chỉ số đo được, đối chiếu với các mục còn lại.
+Mục Metric: "${src}"
+Các mục khác của scorecard:
+${card}
+Với mỗi chỉ số trả về: name (tối đa 8 từ); baseline là hiện trạng (số, hoặc null nếu văn bản không nêu, tuyệt đối không tự đoán); target (số có trong văn bản, không tự đặt mục tiêu mới); unit; direction "up" nếu càng cao càng tốt, "down" nếu càng thấp càng tốt; kind là "value" (giá trị thật cho người dùng, hành vi lặp lại hoặc kết quả công việc), "ai" (chất lượng câu trả lời của AI: đúng sai, precision, recall, tỉ lệ được dùng mà không sửa) hoặc "feasibility" (độ trễ, chi phí); method là cách đo nếu văn bản có nêu, không có thì để chuỗi rỗng; rule là tiêu chí thành công viết thành một câu "Nếu ... thì ...".
+nature là bản chất problem: "behavior" nếu là problem hành vi (duy trì, động lực, quay lại), "productivity" nếu là problem năng suất (thủ công, mất thời gian), "other" nếu chưa rõ.`,
+        '{"nature":"productivity","metrics":[{"name":"","baseline":null,"target":0,"unit":"%","direction":"up","kind":"value","method":"","rule":"Nếu ... thì ..."}]}',
+        o => o && Array.isArray(o.metrics) && o.metrics.length && o.metrics.every(k => str(k.name) && isFinite(+k.target)),
+        () => ({ metrics: parseMetrics(src), nature: natureOf(S.score.problem.text), rule: true }));
+      if (!out.metrics.length) { toast('Chưa tách được số mục tiêu từ văn bản. Thêm metric tay hoặc ghi rõ con số trong scorecard.'); return ['quality', () => {}]; }
+      const old = S.quality.metrics, used = new Set();
+      const next = out.metrics.slice(0, 6).map((k, i) => {
+        const name = String(k.name).slice(0, 60);
+        const named = old.find(o => !used.has(o.id) && o.name.toLowerCase() === name.toLowerCase());
+        const same = named || (old[i] && !used.has(old[i].id) && old[i].from !== 'tay' ? old[i] : null);
+        const id = same ? same.id : 'k' + Date.now().toString(36) + i;
+        used.add(id);
+        const x = { id, name, baseline: num(k.baseline), target: +k.target, unit: String(k.unit || '').slice(0, 12), direction: k.direction === 'down' ? 'down' : 'up', kind: KIND[k.kind] ? k.kind : kindOf(name), method: String(k.method || (named && named.method) || '').slice(0, 160), from: out.rule ? 'tu' : 'agent' };
+        if (x.baseline === null && named && num(named.baseline) !== null) x.baseline = named.baseline;
+        x.rule = str(k.rule) && /^nếu/i.test(String(k.rule).trim()) ? String(k.rule).slice(0, 200) : ruleOf(x);
+        return x;
+      });
+      S.quality.metrics = [...next, ...old.filter(o => o.from === 'tay' && !used.has(o.id))];
+      S.quality.source = S.score.metric.text;
+      S.quality.nature = NATURE[out.nature] ? out.nature : natureOf(S.score.problem.text);
+      save('quality');
+      toast(`Đã lấy ${next.length} metric từ scorecard${out.rule ? ' bằng luật tách số' : ''}.`);
+      return ['quality', () => rise($$('#view .metric'))];
     }
   };
 
@@ -687,6 +995,34 @@
       S.maintain.schedule.push({ id, title: t.title, every: 30, next: inDays(7), owner: '', runs: 0 });
       save('maintain'); rerender(); anim($(`[data-row="${id}"]`, view), { opacity: [0, 1], x: [-30, 0] }, { duration: 0.6 }); toast('Đã thêm vào lịch, hạn sau 7 ngày');
     },
+    qline(b) { qline = b.dataset.id; rerender(); anim($$('.chart .ln', view), { opacity: [0, 1] }, { duration: 0.5 }); },
+    editrun(b) { runEdit = b.dataset.id; rerender(); const f = $('[data-form="run"]', view); if (f) { f.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'center' }); f.elements.model.focus(); } },
+    cancelrun() { runEdit = null; rerender(); },
+    delrun(b) {
+      if (!twice(b, 'run' + b.dataset.id, 'Bấm lần nữa để xóa')) return;
+      S.quality.runs = S.quality.runs.filter(r => r.id !== b.dataset.id);
+      if (runEdit === b.dataset.id) runEdit = null;
+      save('quality'); rerender(); toast('Đã xóa lần chạy');
+    },
+    clearsample(b) {
+      if (!twice(b, 'sample', 'Bấm lần nữa để xóa mẫu')) return;
+      S.quality.runs = S.quality.runs.filter(r => !r.sample); runEdit = null;
+      save('quality'); rerender(); toast('Đã xóa dữ liệu mẫu');
+    },
+    addmetric() { S.quality.metrics.push({ id: 'k' + Date.now().toString(36), name: 'Metric mới', baseline: null, target: 0, unit: '%', direction: 'up', kind: 'value', method: '', rule: '', from: 'tay' }); save('quality'); rerender(); const all = $$('[data-field="name"]', view); if (all.length) { all[all.length - 1].focus(); all[all.length - 1].select(); } },
+    delmetric(b) {
+      if (!twice(b, 'metric' + b.dataset.id, 'Bấm lần nữa')) return;
+      S.quality.metrics = S.quality.metrics.filter(k => k.id !== b.dataset.id); save('quality'); rerender();
+    },
+    preview(b) { preview = b.dataset.id === 'real' ? null : b.dataset.id; applyHealth(); rerender(); },
+    addsuggest(b) {
+      const list = S.maintain.suggest || [], x = list[+b.dataset.n];
+      if (!x) return;
+      const id = 'm' + Date.now().toString(36);
+      S.maintain.schedule.push({ id, title: x.title, every: x.every, next: inDays(Math.min(7, x.every)), owner: '', runs: 0 });
+      S.maintain.suggest = list.filter(y => y !== x);
+      save('maintain'); rerender(); anim($(`[data-row="${id}"]`, view), { opacity: [0, 1], x: [-30, 0] }, { duration: 0.6 }); toast(`Đã thêm vào lịch, chu kỳ ${x.every} ngày`);
+    },
     ran(b) {
       const x = S.maintain.schedule.find(x => x.id === b.dataset.id);
       if (!x) return;
@@ -747,6 +1083,22 @@
       }
       pullRequest(title, event);
     }
+    if (kind === 'run') {
+      const g = n => (f.elements[n] ? String(f.elements[n].value).trim() : '');
+      const nn = n => (g(n) === '' || !isFinite(+g(n)) ? null : Math.max(0, +g(n)));
+      const run = { at: g('at') || nowLocal(), model: g('model').slice(0, 80), values: {}, passed: nn('passed'), total: nn('total'), inTok: nn('inTok') || 0, outTok: nn('outTok') || 0, note: g('note').slice(0, 300) };
+      if (!run.model) return toast('Nhập tên model hoặc phiên bản.');
+      if (run.passed !== null) run.passed = Math.round(run.passed);
+      if (run.total !== null) run.total = Math.round(run.total);
+      if (run.passed !== null && run.total !== null && run.passed > run.total) return toast('Số test pass không được lớn hơn tổng số test.');
+      S.quality.metrics.forEach(k => { const v = g('m_' + k.id); if (v !== '' && isFinite(+v)) run.values[k.id] = +v; });
+      const old = S.quality.runs.find(r => r.id === runEdit);
+      if (old) Object.assign(old, run); else S.quality.runs.push(Object.assign({ id: 'r' + Date.now().toString(36) }, run));
+      S.quality.runs = S.quality.runs.slice(-200);
+      toast(old ? 'Đã lưu lần chạy' : 'Đã thêm lần chạy');
+      runEdit = null; save('quality'); rerender();
+      anim($$('.chart .ln', view), { opacity: [0, 1] }, { duration: 0.6 });
+    }
     if (kind === 'answer') {
       const answers = Object.fromEntries([...new FormData(f)].filter(([, v]) => String(v).trim()));
       if (!Object.keys(answers).length) return toast('Trả lời ít nhất một câu trước khi gửi.');
@@ -764,7 +1116,15 @@
     if (k === 'role') { S.plan.roles[id] = v; save('plan'); rerender(); }
     if (k === 'story') { if (v.trim()) S.plan.stories[+id] = v; else S.plan.stories.splice(+id, 1); save('plan'); if (!v.trim()) rerender(); }
     if (k === 'link') { S.plan.links[id] = v.trim(); save('plan'); if (v && !/^https:\/\//.test(v)) toast('Link cần bắt đầu bằng https://'); else rerender(); }
-    if (k === 'cost') { S.plan.cost[id] = Math.max(0, +v || 0); save('plan'); $('#kpis').innerHTML = kpis(); anim($$('#kpis b'), { opacity: [0.2, 1], y: [6, 0] }, { duration: 0.4 }); }
+    if (k === 'cost') {
+      S.plan.cost[id] = Math.max(0, +v || 0); save('plan');
+      if ($('#kpis')) { $('#kpis').innerHTML = kpis(); anim($$('#kpis b'), { opacity: [0.2, 1], y: [6, 0] }, { duration: 0.4 }); } else rerender();
+    }
+    if (k === 'qmetric') {
+      const x = S.quality.metrics.find(x => x.id === id), fl = t.dataset.field;
+      if (x) x[fl] = fl === 'target' ? (+v || 0) : fl === 'baseline' ? num(v) : fl === 'direction' ? (v === 'down' ? 'down' : 'up') : fl === 'kind' ? (KIND[v] ? v : 'value') : v.trim().slice(0, { unit: 12, name: 60 }[fl] || 200);
+      save('quality'); rerender();
+    }
     if (k === 'owner' || k === 'status') { moveTasks(() => { const x = S.tasks.list.find(x => x.id === id); if (x) x[k] = v; }); save('tasks'); }
     if (k === 'mowner') { const x = S.maintain.schedule.find(x => x.id === id); if (x) x.owner = v; save('maintain'); }
   });

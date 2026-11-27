@@ -219,7 +219,7 @@
 
     // Mỗi tầng gồm 12 khối; khối chưa làm chỉ là khung
     const floors = colors.map((c, i) => {
-      const g = new T.Group(), w = 5 - i * 0.45, depth = w * 0.7, blocks = [], cols = 4, rows = 3;
+      const g = new T.Group(), w = Math.max(1.4, 5 - i * 0.45), depth = w * 0.7, blocks = [], cols = 4, rows = 3;
       for (let z = 0; z < rows; z++) for (let x = 0; x < cols; x++) {
         const bw = w / cols, bd = depth / rows;
         const b = box(bw * 0.92, 1.1, bd * 0.92, mat(0xeef1fa, { transparent: true, opacity: 0.3 }),
@@ -238,14 +238,14 @@
       outline(slab, HEX[c], 0.9);
       g.position.y = BASE + 0.62 + i * FH;
       house.add(g);
-      return { g, blocks, slab, color: HEX[c], filled: 0, w, depth };
+      return { g, blocks, slab, color: HEX[c], filled: 0, w, depth, origin: g.position.clone(), angle: g.rotation.clone() };
     });
     const roof = new T.Group();
     const cone = mesh(new T.ConeGeometry(1.8, 1.1, 4), mat(0xeef1fa, { transparent: true, opacity: 0.35 }), 0, 0, 0, roof);
     cone.rotation.y = Math.PI / 4;
     cone.scale.z = 0.72;
     outline(cone, HEX.indigo, 0.7);
-    roof.position.y = BASE + 0.62 + 4 * FH + 0.15;
+    roof.position.y = BASE + 0.62 + floors.length * FH + 0.15;
     house.add(roof);
 
     // Công trường: nền, lưới, cần cẩu, giàn giáo, vật liệu, thành viên
@@ -275,9 +275,10 @@
     yard.add(crane);
     const scaffold = new T.Group();
     house.add(scaffold);
+    let scaffoldFloor = -1;
     function buildScaffold(f) {
       while (scaffold.children.length) {
-        const o = scaffold.children.pop();
+        const o = scaffold.children[scaffold.children.length - 1];
         o.geometry.dispose();
         scaffold.remove(o);
       }
@@ -288,7 +289,7 @@
         box(w * 2, 0.07, 0.28, mat(HEX.orange), 0, y, d, scaffold);
         box(0.28, 0.07, d * 2, mat(HEX.orange), w, y, 0, scaffold);
       });
-      scaffold.position.y = f.g.position.y;
+      scaffold.position.y = f.origin.y;
     }
     for (let k = 0; k < 9; k++) {
       box(0.55, 0.24, 0.32, mat(HEX[['red', 'orange', 'violet'][k % 3]]), 4.1 + (k % 3) * 0.12, BASE + 0.12 + Math.floor(k / 3) * 0.25, 2.1 + (k % 3) * 0.38 - 0.4, yard);
@@ -306,9 +307,72 @@
       return { p, a: k * 1.55 + 0.4, rad: 4.2 + (k % 2) * 0.7 };
     });
 
-    // Rubik: bốn mặt bên ứng với bốn bước, mặt trên dưới là tổng tiến độ
+    // Dựng sẵn vết nứt, rào chắn, xe cứu thương và mảnh vỡ để dùng lại
+    const dark = flat(0x4a5664), orange = mat(HEX.orange);
+    floors.forEach(f => {
+      const bw = f.w / 4, z = f.depth / 3 * 0.47 + 0.025;
+      f.cracks = f.blocks.slice(0, 2).map(b => {
+        const crack = new T.Group(), x = bw * 0.28;
+        b.add(crack);
+        box(0.025, 0.19, 0.015, dark, x - 0.025, 0.12, z, crack).rotation.z = 0.35;
+        box(0.025, 0.16, 0.015, dark, x - 0.02, -0.035, z, crack).rotation.z = -0.48;
+        box(0.023, 0.22, 0.015, dark, x, -0.19, z, crack).rotation.z = 0.18;
+        crack.visible = false;
+        return crack;
+      });
+    });
+    const barrier = new T.Group(), rescue = new T.Group(), debris = new T.Group();
+    yard.add(barrier, rescue, debris);
+    barrier.visible = rescue.visible = debris.visible = false;
+    const posts = Array.from({ length: 10 }, (_, k) => {
+      const a = (k + 0.5) * Math.PI / 5;
+      return [3.5 * Math.cos(a), 2.65 * Math.sin(a)];
+    });
+    posts.forEach(([x, z], k) => {
+      box(0.36, 0.06, 0.36, orange, x, BASE + 0.03, z, barrier);
+      cyl(0.025, 0.16, 0.52, orange, x, BASE + 0.29, z, barrier, 12);
+      cyl(0.063, 0.088, 0.09, white, x, BASE + 0.37, z, barrier, 12);
+      const [nx, nz] = posts[(k + 1) % posts.length], dx = nx - x, dz = nz - z;
+      for (let j = 0; j < 8; j++) {
+        const p = (j + 0.5) / 8;
+        box(Math.hypot(dx, dz) / 8, 0.09, 0.03, j % 2 ? white : orange, x + dx * p, BASE + 0.48, z + dz * p, barrier).rotation.y = -Math.atan2(dz, dx);
+      }
+    });
+    const ambulance = new T.Group(), medics = new T.Group();
+    rescue.add(ambulance, medics);
+    box(1.25, 0.72, 0.88, white, 0.32, 0.59, 0, ambulance);
+    box(0.71, 0.54, 0.8, white, -0.63, 0.49, 0, ambulance);
+    box(0.05, 0.23, 0.64, dark, -0.98, 0.61, 0, ambulance);
+    box(1.27, 0.11, 0.89, orange, 0.32, 0.53, 0, ambulance);
+    box(0.7, 0.11, 0.81, orange, -0.63, 0.37, 0, ambulance);
+    [-0.65, 0.63].forEach(x => [-0.43, 0.43].forEach(z => {
+      cyl(0.19, 0.19, 0.14, dark, x, 0.2, z, ambulance, 12).rotation.x = Math.PI / 2;
+    }));
+    const sirens = [HEX.red, HEX.blue].map((c, k) => ball(0.1, flat(c), -0.14, 1.02, (k - 0.5) * 0.43, ambulance));
+    ambulance.rotation.y = -Math.atan2(5 - 3.4, 8 - 3.2);
+    [2.45, 3.15].forEach((x, k) => {
+      const p = person(k ? HEX.blue : HEX.green, medics);
+      p.position.set(x, BASE, 4.45 + k * 0.18);
+      p.scale.setScalar(0.66);
+    });
+
+    const rubble = [steel, white, mat(0x5f6b79)], dust = new T.Group();
+    const dustMat = mat(0x9aa3bd, { transparent: true, opacity: 0, depthWrite: false });
+    yard.add(dust);
+    dust.visible = false;
+    dust.position.set(2.4, BASE, -3.5);
+    for (let k = 0; k < 20; k++) {
+      const a = k * 2.399, rad = 0.6 + (k % 7) * 0.28, size = 0.16 + k % 4 * 0.06;
+      box(size * 1.5, size, size, rubble[k % rubble.length], 2.4 + Math.cos(a) * rad, BASE + size / 2, -3.5 + Math.sin(a) * rad, debris).rotation.y = a;
+    }
+    for (let k = 0; k < 6; k++) {
+      const a = k * Math.PI / 3;
+      ball(0.65 + k % 3 * 0.16, dustMat, Math.cos(a) * 1.15, 0.45 + k % 2 * 0.25, Math.sin(a) * 0.9, dust).scale.y = 0.65;
+    }
+
+    // Rubik: bốn mặt bên ứng với bốn bước đầu, mặt dưới là tổng tiến độ
     const dirs = [[0, 0, 1], [1, 0, 0], [0, 0, -1], [-1, 0, 0], [0, 1, 0], [0, -1, 0]];
-    const faceColor = [...colors.map(c => HEX[c]), HEX.indigo, HEX.yellow];
+    const faceColor = dirs.map((_, f) => f === 5 ? HEX.yellow : HEX[colors[f]] ?? HEX.indigo);
     const stickers = dirs.map(() => []);
     for (let x = -1; x <= 1; x++) for (let y = -1; y <= 1; y++) for (let z = -1; z <= 1; z++) {
       const cube = box(0.98, 0.98, 0.98, mat(0xffffff), x * 1.03, y * 1.03, z * 1.03, rubik);
@@ -329,7 +393,8 @@
       if (reduced || !window.Motion) return;
       Motion.animate(0.4, 1, { type: 'spring', stiffness: 240, damping: 13, onUpdate: v => obj.scale.setScalar(v * base) });
     };
-    let focus = 'overview', mode = 'house', values = [0, 0, 0, 0];
+    let focus = 'overview', mode = 'house', values = colors.map(() => 0);
+    let level = 'ok', total = 0;
     function set(next) {
       values = next.slice();
       floors.forEach((f, i) => {
@@ -343,23 +408,32 @@
         });
         f.filled = n;
       });
-      const total = values.reduce((a, b) => a + b, 0) / 4, done = total >= 0.999;
+      total = values.length ? values.reduce((a, b) => a + b, 0) / values.length : 0;
+      const done = total >= 0.999;
       cone.material.color.setHex(done ? HEX.indigo : 0xeef1fa);
       cone.material.opacity = done ? 1 : 0.35;
-      let idx = values.findIndex(v => v < 0.999);
-      scaffold.visible = idx >= 0;
-      if (idx >= 0) buildScaffold(floors[idx]);
+      const idx = floors.findIndex((_, i) => values[i] < 0.999);
+      if (idx !== scaffoldFloor && idx >= 0) buildScaffold(floors[idx]);
+      scaffoldFloor = idx;
+      scaffold.visible = level !== 'collapse' && idx >= 0;
+      paintStickers(true);
+      applyDim();
+    }
+    function paintStickers(animate = false) {
       stickers.forEach((list, f) => {
-        const v = f < 4 ? values[f] : total, n = Math.round(v * list.length);
+        const v = f < 4 ? values[f] ?? 0 : f === 4 && floors.length > 4 ? values[4] ?? 0 : total;
+        const n = Math.round(v * list.length);
         list.forEach((s, k) => {
-          const hex = k < n ? faceColor[f] : 0xe9edf8;
-          if (s.material.color.getHex() !== hex) { s.material.color.setHex(hex); pop(s); }
+          const hex = f === 4 && level === 'collapse' ? 0x5f6b79 : k < n ? faceColor[f] : 0xe9edf8;
+          if (s.material.color.getHex() === hex) return;
+          s.material.color.setHex(hex);
+          if (animate) pop(s);
         });
       });
-      applyDim();
     }
     // Làm mờ các tầng khác khi đang xem một bước
     function applyDim() {
+      const cracked = level === 'ok' ? [] : floors.filter(f => f.filled > 0).slice(-2);
       floors.forEach((f, i) => {
         const dim = typeof focus === 'number' && focus !== i;
         f.blocks.forEach((b, k) => {
@@ -370,7 +444,87 @@
           b.userData.edge.material.opacity = dim ? 0.18 : on ? 0.7 : 0.6;
         });
         f.slab.material.opacity = dim ? 0.2 : 1;
+        f.cracks.forEach((crack, k) => { crack.visible = cracked.includes(f) && k < f.filled; });
       });
+    }
+
+    const falling = floors.slice(Math.floor(floors.length / 2));
+    const healthFrames = new Set();
+    let stopDrive, stopFall;
+    function moveHealth(duration, update) {
+      if (reduced) { update(1); return; }
+      if (window.Motion?.animate) {
+        const control = window.Motion.animate(0, 1, { duration, ease: 'linear', onUpdate: update });
+        return () => control.stop();
+      }
+      const start = performance.now();
+      const frame = now => {
+        const p = Math.min(1, (now - start) / (duration * 1000));
+        update(p);
+        if (p === 1) healthFrames.delete(frame);
+      };
+      healthFrames.add(frame);
+      return () => healthFrames.delete(frame);
+    }
+    function drive() {
+      ambulance.position.set(8, BASE, 5);
+      medics.visible = false;
+      stopDrive = moveHealth(2.5, p => {
+        const u = p * p * (3 - 2 * p);
+        ambulance.position.set(lerp(8, 3.2, u), BASE, lerp(5, 3.4, u));
+        medics.visible = p === 1;
+      });
+    }
+    function collapseFloors() {
+      // Tách khỏi nhà đang nghiêng để các tầng đáp xuống mặt sân
+      const poses = falling.map((f, k) => {
+        const scale = f.g.scale.clone();
+        yard.attach(f.g);
+        f.g.scale.copy(scale);
+        const u = k / Math.max(1, falling.length - 1), angle = lerp(0.6, 1.2, u);
+        const clearance = Math.sin(angle) * (f.w + 0.35) / 2 + Math.cos(angle) * 0.55;
+        return { g: f.g, from: f.g.position.clone(), z: f.g.rotation.z, x: lerp(1.5, 3, u),
+          y: BASE + clearance + 0.3 + k * 0.35, depth: lerp(-3.1, -4.4, u), angle, delay: u * 0.16 };
+      });
+      stopFall = moveHealth(2.4, p => {
+        poses.forEach(({ g, from, z, x, y, depth, angle, delay }) => {
+          const u = Math.max(0, Math.min(1, (p * 2.4 - delay) / (1.4 - delay)));
+          g.position.set(lerp(from.x, x, u), lerp(from.y, y, u * u), lerp(from.z, depth, u));
+          g.rotation.z = lerp(z, angle, u);
+        });
+        debris.visible = p >= 0.55;
+        const haze = Math.max(0, Math.min(1, (p - 0.48) / 0.52));
+        dust.visible = haze > 0 && haze < 1;
+        dust.scale.setScalar(0.65 + haze * 0.85);
+        dustMat.opacity = 0.32 * Math.sin(haze * Math.PI);
+      });
+    }
+    function health(next) {
+      if (next === level || !['ok', 'warn', 'rescue', 'collapse'].includes(next)) return;
+      const wasCollapsed = level === 'collapse', collapsed = next === 'collapse';
+      const wasRescuing = rescue.visible, rescuing = next === 'rescue' || collapsed;
+      level = next;
+      barrier.visible = next !== 'ok';
+      rescue.visible = rescuing;
+      house.rotation.z = rescuing ? 0.07 : next === 'warn' ? 0.035 : 0;
+      rubik.rotation.z = collapsed ? 0.35 : rescuing ? 0.15 : next === 'warn' ? 0.08 : 0;
+      roof.visible = !collapsed;
+      scaffold.visible = !collapsed && scaffoldFloor >= 0;
+      if (rescuing && !wasRescuing) drive();
+      if (!rescuing && wasRescuing) { stopDrive?.(); stopDrive = null; }
+      if (collapsed) collapseFloors();
+      if (wasCollapsed) {
+        stopFall?.();
+        stopFall = null;
+        debris.visible = dust.visible = false;
+        falling.forEach(f => {
+          house.add(f.g);
+          f.g.position.copy(f.origin);
+          f.g.rotation.copy(f.angle);
+        });
+      }
+      paintStickers();
+      applyDim();
     }
 
     /* Camera: các điểm dừng và chuyển cảnh liền mạch */
@@ -380,10 +534,13 @@
     function goal(key) {
       if (mode === 'rubik') {
         if (key === 'overview') return { az: 0.75, el: 0.5, dist: 17, ty: 0.1, need: 3.9 };
-        return { az: [0, 1, 2, -1][key] * Math.PI / 2 + 0.28, el: 0.22, dist: 13, ty: 0.15, need: 3.2 };
+        const side = [0, 1, 2, -1][key];
+        return { az: (side ?? 0) * Math.PI / 2 + 0.28, el: side === undefined ? 0.9 : 0.22, dist: 13, ty: 0.15, need: 3.2 };
       }
-      if (key === 'overview') return { az: 0.62, el: 0.3, dist: 25, ty: 0.35, need: 6.4 };
-      return { az: [-0.55, 0.62, -0.28, 0.5][key], el: 0.2, dist: 14.5, ty: floorY(key) - 0.1, need: 3.5 };
+      const extra = Math.max(0, floors.length - 4);
+      if (key === 'overview') return { az: 0.62, el: 0.3, dist: 25 + 2 * extra, ty: 0.35 + FH * extra / 2, need: 6.4 };
+      const angles = [-0.55, 0.62, -0.28, 0.5, -0.4];
+      return { az: angles[key % angles.length], el: 0.2, dist: 14.5, ty: floorY(key) - 0.1, need: 3.5 };
     }
     function path(points, duration) {
       if (tween) tween.stop();
@@ -426,8 +583,18 @@
     r.setAnimationLoop(() => {
       if (!fit(r, cam, canvas)) return;
       const t = reduced ? 0 : clock.getElapsedTime();
+      if (healthFrames.size) {
+        const now = performance.now();
+        healthFrames.forEach(frame => frame(now));
+      }
+      if (rescue.visible && !reduced) {
+        const flash = Math.floor(t * 4) % 2;
+        sirens[0].material.color.setHex(flash ? 0x4a5664 : HEX.red);
+        sirens[1].material.color.setHex(flash ? HEX.blue : 0x4a5664);
+      }
       floors.forEach((f, i) => {
-        const s = f.g.scale.x + ((focus === i ? 1.1 : 1) - f.g.scale.x) * 0.08;
+        const target = focus === i ? 1.1 : 1;
+        const s = reduced ? target : lerp(f.g.scale.x, target, 0.08);
         f.g.scale.set(s, 1, s);
       });
       jib.rotation.y = 0.5 + Math.sin(t * 0.28) * 0.9;
@@ -448,14 +615,16 @@
       r.render(scene, cam);
       // Vị trí nhãn của từng tầng trên màn hình
       const pts = floors.map((f, i) => {
-        v3.set(f.w / 2 + 0.2, floorY(i), f.depth / 2).project(cam);
+        const s = f.g.scale.x;
+        v3.set((f.w / 2 + 0.2) * s, floorY(i), f.depth / 2 * s);
+        house.localToWorld(v3).project(cam);
         return { x: (v3.x + 1) / 2 * canvas.clientWidth, y: (1 - v3.y) / 2 * canvas.clientHeight };
       });
       onFrame(pts, mode);
     });
 
     return {
-      set, focus: focusOn,
+      set, focus: focusOn, health,
       mode(m) {
         mode = m;
         house.visible = yard.visible = m === 'house';
