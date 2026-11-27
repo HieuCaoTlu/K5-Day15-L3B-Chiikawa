@@ -252,7 +252,7 @@
       return `${target}<path class="ln" d="${d}" style="stroke:${s.color}"/>${dots}`;
     }).join('');
     const legend = series.map(s => `<span style="--c:${s.color}"><i></i>${esc(s.name)}${s.target !== null && s.target !== undefined && isFinite(s.target) ? `, mục tiêu ${+s.target}` : ''}</span>`).join('');
-    return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(label)}">${grid}${xl}${lines}</svg><div class="legend">${legend}<span class="muted">Nét đứt là mục tiêu</span></div>`;
+    return `<div class="chart-wrap"><svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(label)}">${grid}${xl}${lines}</svg></div><div class="legend">${legend}<span class="muted">Nét đứt là mục tiêu</span></div>`;
   }
   /* Khung Product thinking cho metric:
      - đủ hiện trạng, mục tiêu, cách đo;
