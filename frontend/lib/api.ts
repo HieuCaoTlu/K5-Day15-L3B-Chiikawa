@@ -51,7 +51,7 @@ export type ChatSession = {
   last_request: string | null; tokens: number; cost_usd: number;
 };
 
-async function request<T>(path: string, init?: RequestInit & { signal?: AbortSignal }): Promise<T> {
+export async function request<T>(path: string, init?: RequestInit & { signal?: AbortSignal }): Promise<T> {
   const res = await fetch(path, { ...init, headers: { 'Content-Type': 'application/json', ...init?.headers } });
   if (!res.ok) {
     const body = await res.json().catch(() => null);

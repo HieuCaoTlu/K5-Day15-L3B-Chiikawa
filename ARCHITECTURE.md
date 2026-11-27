@@ -73,6 +73,16 @@ Tạo bảng bằng `create_all` khi khởi động (không Alembic). Đổi c�
   `/admin/sessions` phiên chat · `/admin/review` hàng chờ duyệt · `/admin/runs` lượt chạy · `/admin/items` CRUD mẫu.
 - Giao diện: [DESIGN.md](DESIGN.md).
 
+## Planning
+
+Tab Planning nằm ở `/?tab=planning`. Máy tính hiển thị mô hình 3D bên trái và thao tác lập sprint ở khung cùng origin bên phải. Phần ngoài khung (Tổng quan, Phân vai, User story, file, tech stack, chi phí) và tiến độ mô hình do `tang/app.js` đọc từ `GET /state` và lưu qua `PUT /board` (bảng `planning_boards`, chống ghi đè bằng `version`). Khung báo `tang:planning-changed` khi phiên, đội hoặc task đổi; Workstation báo `tang:planning-reload` sau khi lưu. Người mới vào đội bằng mã mời (`planning/invites.py`). Nút Bắt đầu task (`planning/start_pr.py`) dùng token OAuth của người bấm để tạo nhánh và PR nháp trong đúng một lượt callback; việc đọc PR vẫn dùng token cài đặt chỉ đọc. Link `/planning` mở tab tương ứng của Workstation. FastAPI giữ phiên GitHub và phân quyền trưởng nhóm theo GitHub user ID. GitHub App dùng token cài đặt ngắn hạn để đọc PR của repo đã chọn. Token OAuth chỉ dùng ở callback để xác minh hồ sơ hoặc đọc danh sách repo được phép.
+
+Cấu hình GitHub App chỉ đọc qua `planning/github_app.py`: ưu tiên biến `GITHUB_*`, nếu trống thì đọc bảng `planning_github_app`. Bảng này do luồng manifest (`planning/setup.py`) ghi; bí mật được mã hóa bằng khóa trong volume `appdata`. Ngoài máy cá nhân, tạo kết nối cần mã in trong log backend. Địa chỉ không công khai thì không có webhook, `planning/sync.py` chạy nền trong backend để đọc PR định kỳ (một tiến trình uvicorn).
+
+Planning lưu đội, sprint, task và metadata PR vào các bảng `planning_*` trong Postgres. Mỗi đội có một repo đang hoạt động. Khi đổi repo, một giao dịch xóa sprint, task, liên kết PR và bản nháp cũ, đồng thời tăng phiên bản kết nối. Hồ sơ thành viên gắn với đội. Mã task tăng theo bảng và dùng được trong tiêu đề PR.
+
+Workflow tạo kế hoạch chạy qua gateway Gemini và kiểm tra schema, mốc thời gian cùng người phụ trách. Bản nháp có một bước trưởng nhóm duyệt trước khi tạo task. Webhook dùng GitHub ID của người mở PR và quy tắc liên kết để tính trạng thái từ PR đã xác minh. Với Web Push được cấu hình, backend quét task gần hạn trong Postgres, gửi cho thiết bị đã đăng ký và ghi lại mốc đã gửi.
+
 ## CI/CD
 
 `.github/workflows/ci-cd.yml` — PR: backend (ruff, pytest, eval) ‖ frontend (typecheck) trên máy GitHub (`ubuntu-latest`).

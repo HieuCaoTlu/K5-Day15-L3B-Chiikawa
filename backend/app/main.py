@@ -1,16 +1,35 @@
+import asyncio
 import logging
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import admin, agent, health, items
+from app.api import admin, agent, health, items, planning
 from app.config import get_settings
 from app.db import init_db, session_scope
+from app.planning import github_app, setup
+from app.planning.github import AUTH_CALLBACK, SETUP_CALLBACK
+from app.planning.push import reminder_loop
+from app.planning.push import vapid as push_keys
+from app.planning.sync import poll_loop
 from app.seed import seed
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger("app")
+
+
+class _PlanningOAuthLogFilter(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        args = record.args
+        if isinstance(args, tuple) and len(args) == 5:
+            path = str(args[2]).partition("?")[0]
+            if path in (AUTH_CALLBACK, SETUP_CALLBACK):
+                record.args = (*args[:2], path, *args[3:])
+        return True
+
+
+logging.getLogger("uvicorn.access").addFilter(_PlanningOAuthLogFilter())
 
 
 @asynccontextmanager
@@ -33,7 +52,21 @@ async def lifespan(_: FastAPI):
         settings.demo_mode,
         settings.mock_nodes or "-",
     )
-    yield
+    if setup.code_required() and not github_app.current():
+        setup.announce_code()
+    background = []
+    if push_keys():
+        background.append(asyncio.create_task(reminder_loop()))
+    if settings.planning_poll_seconds > 0:
+        # Luôn chạy: kết nối GitHub có thể được tạo sau khi khởi động. Có webhook thì mỗi lượt tự bỏ qua.
+        background.append(asyncio.create_task(poll_loop(settings.planning_poll_seconds)))
+    try:
+        yield
+    finally:
+        for task in background:
+            task.cancel()
+            with suppress(asyncio.CancelledError):
+                await task
 
 
 def create_app() -> FastAPI:
@@ -58,6 +91,7 @@ def create_app() -> FastAPI:
     app.include_router(items.router, prefix="/api/v1")
     app.include_router(agent.router, prefix="/api/v1")
     app.include_router(admin.router, prefix="/api/v1")
+    app.include_router(planning.router, prefix="/api/v1")
     return app
 
 

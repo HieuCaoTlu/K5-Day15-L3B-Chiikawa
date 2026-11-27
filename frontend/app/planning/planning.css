@@ -1,0 +1,270 @@
+@import '../../public/tang/tokens.css';
+@import '../../public/tang/avatar.css';
+
+/* Phạm vi Planning bao gồm cả hộp thoại của kit được gắn vào body. */
+body:has(.pl-shell) {
+  --c: var(--green);
+  --font-sans: var(--font);
+  --color-page: white;
+  --color-ink: var(--ink);
+  --color-muted: var(--mute);
+  --color-subtle: var(--mute);
+  --color-line: var(--line);
+  --color-line-soft: var(--line);
+  --color-line-strong: color-mix(in srgb, var(--mute) 22%, white);
+  --color-soft: var(--soft);
+  --color-soft-hover: color-mix(in srgb, var(--indigo) 8%, var(--soft));
+  --color-pale: color-mix(in srgb, var(--c) 13%, white);
+  --color-brand: var(--indigo);
+  --color-brand-dark: color-mix(in srgb, var(--indigo) 75%, var(--ink));
+  --color-go: color-mix(in srgb, var(--green) 42%, var(--ink));
+  --color-go-bg: color-mix(in srgb, var(--green) 13%, white);
+  --color-warn-bg: color-mix(in srgb, var(--orange) 14%, white);
+  --color-rust: color-mix(in srgb, var(--orange) 43%, var(--ink));
+  --color-danger: color-mix(in srgb, var(--red) 74%, var(--ink));
+
+  background: var(--color-page);
+  color: var(--ink);
+  font: 400 15px/1.6 var(--font);
+}
+
+body:has(.pl-shell) :focus-visible { outline: 2px solid var(--indigo); outline-offset: 2px; }
+
+.pl-top {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 18px;
+  padding: 2px 2px 14px;
+  background: white;
+}
+
+.pl-account { margin-inline-start: auto; }
+.pl-tabs { display: flex; flex-wrap: wrap; gap: 2px; }
+.pl-tabs button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  min-height: 36px;
+  border-radius: 99px;
+  font-size: 14px;
+  cursor: pointer;
+}
+.pl-tabs button span {
+  content: '';
+  inline-size: 9px;
+  block-size: 9px;
+  border-radius: 50%;
+  background: var(--c);
+  flex: none;
+}
+.pl-tabs button[aria-pressed='true'], .pl-tabs button:hover { background: var(--color-pale); }
+.pl-tabs button[aria-pressed='true'] span { box-shadow: none; }
+
+/* Nội dung nằm liền với trang Workstation: cùng chiều rộng, không cuộn riêng. Lề 2px giữ viền card. */
+.pl-page {
+  width: 100%;
+  padding: 1px 2px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.pl-page h2, .pl-page h3 {
+  line-height: 1.2;
+  letter-spacing: -.02em;
+  font-weight: 500;
+}
+.pl-page h2:not(.pl-intro-title), .pl-page h3 { font-size: 17px; }
+
+html:has(.pl-shell) { overflow: hidden; }
+/* Khung cao hơn màn hình, nên hộp thoại bám theo vùng Workstation đang hiển thị. */
+body:has(.pl-shell) .d-modal-back { top: var(--pl-view-top, 0px); bottom: auto; height: var(--pl-view-height, 100%); }
+body:has(.pl-shell) .d-modal { max-height: calc(var(--pl-view-height, 100vh) - 32px); }
+
+.pl-between, .pl-row { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+.pl-between { justify-content: space-between; }
+
+body:has(.pl-shell) .d-card {
+  padding: 20px;
+  border-radius: 20px;
+  box-shadow: 0 0 0 1px var(--line);
+}
+body:has(.pl-shell) .d-btn { min-height: 36px; font-size: 14px; }
+body:has(.pl-shell) .d-b1 { background: var(--ink); color: white; }
+body:has(.pl-shell) .d-b1:hover { background: color-mix(in srgb, var(--ink) 86%, var(--indigo)); }
+body:has(.pl-shell) .d-b2 { background: var(--soft); border-color: transparent; }
+body:has(.pl-shell) .d-b2:hover { background: var(--color-soft-hover); }
+body:has(.pl-shell) .d-fld :is(label, .lab),
+body:has(.pl-shell) .d-chip { font-size: 13px; }
+body:has(.pl-shell) :is(.d-inp, .d-sel, .d-ta) {
+  background: var(--soft);
+  border-color: transparent;
+  border-radius: 10px;
+  font-size: 15px;
+}
+body:has(.pl-shell) :is(.d-inp, .d-sel, .d-ta):focus { background-color: white; border-color: var(--indigo); }
+/* Nút chỉ có biểu tượng: lề ngang của .d-btn sẽ ép biểu tượng còn rộng 0. */
+body:has(.pl-shell) .d-btn.d-ib { padding-inline: 0; }
+.pl-shell .d-ib svg, body:has(.pl-shell) .d-ib svg { flex: none; }
+/* Trong khối nền xám, ô nhập và nút phụ phải trắng có viền, nếu không sẽ lẫn vào nền. */
+body:has(.pl-shell) .bg-soft :is(.d-inp, .d-sel, .d-ta, .d-b2) { background-color: white; border-color: var(--color-line-strong); }
+body:has(.pl-shell) .bg-soft :is(.d-inp, .d-sel, .d-ta):focus { border-color: var(--indigo); }
+body:has(.pl-shell) .bg-soft .d-b2:hover { background-color: var(--color-soft-hover); }
+body:has(.pl-shell) .bg-soft :is(.d-inp, .d-ta)[readonly] { background-color: transparent; border-style: dashed; }
+body:has(.pl-shell) .d-seg { border-radius: 99px; padding: 3px; gap: 2px; }
+body:has(.pl-shell) .d-seg button { border-radius: 99px; font-size: 13px; min-height: 34px; height: auto; }
+body:has(.pl-shell) .d-seg button.on { color: white; background: var(--ink); box-shadow: none; }
+body:has(.pl-shell) :is(.d-alert, .d-empty) { font-size: 14px; }
+body:has(.pl-shell) .d-modal > .text-lg, body:has(.pl-shell) .d-modal > div > .text-lg { font-size: 17px; font-weight: 500; }
+.pl-page button.d-chip { min-height: 34px; }
+
+.pl-sign-in {
+  min-height: 300px;
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  align-items: center;
+  gap: 22px;
+}
+.pl-intro-title {
+  max-width: 20ch;
+  font-size: clamp(32px, 5vw, 54px);
+  font-weight: 500;
+  line-height: 1.14;
+  letter-spacing: -.035em;
+}
+
+.pl-steps { display: flex; flex-direction: column; gap: 6px; font-size: 14px; color: var(--mute); }
+.pl-steps li { display: flex; align-items: center; gap: 10px; padding: 6px 12px 6px 6px; border-radius: 99px; }
+.pl-steps li > span:first-child {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  inline-size: 24px;
+  block-size: 24px;
+  border-radius: 50%;
+  background: var(--soft);
+  font-size: 13px;
+}
+.pl-steps li[aria-current='step'] { background: var(--color-pale); color: var(--ink); font-weight: 500; }
+.pl-steps li[aria-current='step'] > span:first-child { background: var(--ink); color: white; }
+.pl-steps li.done > span:first-child { background: var(--color-go-bg); color: var(--color-go); }
+.pl-connect { display: flex; flex-direction: column; gap: 12px; }
+.pl-connect summary { cursor: pointer; min-height: 34px; display: list-item; align-content: center; }
+.pl-code { background: var(--soft); border-radius: 6px; padding: 2px 6px; overflow-wrap: anywhere; user-select: all; }
+
+.pl-invite-code { font-size: 28px; font-weight: 500; letter-spacing: .12em; user-select: all; overflow-wrap: anywhere; }
+.pl-invite-input { text-transform: uppercase; letter-spacing: .08em; }
+
+.pl-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+.pl-access-help { display: flex; flex-direction: column; gap: 8px; border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
+.pl-access-help ol { list-style: decimal; padding-inline-start: 20px; display: flex; flex-direction: column; gap: 6px; }
+.pl-access-help strong { font-weight: 500; }
+.pl-access-list { display: flex; flex-direction: column; gap: 8px; }
+.pl-layout.pl-single { grid-template-columns: minmax(0, 1fr); }
+.pl-board, .pl-aside {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-width: 0;
+}
+.pl-team-grid, .pl-fields, .pl-task-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.pl-break { overflow-wrap: anywhere; }
+.pl-tag-row, .pl-avatar-options { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+
+.pl-extra-tag { display: flex; gap: 4px; max-width: 190px; }
+.pl-extra-tag .d-inp { min-width: 0; height: 36px; }
+.pl-tag { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+.pl-tag:hover { color: var(--color-brand-dark); }
+.pl-task {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+  padding: 12px;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 0 0 1px var(--line);
+}
+/* Mỗi sprint thu gọn thành một dòng, bấm để xem task. */
+.pl-sprint { border: 1px solid color-mix(in srgb, var(--sp, var(--line)) 38%, white); border-radius: 12px; min-width: 0; }
+.pl-sprint > summary { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 12px; min-height: 48px; padding: 10px 14px; cursor: pointer; list-style: none; border-radius: 12px; }
+.pl-sprint > summary::-webkit-details-marker { display: none; }
+.pl-sprint > summary::before { content: ''; flex: none; inline-size: 7px; block-size: 7px; border-inline-end: 2px solid var(--mute); border-block-end: 2px solid var(--mute); transform: rotate(-45deg); transition: transform .18s; }
+.pl-sprint[open] > summary::before { transform: rotate(45deg); }
+.pl-sprint > summary:hover { background: var(--soft); }
+.pl-sprint-name { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 10px; min-width: 0; }
+.pl-sprint-count { display: flex; gap: 10px; margin-inline-start: auto; }
+.pl-sprint-body { padding: 4px 14px 14px; }
+@media (prefers-reduced-motion: reduce) { .pl-sprint > summary::before { transition: none; } }
+
+.pl-task-title {
+  min-height: 34px;
+  text-align: left;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--ink);
+  cursor: pointer;
+}
+.pl-task-title:hover { color: var(--color-brand); }
+.pl-due {
+  border-radius: 12px;
+  cursor: pointer;
+  min-height: 34px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  text-align: left;
+  gap: 6px;
+  padding: 8px 10px;
+}
+.pl-draft-task > summary { cursor: pointer; min-height: 46px; padding: 10px 12px; }
+.pl-draft-task > summary span + span { display: block; padding-inline-start: 15px; }
+.pl-task-picker { flex: 1 1 200px; min-width: 0; max-width: 100%; }
+
+.pl-avatar-option {
+  padding: 2px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  cursor: pointer;
+  line-height: 0;
+}
+.pl-avatar-option[aria-pressed="true"] { border-color: var(--color-brand); }
+.pl-avatar-option .pl-avatar, .pl-task .pl-avatar { --pl-unit: .38px; }
+.pl-login-avatars {
+  display: grid;
+  grid-template-columns: repeat(2, auto);
+  width: max-content;
+  gap: 12px;
+  margin-inline: auto;
+}
+.pl-login-avatars .pl-avatar { --pl-unit: 1.08px; }
+.pl-login-avatars .pl-avatar:nth-child(2) { transform: rotate(7deg); }
+.pl-login-avatars .pl-avatar:nth-child(3) { transform: rotate(-5deg); }
+
+@media (max-width: 900px) {
+  .pl-layout { grid-template-columns: minmax(0, 1fr); }
+  .pl-repo-first .pl-aside { grid-row: 1; }
+}
+@media (max-width: 625px) {
+  .pl-sign-in, .pl-team-grid, .pl-fields, .pl-task-grid { grid-template-columns: minmax(0, 1fr); }
+  .pl-login-avatars { grid-template-columns: repeat(4, auto); margin: 0; gap: 8px; }
+  .pl-login-avatars .pl-avatar { --pl-unit: .62px; }
+  .pl-tabs { order: 3; width: 100%; }
+  .pl-tabs button { padding-inline: 9px; font-size: 13px; }
+  .pl-account { gap: 6px; }
+  body:has(.pl-shell) .d-card { padding: 16px; }
+  body:has(.pl-shell) :is(.d-inp, .d-sel, .d-ta) { font-size: 16px; }
+  .pl-page .d-seg { max-width: 100%; flex-wrap: wrap; }
+  .pl-page input[type="date"], .pl-page input[type="datetime-local"] { min-width: 0; max-width: 100%; }
+}

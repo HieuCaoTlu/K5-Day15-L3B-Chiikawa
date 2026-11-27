@@ -1,0 +1,8 @@
+:root{
+  --ink:#121a33; --mute:#626d8c; --line:#e7ebf5; --soft:#f4f6fc;
+  --red:#ff4d5e; --orange:#ff8a1f; --yellow:#ffc21a; --green:#14b86a; --blue:#0a9cf0; --indigo:#4d5bf0; --violet:#a24ce8;
+  --c:var(--indigo);
+  --font:"Be Vietnam Pro",system-ui,-apple-system,"Segoe UI",Arial,sans-serif;
+  --spectrum:linear-gradient(90deg,var(--red),var(--orange),var(--yellow),var(--green),var(--blue),var(--indigo),var(--violet));
+  --top:62px;
+}

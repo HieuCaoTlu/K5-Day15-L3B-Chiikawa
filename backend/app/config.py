@@ -33,6 +33,31 @@ class Settings(BaseSettings):
     mock_nodes: str = ""  # "all" hoặc "draft,human_review": node trả thẳng output trong app/agent/mocks/<node>.json
     max_input_chars: int = 2000
 
+    # Planning: GitHub App và Web Push. Trống → có thể mở đội demo ở môi trường phát triển.
+    # Biến GITHUB_* là tùy chọn: để trống thì kết nối bằng nút trong Planning, khóa lưu mã hóa trong DB.
+    site_url: str = "http://localhost:3000"
+    site_address: str = ""  # địa chỉ Caddy; khác ":80" thì tạo kết nối GitHub cần mã cài đặt
+    planning_key_file: str = "data/planning.key"  # khóa mã hóa, nằm trong volume appdata
+    planning_poll_seconds: int = 60  # không có webhook thì backend tự đọc PR theo chu kỳ này; 0 = tắt
+    github_client_id: str = ""
+    github_client_secret: str = ""
+    github_app_slug: str = ""
+    github_app_private_key_b64: str = ""
+    github_webhook_secret: str = ""
+    push_vapid_public_key: str = ""
+    push_vapid_private_key: str = ""
+    push_vapid_subject: str = ""
+    planning_push_auto: bool = True  # trống khóa VAPID ở trên thì Tầng tự tạo; false = tắt thông báo
+    planning_vapid_file: str = "data/planning-vapid.json"
+
+    @property
+    def site_origin(self) -> str:
+        return self.site_url.rstrip("/")
+
+    @property
+    def planning_demo_enabled(self) -> bool:
+        return self.app_env != "production" or self.demo_mode
+
     @property
     def is_postgres(self) -> bool:
         return self.database_url.startswith("postgresql")
