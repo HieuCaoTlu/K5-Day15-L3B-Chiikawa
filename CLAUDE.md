@@ -1,7 +1,6 @@
 # CLAUDE.md — mục lục cho agent code
 
-Đọc file này trước. Nó chỉ là **mục lục + luật cứng**; chi tiết nằm ở file được trỏ tới. Khi tài liệu mâu thuẫn với code,
-**code thắng** — sửa tài liệu cho khớp.
+Đọc file này trước. Đây là **mục lục và quy ước bắt buộc**. Đối chiếu hành vi với code hiện tại và đối chiếu giao diện với Claude Artifact Tầng trong [DESIGN.md](DESIGN.md).
 
 ## Đọc nhanh (≤ 60 giây)
 
@@ -43,33 +42,24 @@ backend/app/
     demo_cache.json    kết quả mẫu cho DEMO_MODE
 backend/tests/         test_api.py · agent/test_nodes.py · agent/test_flow.py
 backend/eval/          cases.json + run_eval.py (số liệu "agent đúng X%")
-frontend/app/          / (landing) · /chat · /admin (tổng quan, chi phí, phiên chat, hàng chờ duyệt, lượt chạy, items)
-frontend/components/   kit/ (ui.tsx, Shell, ProposalCard) · chat/ (Chat, gemini) · landing/ · motion/
-frontend/app/globals.css     token màu/chữ (@theme) + hiệu ứng
-frontend/app/components.css  bộ class d-* (thẻ, nút, form, bảng, chip…)
+frontend/public/index.html   / (landing và Workstation Claude Artifact Tầng)
+frontend/public/tang/        tokens.css (token dùng chung) · style.css (mẫu UI) · data.js (màu khu vực) · app.js · scene.js
+frontend/app/                /planning · /chat · /admin
+frontend/components/         planning/ · kit/ (ui.tsx, Shell, ProposalCard) · chat/ · landing/ · motion/
+frontend/app/globals.css     token và kiểu toàn cục cho các route Next.js
+frontend/app/components.css  lớp d-* và nền tảng component Next.js
 ```
 
 ## Luật thiết kế (STRICT)
 
-Mọi UI phải theo [DESIGN.md](DESIGN.md). Tóm tắt các luật hay bị vi phạm:
+**Dùng design pattern của Claude Artifact Tầng** trên [estatesmart.site](https://estatesmart.site/). Đọc [DESIGN.md](DESIGN.md) trước khi sửa UI. Mẫu tham chiếu trong repo là Workstation ở `frontend/public/index.html`, `frontend/public/tang/tokens.css`, `frontend/public/tang/style.css` và `frontend/public/tang/data.js`.
 
-1. **Chỉ dùng token** trong `globals.css` (`bg-page`, `text-ink`, `text-muted`, `bg-brand`, `text-go`, `text-warn`…).
-   Không viết mã hex mới trong component. Cần màu mới → thêm token + ghi vào DESIGN.md trước.
-2. **Dùng component có sẵn** trước khi tự viết: `components/kit/ui.tsx` (Kpi, Seg, StatusChip, Bars, Modal, useConfirm,
-   Field, Icon…) và class `d-*` (`d-card`, `d-btn d-b1`, `d-inp`, `d-tbl`, `d-chip`…). Không thêm thư viện UI
-   (shadcn, MUI, Chakra…) và không thêm thư viện icon — icon là path SVG trong `Icon`.
-3. **Thẻ trắng trên nền `page`, không viền, không bóng**; bo 24px (trang ứng dụng) / 28px (landing); khoảng cách giữa
-   các khối **12px**.
-4. **Nút luôn bo tròn (pill)**; mỗi khu vực chỉ **một** nút chính màu brand (`d-b1` / `.btn bg-brand`).
-5. **Tiêu đề weight 400**, tracking âm; không in đậm tiêu đề. Body 18px. Mọi chữ dùng Familjen Grotesk. **Không dùng Instrument Serif** (khung mặc định không có chỗ
-   nào dùng); không `italic`, không trộn font trong một dòng, không viết hoa toàn bộ tên/tiêu đề/nút.
-   Muốn nhấn một cụm → đổi màu (`text-brand`).
-6. **Tin xấu dùng cam (`warn`/`rust`), không dùng đỏ**; nói điều kiện cần ("cần thêm X để…"), không phán quyết.
-   Đỏ (`danger`) chỉ cho nút xoá / thao tác không hoàn tác.
-7. Mọi hiệu ứng phải tắt được khi `prefers-reduced-motion`. Hiệu ứng gradient kiểu Gemini **chỉ** dùng trong khung chat.
-8. Giao diện tiếng Việt, câu ngắn, không emoji.
-
-Xong một màn hình → tự đối chiếu với "Checklist trước khi xong" trong DESIGN.md.
+1. Dùng **Be Vietnam Pro**, nội dung 15px, tiêu đề weight 500. Thanh đầu và nền chính trắng. Panel bo 20px, viền mảnh và bóng nhẹ. Khoảng cách giữa các panel khoảng 18px.
+2. Giữ màu theo khu vực của Workstation. **Planning dùng xanh lá `#14b86a`**. Dùng token CSS cho chấm màu, chip, thẻ tiến độ và mục đang chọn. Dùng indigo cho liên kết và focus.
+3. Nút dạng pill, CTA chính nền `--ink` hoặc tone khu vực đủ tương phản. Ô nhập nền `--soft`, bo 10px. Trạng thái có nhãn chữ và hướng xử lý khi cần.
+4. Trên các route Next.js, dùng lại hành vi form, tab, trạng thái và hộp thoại từ `components/kit/`. Áp hình thức Artifact bằng CSS có phạm vi trang. Giữ nhất quán với mẫu Workstation trước khi thêm component hoặc thư viện giao diện.
+5. Giữ mô hình 3D của Workstation bên trái trên desktop. Đặt chức năng Planning trong tab Planning của Workstation.
+6. Viết UI tiếng Việt ngắn. Kiểm tra dùng bàn phím, `prefers-reduced-motion`, bố cục ở 375px và checklist trong DESIGN.md.
 
 ## Kiến trúc agent (tóm tắt)
 
