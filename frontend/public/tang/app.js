@@ -2713,6 +2713,8 @@ nature là bản chất problem: "behavior" nếu là problem hành vi (duy trì
   const actions = {
     enter: () => enter(),
     home,
+    replay: () => replay(),
+    flow: () => $('#flow').scrollIntoView({ behavior: reduced ? 'auto' : 'smooth' }),
     tab: b => go(b.dataset.id),
     'planning-live': () => setPlanningOpen(true),
     'repo-open': openRepo,
@@ -3302,37 +3304,28 @@ nature là bản chất problem: "behavior" nếu là problem hành vi (duy trì
     intro = M.animate(0, 1, { duration: 5.2, delay: 0.35, ease: [0.55, 0, 0.15, 1], onUpdate: v => { heroScene.state.p = v; } });
   }
   function landing() {
-    initSteps();
-    pickModel('house');
-    initModelViewer();
+    $('#flowList').innerHTML = STEPS.map((s, i) => `<li><button class="step" style="--c:${s.hex}" data-step="${s.id}"><span class="step-no">${i + 1}</span><span class="step-body"><span class="step-title">${s.name}</span><span>${s.lead}</span>
+      <span class="shift"><span><small>Engineer thường nghĩ</small>${s.from}</span><span><small>AI builder hỏi</small>${s.to}</span></span><span class="chips">${s.out.map(o => `<span class="chip">${o}</span>`).join('')}</span></span></button></li>`).join('');
+    $$('.step').forEach(b => b.addEventListener('click', () => enter(b.dataset.step)));
     if (window.Scenes) {
       try {
-        const card = $('#floorCard');
-        heroScene = window.Scenes.hero($('#heroCanvas'), FLOORS, i => {
-          card.classList.toggle('on', i >= 0);
-          if (i < 0) return;
-          const f = FLOORS[i];
-          card.style.setProperty('--c', `var(--${f.color})`);
-          $('.floor-no', card).textContent = `Tầng ${i + 1}`;
-          $('h2', card).textContent = f.name;
-          $('p', card).textContent = f.text;
-        }, (x, y) => {
-          // Card nằm bên trái tầng đang chọn, không tràn khỏi khung
-          const box = card.offsetParent;
-          if (!box) return;
-          const left = Math.max(16, Math.min(box.clientWidth - card.offsetWidth - 16, x - card.offsetWidth - 12));
-          const top = Math.max(16, Math.min(box.clientHeight - card.offsetHeight - 16, y - card.offsetHeight / 2));
-          card.style.setProperty('--x', `${Math.round(left)}px`);
-          card.style.setProperty('--y', `${Math.round(top)}px`);
+        let tipAnim;
+        heroScene = window.Scenes.hero($('#heroCanvas'), FLOORS, (i, group) => {
+          const f = FLOORS[i], tip = $('#floorTip');
+          tip.style.setProperty('--c', `var(--${f.color})`);
+          $('span', tip).textContent = `Tầng ${i + 1}, ${f.name}: ${f.text}`;
+          anim(tip, { y: [14, 0], opacity: [0, 1] }, { type: 'spring' });
+          if (canAnim) { if (tipAnim) tipAnim.stop(); tipAnim = M.animate(0, 1, { duration: 0.7, onUpdate: v => { const s = 1 + Math.sin(v * Math.PI) * 0.12; group.scale.set(s, 1, s); } }); }
         });
         replay();
-      } catch (e) {
-        const card = $('#floorCard');
-        card.classList.add('on');
-        $('.floor-no', card).textContent = '';
-        $('h2', card).textContent = 'Chưa hiển thị được 3D';
-        $('p', card).textContent = 'Thiết bị này không chạy được mô hình. Bạn vẫn vào buồng lái được.';
-      }
+      } catch (e) { $('#floorTip span').textContent = 'Thiết bị này không hiển thị được 3D.'; }
+    }
+    rise($$('.hero-copy > *'), 0.5);
+    if (canAnim && M.inView) {
+      $$('.step, .flow-head, .flow-end').forEach(el => {
+        el.style.opacity = 0;
+        M.inView(el, () => { M.animate(el, { opacity: [0, 1], y: [40, 0] }, { duration: 0.7, ease: EASE }); }, { amount: 0.2 });
+      });
     }
   }
 
