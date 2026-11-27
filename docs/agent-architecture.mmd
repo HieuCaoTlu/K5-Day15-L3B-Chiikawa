@@ -1,0 +1,57 @@
+%%{init: {"theme": "base", "flowchart": {"curve": "basis", "nodeSpacing": 28, "rankSpacing": 38}, "themeVariables": {"fontFamily": "Be Vietnam Pro, Segoe UI, Arial", "fontSize": "15px", "primaryColor": "#ffffff", "primaryBorderColor": "#cfd6ea", "primaryTextColor": "#121a33", "lineColor": "#626d8c"}}}%%
+flowchart TB
+    subgraph T["① THINKING · BƯỚC CHÍNH — agent phân tích ý tưởng bằng tư duy sản phẩm (có benchmark)"]
+        direction LR
+        U(["Trưởng nhóm gửi ý tưởng<br/>hoặc trả lời câu hỏi"]):::human --> G["guard_input<br/><i>code: độ dài, injection</i>"]:::code
+        G -- "bị chặn" --> B(["Từ chối + lý do"]):::out
+        G -- "hợp lệ" --> X["update_canvas<br/><i>Gemini: trích tin nhắn<br/>vào 9 ô AI MVP Canvas</i>"]:::llm
+        X --> E["mark_evidence<br/><i>code: CÓ BẰNG CHỨNG khi có người cụ thể<br/>+ lần cụ thể + trích dẫn có thật</i>"]:::code
+        E --> R{"4 ô lõi đủ<br/>bằng chứng?"}:::route
+        R -- "còn thiếu" --> Q["ask_next<br/><i>NOT YET + hỏi đúng 1 câu</i>"]:::code
+        Q -. "chờ tin nhắn tiếp" .-> U
+        R -- "đủ, hoặc NO" --> V["verdict<br/><i>code: GO / NO</i>"]:::code
+        V --> H["human_review<br/><i>trưởng nhóm Duyệt / Chưa duyệt</i>"]:::human
+        H -- "Duyệt" --> F(["Canvas đã chốt"]):::out
+        H -. "Chưa duyệt" .-> U
+    end
+
+    subgraph P["② PLANNING · mở rộng"]
+        direction TB
+        p1["Kết nối GitHub"]:::ext
+        p2["Tự chia sprint, giao task"]:::ext
+        p3["Cập nhật task theo pull request,<br/>nhắc deadline"]:::ext
+    end
+    subgraph S["③ PITCHING · mở rộng"]
+        direction TB
+        s1["Tạo form khảo sát,<br/>link công khai"]:::ext
+        s2["Dashboard phản hồi"]:::ext
+        s3["Pitching HTML,<br/>bài quảng cáo"]:::ext
+    end
+    subgraph QL["④ QUALITY · mở rộng"]
+        direction TB
+        q1["Ghi các lần chạy thử,<br/>biểu đồ chất lượng"]:::ext
+        q2["Token, chi phí,<br/>gợi ý lợi nhuận"]:::ext
+    end
+    subgraph M["⑤ MAINTAINING · mở rộng"]
+        direction TB
+        m1["Gợi ý cập nhật công nghệ"]:::ext
+        m2["Lịch bảo trì,<br/>sức khỏe sản phẩm"]:::ext
+    end
+
+    T ==>|"Canvas đã duyệt"| P
+    P ==> S
+    S ==> QL
+    QL ==> M
+    T -. "metric lấy từ Canvas" .-> QL
+
+    classDef human fill:#fff7ed,stroke:#ff8a1f,stroke-width:1.5px,color:#121a33;
+    classDef code fill:#f4f6fc,stroke:#9aa3bd,stroke-width:1.5px,color:#121a33;
+    classDef llm fill:#eef2ff,stroke:#4d5bf0,stroke-width:1.5px,color:#121a33;
+    classDef route fill:#ecfdf5,stroke:#14b86a,stroke-width:1.5px,color:#121a33;
+    classDef out fill:#ffffff,stroke:#121a33,stroke-width:1.5px,color:#121a33;
+    classDef ext fill:#ffffff,stroke:#cfd6ea,stroke-width:1px,color:#626d8c;
+    style T fill:#f2faff,stroke:#0a9cf0,stroke-width:4px,color:#121a33
+    style P fill:#f8fafc,stroke:#cfd6ea,stroke-width:1.5px,color:#626d8c
+    style S fill:#f8fafc,stroke:#cfd6ea,stroke-width:1.5px,color:#626d8c
+    style QL fill:#f8fafc,stroke:#cfd6ea,stroke-width:1.5px,color:#626d8c
+    style M fill:#f8fafc,stroke:#cfd6ea,stroke-width:1.5px,color:#626d8c

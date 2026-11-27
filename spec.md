@@ -30,31 +30,38 @@ Data BTC cấp đã dùng (nếu có — không commit nguyên file): __
 - Số lần / tháng của từng kiểu người dùng (dùng cho persona ở §8):
 
 ## §3. Giải pháp tương tự *(guide 2.1)*
-- [sản phẩm / tính năng gần giống]: một điều đáng học · một điều đáng né · mình khác gì
+- **ChatGPT / Claude dùng thẳng (người dùng tự hỏi "ý tưởng này có ổn không")**: học được cách hỏi lại từng câu một; né việc dễ khen ý tưởng và tự điền cho đủ; mình khác ở chỗ luật bằng code: ô chỉ được đánh dấu có bằng chứng khi có một người cụ thể và một lần cụ thể, và kết luận GO / NOT YET / NO do code quyết, không do LLM. *(tự đánh giá, chưa kiểm chứng với người dùng ngoài nhóm)*
+- **Mẫu AI MVP Canvas / Scorecard trong tài liệu Day 2**: học được 9 ô và các ô lõi; né việc để người dùng tự điền một mình trên giấy; mình khác là có agent phản biện từng lượt và có người duyệt trước khi sang Planning.
 
 ## §4. Thiết kế *(guide 2.2, 3.2)*
-- **Lát cắt MỘT CÂU** (1 người dùng · 1 việc · 1 quyết định AI · 1 kết quả):
-- Không làm (≥3 điều):
-- **Sơ đồ** (ảnh / Mermaid / draw.io): [chèn ở đây]
-- **Hình dạng:** [ ] workflow cố định · [ ] một agent · [ ] nhiều agent — 2 dòng lý do, và vì sao **không** chọn hình dạng phức tạp hơn:
-- **AI dựa vào đâu** — mỗi công cụ (khớp `codebase/tools.py`):
+- **Lát cắt MỘT CÂU** (1 người dùng · 1 việc · 1 quyết định AI · 1 kết quả): Một trưởng nhóm Engineer · chốt đề tài trước khi code · AI quyết định GO / NOT YET / NO dựa trên việc các ô của AI MVP Canvas đã có chuyện thật hay mới là giả định · kết quả là AI MVP Canvas được trưởng nhóm duyệt, sẵn sàng sang Planning.
+- Không làm (≥3 điều): (1) Planning, Pitching, Quality, Maintaining là module mở rộng, **không nằm trong benchmark**; (2) agent không viết code, không làm slide thay người dùng; (3) agent không bịa số liệu hay trích dẫn khách hàng; (4) agent không tự chốt GO thay trưởng nhóm; (5) chưa cho sửa tay từng ô Canvas.
+- **Sơ đồ** (Mermaid, mỗi ô là một phần của quy trình, **Thinking là bước chính**): `docs/agent-architecture.png`, nguồn `docs/agent-architecture.mmd`
+
+  ![Kiến trúc nền tảng: Thinking là bước chính, bốn module còn lại là mở rộng](docs/agent-architecture.png)
+
+- **Hình dạng:** [x] workflow cố định · [ ] một agent · [ ] nhiều agent — Các bước biết trước (trích tin nhắn → đánh dấu bằng chứng → quyết định → hỏi tiếp hoặc chờ duyệt), chỉ rẽ nhánh theo luật bằng code; mỗi tin nhắn chỉ gọi LLM đúng 1 lần nên rẻ, test được và tái lập được. **Không** chọn agent vì agent không cần tự chọn công cụ hay bước tiếp theo, và không chọn nhiều agent vì chưa có vai nào thật sự khác nhau.
+- **AI dựa vào đâu** — mỗi công cụ (code ở `backend/app/agent/`; `codebase/` là khung `python run.py`, chưa nối với agent, xem mục "phần còn giả"):
 
   | Công cụ | Input | Output | Tác động ra ngoài? |
   |---|---|---|---|
-  |  |  |  |  |
+  | `update_canvas` (Gemini, structured output) | tin nhắn mới, Canvas hiện tại | cập nhật các ô: nội dung, người, lần, trích dẫn; ý định; các cờ | Không |
+  | `mark_evidence` và `decide()` (code thuần) | Canvas, cờ | trạng thái từng ô (CÓ BẰNG CHỨNG / GIẢ ĐỊNH / TRỐNG); GO / NOT YET / NO; ô cần hỏi tiếp | Không |
+  | `finalize` (code thuần) | Canvas đã duyệt, quyết định của trưởng nhóm | kết quả cuối, `handoff = planning` khi GO được duyệt | Có: ghi vào bảng `agent_runs`, chỉ sau khi trưởng nhóm bấm Duyệt |
 
-- **Mức tự động:** [ ] AI gợi ý, người quyết · [ ] AI tự làm khi chắc, chuyển người khi không · [ ] AI tự làm — lý do (sai thì ai chịu gì, sửa đắt hay rẻ):
-- **Chỗ chặn rủi ro** (rủi ro lớn nhất của lát cắt bị chặn ở đâu, bằng gì):
-- **Chỗ người duyệt** (việc AI không được tự làm):
+- **Mức tự động:** [x] AI gợi ý, người quyết · [ ] AI tự làm khi chắc, chuyển người khi không · [ ] AI tự làm — Sai thì cả nhóm build sai hướng và mất cả sprint, nhưng lỗi lộ ra ngay ở bước Thinking, trước khi code; sửa lúc này rẻ, sửa sau khi code thì đắt. Vì vậy trưởng nhóm là người chốt.
+- **Chỗ chặn rủi ro** (rủi ro lớn nhất: AI khen ý tưởng và đánh dấu "có bằng chứng" khi người dùng chỉ đoán): ở `mark_evidence`. Một ô chỉ là CÓ BẰNG CHỨNG khi có người cụ thể + lần cụ thể + đoạn trích có thật trong tin nhắn (kiểm bằng code); LLM bịa trích dẫn thì ô chỉ là giả định. `guard_input` chặn prompt injection; ý định ép GO, bắt bịa bằng chứng, hay đòi việc ngoài phạm vi bị từ chối.
+- **Chỗ người duyệt** (việc AI không được tự làm): chốt GO hoặc NO, và mở bước Planning. Mọi kết luận đều đi qua `human_review`; AI không tự sang bước tiếp.
 - **Nguyên tắc thiết kế** (≥3, bắt buộc G10):
 
   | Nguyên tắc | Chỗ cụ thể trên sơ đồ / trong bản chạy thử |
   |---|---|
-  | G10 — thu hẹp phạm vi khi không chắc |  |
-  |  |  |
-  |  |  |
+  | G10 — thu hẹp phạm vi khi không chắc | Node `ask_next`: còn ô lõi chưa có chuyện thật thì kết luận NOT YET và hỏi đúng 1 câu vào ô lõi còn thiếu, không đoán |
+  | G1 / G2 — nói rõ làm được gì, làm tốt đến đâu | Mỗi ô Canvas hiện nhãn Có bằng chứng / Giả định / Trống; khung "Đánh giá của agent" cho biết vì sao chưa GO. Nhãn "Chế độ dự phòng" hiện khi Gemini không chạy |
+  | G11 — giải thích vì sao | Danh sách `reasons` trong khung "Đánh giá của agent" nêu ô nào còn thiếu và cần làm gì tiếp |
+  | G8 — dễ bỏ qua | Nút "Chưa duyệt" và "Làm lại"; gửi tin nhắn mới là sửa lại Canvas |
 
-- Phần nào còn giả (công cụ trả dữ liệu giả, model chế độ giả…) — ghi rõ, không giả làm thật:
+- Phần nào còn giả (công cụ trả dữ liệu giả, model chế độ giả…) — ghi rõ, không giả làm thật: (1) `codebase/` (khung `python run.py`) vẫn là workflow ví dụ của khung mẫu, chưa nối với agent Thinking ở `backend/`; sẽ nối trước CP3; (2) dữ liệu của các module Planning, Pitching, Quality, Maintaining trong Workstation là dữ liệu mẫu (bài toán "Đáp Nhanh"); (3) chế độ `MOCK_NODES=all` trả Canvas mẫu của "chị Lan" và luôn ra GO; (4) khi không có `GOOGLE_API_KEY` agent chạy luật dự phòng (nhãn "Chế độ dự phòng").
 
 ## §5. Chỗ khó — 4 lớp + ≥6 kịch bản + 2 tấn công *(guide 2.3)*
 
@@ -71,9 +78,9 @@ Data BTC cấp đã dùng (nếu có — không commit nguyên file): __
 - Bị đòi ngoài phạm vi (lớp 3): · Trường hợp đặc thù lĩnh vực (lớp 4):
 
 ## §7. Đánh giá & chuẩn "đạt" *(guide 2.4, 4.1)*
-- Data card: `data/DATA_CARD.md` · bộ câu thử: `eval/benchmark.csv` — __ câu (thuong __ · kho __ · tu_choi __) · metric: `eval/metric_spec.yaml` (__ metric)
-- **Chuẩn "đạt"** (chốt **trước 19:30 Thứ Sáu 27/11**, giữ nguyên đến 23:59 Thứ Bảy 28/11): "Đạt khi ≥ __% câu qua, và __"
-- Kết quả: lượt 1 __/__ (__%) · lượt 2 __/__ (__%) — run ID: __ / __ → chi tiết `eval/report.md`, hồ sơ `eval/README.md`
+- Data card: `data/DATA_CARD.md` · bộ câu thử: `eval/benchmark.csv` — 23 câu (thuong 3 · kho 16 · tu_choi 4) · metric: `eval/metric_spec.yaml` (4 metric)
+- **Chuẩn "đạt"** (chốt **trước 19:30 Thứ Sáu 27/11**, giữ nguyên đến 23:59 Thứ Bảy 28/11): "Đạt khi ≥ 75% câu `thuong` và `kho` qua, và 100% câu `tu_choi` qua, và không có câu nào trả GO khi còn ô lõi chưa có bằng chứng"
+- Kết quả: lượt 1 chưa chạy chính thức (làm ở CP3) · lượt 2 chưa chạy → chi tiết `eval/report.md`, hồ sơ `eval/README.md`. Chạy thử trước CP2 với Gemini thật (`gemini-3.5-flash-lite`): 19/23 (83%); agent luôn trả NOT YET chỉ qua 11/23 (48%). Lỗi còn lại: chưa nhận ra việc không cần AI (2 câu), chưa gắn tên người vào Persona (2 câu).
 
 ## §8. Chi phí khi dùng thật *(guide 4.2)*
 - Persona + giá: `cost/personas.yaml` · lượt mô phỏng: `cost/simulate-__.csv` (__ phiên)

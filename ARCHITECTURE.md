@@ -23,33 +23,45 @@ db — Postgres 16: items · agent_runs · llm_calls · checkpoint LangGraph (b�
 
 Không có Redis: thêm khi thật cần queue/cache. Cloudflare: bật proxy là đủ chống bot cơ bản.
 
-## Agent (LangGraph, kiểu Workflow)
+## Agent Thinking (LangGraph, kiểu Workflow)
+
+Bước Thinking: engineer trao đổi với agent, agent điền dần AI MVP Canvas (9 ô), đánh dấu ô nào có chuyện thật, ô nào mới là
+giả định, rồi đề xuất GO / NOT YET / NO. Trưởng nhóm duyệt. Sơ đồ: [docs/agent-architecture.mmd](docs/agent-architecture.mmd).
 
 ```
 START → guard_input ──blocked──→ END
              │
              ▼
-           draft ──→ human_review ──→ finalize → END
-       (Gemini, JSON)  (interrupt: người duyệt)
+        update_canvas ──→ mark_evidence ──┬─ còn ô lõi thiếu ──→ ask_next → END (chờ tin nhắn tiếp theo)
+        (Gemini, JSON)    (code)          └─ đủ 4 ô lõi / NO ──→ verdict → human_review → finalize → END
+                                                                          (interrupt: trưởng nhóm duyệt)
 ```
 
 | Node | Loại | Vào | Ra | Mock |
 |---|---|---|---|---|
 | `guard_input` | code | `request` | `blocked`, `block_reason` | `mocks/guard_input.json` |
-| `draft` | LLM (Flash, structured output) → demo_cache → luật dự phòng | `request` | `proposal` (Proposal), `source` | `mocks/draft.json` |
-| `human_review` | HITL `interrupt()` | `proposal` | `review` (Review) | `mocks/human_review.json` (= tự duyệt) |
-| `finalize` | code | `proposal`, `review` | `result` | `mocks/finalize.json` |
+| `update_canvas` | LLM (Flash, structured output) → demo_cache → heuristic dự phòng | `request`, `canvas`, `flags` | `canvas`, `flags`, `intent`, `source` | `mocks/update_canvas.json` |
+| `mark_evidence` | code | `canvas` | `canvas` (gán lại `status` từng ô) | `mocks/mark_evidence.json` |
+| `ask_next` | code | `canvas`, `flags`, `intent` | `proposal` (NOT YET + 1 câu hỏi), `result.status=needs_info` | `mocks/ask_next.json` |
+| `verdict` | code | `canvas`, `flags`, `intent` | `proposal` (GO hoặc NO) | `mocks/verdict.json` |
+| `human_review` | HITL `interrupt()` | `proposal` | `review` | `mocks/human_review.json` (= tự duyệt) |
+| `finalize` | code | `proposal`, `review` | `result` (`handoff=planning` khi GO được duyệt) | `mocks/finalize.json` |
 
-- **Vì sao Workflow**: thứ tự bước biết trước → rẻ, test được, tái lập được. Không loop trừ khi thật cần.
+- **Một lượt = một tin nhắn.** Canvas nối tiếp giữa các lượt trong cùng `session_id` (`service._previous_canvas`), nên agent
+  hỏi từng câu một. Hỏi tiếp kết thúc lượt ở `ask_next` (status `needs_info`); chỉ khi đủ bằng chứng mới tới `human_review`.
+- **Luật bằng code, không bằng LLM** (`app/agent/canvas.py`): một ô chỉ là `evidence` khi có người cụ thể + lần cụ thể + đoạn
+  trích **có thật trong tin nhắn**. LLM bịa trích dẫn → ô chỉ là `assumption`. `decide()` quyết GO / NOT YET / NO.
+- **4 ô lõi** (Persona, Pain Point, Current Workaround, JTBD) phải có chuyện thật mới được GO. Cờ `no_ai_needed` hoặc
+  `solved_elsewhere` → NO.
 - **HITL**: `POST /agent/runs` chạy tới `human_review` rồi dừng (`status=waiting_review`). `POST /agent/runs/{id}/review`
   gửi `Command(resume={approved, note})` → chạy tiếp. Checkpointer: Postgres (`PostgresSaver`) khi `DATABASE_URL` là
   Postgres, còn lại bộ nhớ (dev/test).
-- **Guardrail**: code trước LLM (độ dài, regex injection), schema Pydantic + làm sạch sau LLM. Prompt coi input là dữ liệu.
-- **Đường lui**: không key / hết ngân sách → `LLMUnavailableError` → dự phòng. LLM lỗi/timeout/sai schema → demo_cache →
-  luật dự phòng. `DEMO_MODE=true` → ưu tiên demo_cache (demo không phụ thuộc mạng).
-- **Chi phí**: mỗi lượt gọi ghi `llm_calls` (token vào/ra, chi phí theo giá trong `.env`, độ trễ, run_id lấy từ
-  `thread_id`). `DAILY_BUDGET_USD` chặn chi tiêu trong ngày.
-- **Làm song song**: `MOCK_NODES=draft` (hoặc `all`) → node trả mock data; người làm UI / node sau không phải chờ.
+- **Guardrail**: code trước LLM (độ dài, regex injection), kiểm bằng chứng bằng code sau LLM, schema Pydantic. Prompt coi input là dữ liệu.
+- **Đường lui**: không key / hết ngân sách → `LLMUnavailableError` → heuristic dự phòng. LLM lỗi/timeout/sai schema → demo_cache →
+  heuristic. `DEMO_MODE=true` → ưu tiên demo_cache.
+- **Chi phí**: một lượt gọi LLM (node `update_canvas`); `ask_next`, `verdict` là template, không tốn token. Mỗi lượt gọi ghi `llm_calls`.
+- **Làm song song**: `MOCK_NODES=update_canvas` (hoặc `all`) → node trả mock data. Lưu ý `MOCK_NODES=all` luôn ra GO vì mock là
+  canvas đã đủ bằng chứng; muốn thử luồng thật thì để trống `MOCK_NODES`.
 
 ## Dữ liệu
 

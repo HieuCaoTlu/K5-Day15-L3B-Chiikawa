@@ -60,7 +60,8 @@ export function Planning() {
   useEffect(() => {
     const url = new URL(window.location.href);
     if (window.parent === window) {
-      url.pathname = '/';
+      url.pathname = '/workstation';
+      url.hash = 'planning';
       url.searchParams.delete('embed');
       url.searchParams.set('tab', 'planning');
       window.location.replace(url.toString());
