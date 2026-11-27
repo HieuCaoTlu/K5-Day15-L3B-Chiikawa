@@ -34,7 +34,7 @@ Muốn dùng Gemini thật: điền `GOOGLE_API_KEY` trong `.env` rồi `docker 
 
 ### Planning
 
-Mở **Planning → Đội, sprint và PR** trong Workstation hoặc vào `/?tab=planning`. Mô hình tiến độ 3D nằm bên trái trên desktop. Khi chạy dev, chọn **Dùng thử với dữ liệu mẫu** để thiết lập đội, kết nối repo mẫu, duyệt sprint và giả lập PR từ tab **Pull request**. Mỗi phiên demo có dữ liệu riêng.
+Mở **Planning → Đội, sprint và PR** trong Workstation hoặc vào `/workstation#planning`. Mô hình tiến độ 3D nằm bên trái trên desktop. Khi chạy dev, chọn **Dùng thử với dữ liệu mẫu** để thiết lập đội, kết nối repo mẫu, duyệt sprint và giả lập PR từ tab **Pull request**. Mỗi phiên demo có dữ liệu riêng.
 
 ### Kết nối GitHub thật
 
