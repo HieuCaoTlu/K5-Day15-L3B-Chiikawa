@@ -1,0 +1,159 @@
+@import 'tailwindcss';
+
+/* ============================================================================
+   TOKEN — nguồn duy nhất của màu / font / cỡ chữ (lấy nguyên từ P-020 / EstateSmart).
+   Quy tắc dùng: DESIGN.md (BẮT BUỘC). KHÔNG thêm mã hex trong component; cần màu mới → thêm ở đây + DESIGN.md.
+   Dùng trong Tailwind: bg-page, text-ink, text-muted, border-line, bg-brand, text-go, text-warn, text-rust…
+   ========================================================================== */
+@theme {
+  --font-sans: var(--font-grotesk), system-ui, sans-serif;
+  --font-serif: var(--font-instrument), Georgia, serif;
+
+  --color-page: #e9eff5;
+  --color-ink: #111a24;
+  --color-muted: #4a5664;
+  --color-subtle: #5f6b79;
+  --color-line: #d6dfe8;
+  --color-line-soft: #e1e8ef;
+  --color-line-strong: #c3ceda;
+  --color-soft: #f4f8fc;
+  --color-soft-hover: #eaf1f8;
+  --color-pale: #dce8f5;
+  --color-mist: #c9d3dd;
+  --color-brand: #2c6ab0;
+  --color-brand-dark: #1f5a9e;
+  --color-go: #2e7d5b;
+  --color-go-bg: #e6f2ec;
+  --color-warn: #e07b3c;
+  --color-warn-bg: #fbebdd;
+  --color-rust: #a34f1b;
+  --color-danger: #c8372d;
+
+  /* Cỡ chữ: thang Tailwind mặc định +2px (xs 12→14, sm 14→16, base 16→18…). Body 18px. */
+  --text-xs: 0.875rem;
+  --text-sm: 1rem;
+  --text-base: 1.125rem;
+  --text-lg: 1.25rem;
+  --text-xl: 1.375rem;
+  --text-2xl: 1.625rem;
+}
+
+@layer base {
+  html { scroll-behavior: smooth; }
+  body { background: var(--color-page); color: var(--color-ink); font-family: var(--font-sans); font-size: 18px; margin: 0; -webkit-font-smoothing: antialiased; }
+  a { color: var(--color-brand); }
+  a:hover { color: var(--color-brand-dark); }
+  :focus-visible { outline: 2px solid var(--color-brand); outline-offset: 2px; }
+}
+
+/* Landing: nhãn, số, thẻ, nút tròn. Trang ứng dụng (chat/admin) dùng bộ d-* trong components.css. */
+@layer components {
+  .lbl { font-size: 13px; letter-spacing: 0.16em; text-transform: uppercase; font-weight: 500; color: var(--color-muted); }
+  .num { font-weight: 400; letter-spacing: -0.045em; font-feature-settings: 'tnum' 1, 'lnum' 1; }
+  .idx { font-size: 14px; letter-spacing: 0.12em; color: var(--color-subtle); font-feature-settings: 'tnum' 1; }
+  .card { background: #fff; border-radius: 28px; }
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 10px;
+    min-height: 48px; padding: 0 22px; border-radius: 999px; border: 0; cursor: pointer;
+    font-family: var(--font-sans); font-weight: 500; font-size: 17px; text-decoration: none; white-space: nowrap;
+    transition: background-color 0.2s ease, border-color 0.2s ease, transform 0.15s ease;
+  }
+  .btn:active { transform: scale(0.98); }
+  .h2 { margin: 0; font-weight: 400; line-height: 1.14; letter-spacing: -0.03em; }
+  .nav-link { color: var(--color-ink); text-decoration: none; font-size: 16px; }
+  .nav-link:hover { color: var(--color-brand); }
+}
+
+/* ---------- Header dính, nền mờ khi đã cuộn ---------- */
+.site-header { height: 64px; transition: background-color 0.4s ease, box-shadow 0.4s ease, backdrop-filter 0.4s ease; }
+.site-header[data-scrolled='true'] {
+  background-color: rgb(233 239 245 / 0.78);
+  backdrop-filter: saturate(1.4) blur(14px);
+  -webkit-backdrop-filter: saturate(1.4) blur(14px);
+  box-shadow: 0 1px 0 rgb(17 26 36 / 0.06);
+}
+.nav-link { position: relative; }
+.nav-link::after {
+  content: ''; position: absolute; left: 0; right: 0; bottom: -4px; height: 1.5px; border-radius: 2px;
+  background: currentColor; transform: scaleX(0); transform-origin: right; transition: transform 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.nav-link:hover::after { transform: scaleX(1); transform-origin: left; }
+
+/* ---------- Nút: mũi tên trượt + vệt sáng lướt qua khi rê chuột ---------- */
+.btn-fx { position: relative; overflow: hidden; isolation: isolate; }
+.btn-fx::before {
+  content: ''; position: absolute; inset: 0; z-index: -1; pointer-events: none;
+  background: linear-gradient(110deg, transparent 30%, var(--fx, rgb(255 255 255 / 0.28)) 50%, transparent 70%);
+  transform: translateX(-120%); transition: transform 0.8s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.btn-fx:hover::before { transform: translateX(120%); }
+.btn-fx .arrow { transition: transform 0.45s cubic-bezier(0.22, 1, 0.36, 1); }
+.btn-fx:hover .arrow { transform: translateX(4px); }
+
+/* ---------- Chấm sáng chạy dọc đường nối các bước ---------- */
+@keyframes flow-x { 0% { left: 0; opacity: 0; } 12% { opacity: 1; } 88% { opacity: 1; } 100% { left: calc(100% - 8px); opacity: 0; } }
+@keyframes flow-y { 0% { top: 0; opacity: 0; } 12% { opacity: 1; } 88% { opacity: 1; } 100% { top: calc(100% - 8px); opacity: 0; } }
+.flow-dot { animation: flow-y 3.9s ease-in-out infinite; }
+@media (min-width: 1024px) { .flow-dot { animation-name: flow-x; } }
+
+/* ---------- Hiệu ứng vào màn hình: CSS thuần, chạy ngay khi HTML hiện ---------- */
+@keyframes rise-in { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: none; } }
+@keyframes word-up { from { transform: translateY(150%); } to { transform: none; } }
+@keyframes hero-zoom { from { transform: scale(1.12); } to { transform: scale(1); } }
+.rise-in { animation: rise-in 0.9s cubic-bezier(0.22, 1, 0.36, 1) var(--d, 0s) both; }
+.word-mask { display: inline-block; overflow: hidden; padding: 0.36em 0.14em 0.18em 0.08em; margin: -0.36em -0.14em -0.18em -0.08em; vertical-align: top; }
+.word-up { display: inline-block; animation: word-up 0.85s cubic-bezier(0.22, 1, 0.36, 1) var(--d, 0s) both; }
+.hero-zoom { animation: hero-zoom 1.8s cubic-bezier(0.22, 1, 0.36, 1) both; }
+/* Hiện khi cuộn tới (components/motion/Reveal.tsx gắn data-shown) */
+.reveal { opacity: 0; transform: translateY(24px); transition: opacity .8s cubic-bezier(0.22, 1, 0.36, 1) var(--d, 0s), transform .8s cubic-bezier(0.22, 1, 0.36, 1) var(--d, 0s); }
+.reveal[data-shown='true'] { opacity: 1; transform: none; }
+
+/* ---------- Thẻ nhấp nhô nhẹ ---------- */
+@keyframes float-y { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+.float-slow { animation: float-y 6s ease-in-out infinite; }
+
+/* ---------- Hiệu ứng kiểu Gemini (CHỈ dùng trong phần chat) ---------- */
+:root { --gm-grad: linear-gradient(90deg, #2c6ab0, #7b6fd6, #d96570, #7b6fd6, #2c6ab0); }
+@keyframes gm-slide { from { background-position: 0% 50%; } to { background-position: 200% 50%; } }
+@keyframes gm-rotate { to { transform: rotate(360deg); } }
+@keyframes gm-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+@keyframes gm-blink { 50% { opacity: 0; } }
+@keyframes msg-in { from { opacity: 0; transform: translateY(14px) scale(.96); } to { opacity: 1; transform: none; } }
+.msg-in { animation: msg-in .45s cubic-bezier(.2, 1.15, .3, 1) both; }
+.gm-spin { animation: gm-rotate 2.4s linear infinite; }
+.gm-fade { animation: gm-in 0.35s ease both; }
+.gm-shimmer-text {
+  background: var(--gm-grad); background-size: 200% 100%;
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  animation: gm-slide 2.2s linear infinite, gm-in 0.35s ease both;
+}
+.gm-caret {
+  display: inline-block; width: 8px; height: 8px; margin-left: 3px; border-radius: 99px;
+  background: var(--gm-grad); background-size: 200% 100%; vertical-align: middle;
+  animation: gm-slide 1.2s linear infinite, gm-blink 0.9s steps(1) infinite;
+}
+/* Vòng gradient xoay quanh nút gửi khi đang xử lý (nút chuyển thành "dừng") */
+.send-ring {
+  background: conic-gradient(from 0deg, #2c6ab0, #7b6fd6, #d96570, #2c6ab0);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 2.5px), #000 calc(100% - 2px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 2.5px), #000 calc(100% - 2px));
+  animation: gm-rotate 1.1s linear infinite;
+}
+/* Viền gradient chạy quanh ô nhập khi agent đang xử lý */
+.gm-input { position: relative; isolation: isolate; }
+.gm-input.gm-busy { border-color: transparent; }
+.gm-input.gm-busy::before {
+  content: ''; position: absolute; inset: -1.5px; z-index: -1; border-radius: inherit;
+  background: var(--gm-grad); background-size: 200% 100%; animation: gm-slide 2s linear infinite;
+}
+.gm-input.gm-busy::after { content: ''; position: absolute; inset: 0; z-index: -1; border-radius: inherit; background: #fff; }
+
+/* Thanh cuộn mảnh */
+.thin-scroll { scrollbar-width: thin; scrollbar-color: #c3ceda transparent; }
+.thin-scroll::-webkit-scrollbar { width: 5px; height: 5px; }
+.thin-scroll::-webkit-scrollbar-thumb { background: #c3ceda; border-radius: 999px; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
+  .reveal { opacity: 1; transform: none; }
+}

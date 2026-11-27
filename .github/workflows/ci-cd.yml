@@ -1,0 +1,117 @@
+# CI/CD một file: PR → test; push main → test → deploy lên VPS.
+#
+# Nhanh hơn bản P-020 vì:
+#   1. Một workflow, deploy `needs` test (không chờ sự kiện workflow_run khởi động lại hàng đợi).
+#   2. Backend và frontend kiểm tra SONG SONG trên runner riêng của nhóm (self-hosted, cache uv/npm nằm sẵn trên đĩa).
+#   3. Frontend chỉ typecheck ở CI (không build 2 lần) — build thật nằm trong Docker, có cache mount.
+#   4. Runner deploy nằm NGAY TRÊN VPS: không SSH, không nén/đẩy code; docker compose build dùng lại cache BuildKit.
+#   5. PR đẩy commit mới → huỷ lượt CI cũ của PR đó (cancel-in-progress).
+#
+# Runner hỏng? Repo → Settings → Variables → CI_RUNNER = ubuntu-latest (CI chạy trên GitHub),
+# rồi deploy tay: Actions → CI/CD → Run workflow → tick "via_ssh" (cần secrets VPS_*; xem deploy/README.md).
+name: CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      via_ssh:
+        description: "Deploy qua SSH từ ubuntu-latest (khi runner trên VPS không chạy)"
+        type: boolean
+        default: false
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    # Không chạy code từ fork trên runner của nhóm.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ${{ vars.CI_RUNNER == 'ubuntu-latest' && 'ubuntu-latest' || fromJSON('["self-hosted","hackathon"]') }}
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      # setup-uv: trên runner riêng uv nằm sẵn trong tool cache; cache gói ở ~/.cache/uv tồn tại giữa các lần chạy.
+      - uses: astral-sh/setup-uv@v6
+      - name: Cài dependency
+        run: uv sync --frozen
+      - name: Lint
+        run: uv run ruff check . && uv run ruff format --check .
+      - name: Test (offline, SQLite trong RAM, không key)
+        run: uv run pytest
+      - name: Eval agent
+        run: uv run python eval/run_eval.py
+
+  frontend:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ${{ vars.CI_RUNNER == 'ubuntu-latest' && 'ubuntu-latest' || fromJSON('["self-hosted","hackathon"]') }}
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          # Runner riêng: ~/.npm đã nằm trên đĩa, không cần upload/download cache của GitHub.
+          cache: ${{ runner.environment == 'github-hosted' && 'npm' || '' }}
+          cache-dependency-path: frontend/package-lock.json
+      - name: Cài dependency
+        run: npm ci --prefer-offline --no-audit --no-fund
+      - name: Typecheck
+        run: npm run typecheck
+
+  deploy:
+    needs: [backend, frontend]
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && !inputs.via_ssh))
+    # Runner có nhãn "deploy" chỉ cài trên VPS (deploy/setup-runner.sh) → job chạy ngay trên VPS.
+    runs-on: [self-hosted, hackathon, deploy]
+    timeout-minutes: 15
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build + chạy container (docker compose up --wait)
+        run: bash deploy/deploy.sh
+        env:
+          DEPLOY_BASE: ${{ vars.DEPLOY_BASE || '/opt/hackathon' }}
+
+  # Dự phòng: runner trên VPS hỏng → deploy từ máy GitHub qua SSH (giống P-020).
+  deploy-ssh:
+    needs: [backend, frontend]
+    if: github.event_name == 'workflow_dispatch' && inputs.via_ssh
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - name: Đẩy code lên VPS qua SSH và deploy
+        env:
+          SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+          HOST: ${{ secrets.VPS_HOST }}
+        run: |
+          for v in SSH_KEY KNOWN_HOSTS HOST; do
+            [ -n "${!v}" ] || { echo "::error::Thiếu secret VPS_SSH_KEY / VPS_KNOWN_HOSTS / VPS_HOST"; exit 1; }
+          done
+          dir="$RUNNER_TEMP/ssh"; mkdir -p "$dir"; trap 'rm -rf "$dir"' EXIT
+          printf '%s\n' "$SSH_KEY" > "$dir/key"; chmod 600 "$dir/key"
+          printf '%s\n' "$KNOWN_HOSTS" > "$dir/known_hosts"
+          git -c core.autocrlf=false archive --format=tar.gz HEAD \
+            | ssh -i "$dir/key" -o IdentitiesOnly=yes -o UserKnownHostsFile="$dir/known_hosts" \
+                  -o StrictHostKeyChecking=yes deploy@"$HOST" "$(git rev-parse HEAD)"

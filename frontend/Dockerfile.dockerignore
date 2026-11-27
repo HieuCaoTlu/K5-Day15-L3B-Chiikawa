@@ -1,0 +1,9 @@
+# Dùng khi build frontend/Dockerfile với context = gốc repo. Chỉ gửi frontend/ và Caddyfile cho Docker.
+*
+!frontend
+!deploy/Caddyfile
+frontend/node_modules
+frontend/.next
+frontend/out
+frontend/.env*
+frontend/*.tsbuildinfo

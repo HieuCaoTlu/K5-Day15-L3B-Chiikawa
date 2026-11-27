@@ -1,0 +1,62 @@
+# Một file cho cả máy cá nhân lẫn VPS. Khác nhau chỉ ở .env (SITE_ADDRESS, POSTGRES_PASSWORD, GOOGLE_API_KEY…).
+#   docker compose up -d --build     → http://localhost (Caddy) · API docs http://localhost/docs
+# Luồng: Internet → web (Caddy: HTML tĩnh + reverse proxy) → backend (FastAPI + LangGraph) → db (Postgres)
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-app}
+      POSTGRES_DB: app
+    ports:
+      # Chỉ mở trong máy (để chạy uvicorn ngoài Docker vẫn dùng được Postgres). Internet không vào được.
+      - "127.0.0.1:${DB_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app -d app"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  backend:
+    build: ./backend
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      DATABASE_URL: postgresql+psycopg://app:${POSTGRES_PASSWORD:-app}@db:5432/app
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${BACKEND_PORT:-8000}:8000"
+    volumes:
+      - appdata:/app/data
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      args:
+        SITE_URL: ${SITE_URL:-http://localhost}
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:-:80}
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  appdata:
+  caddy_data:
+  caddy_config:

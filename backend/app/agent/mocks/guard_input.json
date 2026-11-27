@@ -1,0 +1,11 @@
+{
+  "node": "guard_input",
+  "description": "Chặn yêu cầu rỗng / quá dài / prompt injection. Code thuần, không LLM.",
+  "input": {
+    "request": "Lên kế hoạch onboarding cho nhân viên mới trong tuần đầu"
+  },
+  "output": {
+    "blocked": false,
+    "block_reason": ""
+  }
+}

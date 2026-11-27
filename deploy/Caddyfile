@@ -1,0 +1,47 @@
+# Caddy: cổng vào duy nhất. SITE_ADDRESS (từ .env):
+#   máy cá nhân: :80                → http://localhost (không HTTPS)
+#   VPS:         app.ten-mien.com   → Caddy tự xin + gia hạn HTTPS (Let's Encrypt). Bản ghi A phải trỏ về IP VPS.
+#   Nhiều tên miền: "app.ten-mien.com, www.ten-mien.com"
+#
+# Chia đường:
+#   /api/*, /health, /docs, /openapi.json → backend FastAPI
+#   còn lại (/, /chat, /admin…)             → HTML tĩnh của Next.js (nằm sẵn trong image ở /srv)
+{$SITE_ADDRESS::80} {
+	encode zstd gzip
+
+	header {
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+		X-Frame-Options SAMEORIGIN
+		-Server
+	}
+
+	@backend path /api/* /health /docs /docs/* /openapi.json
+	handle @backend {
+		reverse_proxy backend:8000 {
+			# Agent gọi LLM có thể lâu
+			transport http {
+				read_timeout 180s
+			}
+		}
+	}
+
+	handle {
+		root * /srv
+		@immutable path /_next/static/*
+		header @immutable Cache-Control "public, max-age=31536000, immutable"
+		@html path / *.html
+		header @html Cache-Control "public, max-age=0, must-revalidate"
+		try_files {path} {path}.html {path}/index.html
+		file_server
+	}
+
+	handle_errors {
+		@notfound expression {err.status_code} == 404
+		handle @notfound {
+			root * /srv
+			rewrite * /404.html
+			file_server
+		}
+	}
+}

@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# Chạy trước mỗi commit: lint + test phần bị đổi. Bật: `make hooks` (git config core.hooksPath scripts/git-hooks).
+# Gấp quá cần bỏ qua một lần: SKIP_CHECKS=1 git commit ...  (không dùng --no-verify thường xuyên)
+set -euo pipefail
+[[ ${SKIP_CHECKS:-0} == 1 ]] && exit 0
+
+changed=$(git diff --cached --name-only)
+root=$(git rev-parse --show-toplevel)
+
+if grep -q '^backend/' <<<"$changed"; then
+  echo "▶ backend: ruff + pytest"
+  (cd "$root/backend" && uv run ruff check . && uv run ruff format --check . && uv run pytest -q)
+fi
+
+if grep -q '^frontend/' <<<"$changed"; then
+  echo "▶ frontend: typecheck"
+  (cd "$root/frontend" && npm run -s typecheck)
+fi
+
+if grep -qE '(^|/)\.env$' <<<"$changed"; then
+  echo "✖ Đang commit file .env — bỏ ra: git restore --staged .env"; exit 1
+fi

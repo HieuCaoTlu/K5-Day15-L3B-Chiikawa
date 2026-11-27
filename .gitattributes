@@ -1,0 +1,6 @@
+# Script chạy trên Linux phải giữ LF kể cả khi commit từ Windows (CRLF làm hỏng bash trên VPS).
+* text=auto
+*.sh text eol=lf
+scripts/git-hooks/* text eol=lf
+Caddyfile text eol=lf
+Dockerfile text eol=lf
