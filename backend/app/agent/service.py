@@ -68,9 +68,7 @@ def _supersede_waiting(session: Session, run: AgentRun) -> None:
             .with_for_update()
         ).first()
     session.flush()
-    newest = session.scalar(
-        with_canvas(in_session).order_by(AgentRun.created_at.desc(), AgentRun.id.desc()).limit(1)
-    )
+    newest = session.scalar(with_canvas(in_session).order_by(AgentRun.created_at.desc(), AgentRun.id.desc()).limit(1))
     if newest is None:
         return
     waiting = session.scalars(

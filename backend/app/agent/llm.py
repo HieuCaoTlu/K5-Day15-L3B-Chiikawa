@@ -189,10 +189,8 @@ def _structured_openrouter[T: BaseModel](schema: type[T], prompt: str, *, node: 
                 "response_format" in resp.text.lower() or "json_schema" in resp.text.lower()
             ):
                 fallback_prompt = (
-                    prompt
-                    + "\n\nChỉ trả về một đối tượng JSON hợp lệ khớp đúng JSON Schema sau "
-                    "(không thêm chữ giải thích hay markdown):\n"
-                    + json.dumps(raw_schema, ensure_ascii=False)
+                    prompt + "\n\nChỉ trả về một đối tượng JSON hợp lệ khớp đúng JSON Schema sau "
+                    "(không thêm chữ giải thích hay markdown):\n" + json.dumps(raw_schema, ensure_ascii=False)
                 )
                 fallback_body = {
                     "model": model_name,

@@ -111,8 +111,10 @@ def apply_update(prev: dict | None, upd: CanvasUpdate, request: str, flags: dict
         for cell in DEPENDS_ON_PERSONA:
             canvas[cell].update(who="", when="", quote="", grounded=False)
     for cell, candidate in accepted.items():
-        if canvas[cell]["status"] != "evidence" or cell_status(candidate) == "evidence" or (
-            cell == "persona" and upd.persona_changed
+        if (
+            canvas[cell]["status"] != "evidence"
+            or cell_status(candidate) == "evidence"
+            or (cell == "persona" and upd.persona_changed)
         ):
             canvas[cell] = candidate
     # Cờ NO đã bật thì giữ qua các lượt sau; lượt không nhắc tới thì không tự xóa.

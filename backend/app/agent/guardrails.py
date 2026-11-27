@@ -19,7 +19,7 @@ INJECTION = re.compile(
 )
 INJECTION_KEYWORDS = re.compile(r"system\s+prompt|jailbreak|developer\s+mode|\bDAN\b", re.IGNORECASE)
 INTERVIEW_QUOTE = re.compile(
-    r'\b(?:nói(?:\s+(?:rằng|thẳng))?|kể(?:\s+lại)?|trả\s+lời|cho\s+biết|said|replied)'
+    r"\b(?:nói(?:\s+(?:rằng|thẳng))?|kể(?:\s+lại)?|trả\s+lời|cho\s+biết|said|replied)"
     r'\s*:\s*(?:"[^"\n]+"|“[^”\n]+”)',
     re.IGNORECASE,
 )
