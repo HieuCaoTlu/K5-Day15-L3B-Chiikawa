@@ -1,0 +1,181 @@
+{
+  "node": "verdict",
+  "description": "Đủ 4 ô lõi (hoặc cờ NO) → ra phán quyết GO / NO để trưởng nhóm duyệt. Luật nằm trong canvas.decide, code thuần.",
+  "input": {
+    "canvas": {
+      "persona": {
+        "content": "Chị Lan, chủ shop mỹ phẩm có 2 nhân viên",
+        "who": "chị Lan",
+        "when": "tuần trước",
+        "quote": "chị Lan, chủ shop mỹ phẩm 2 nhân viên",
+        "grounded": true,
+        "status": "evidence"
+      },
+      "jtbd": {
+        "content": "Trả lời khách kịp thời để không mất đơn",
+        "who": "chị Lan",
+        "when": "tuần trước",
+        "quote": "Tuần trước chị mất 3 đơn vì trả lời tin nhắn trễ 2 giờ",
+        "grounded": true,
+        "status": "evidence"
+      },
+      "pain_point": {
+        "content": "Mất 3 đơn vì trả lời tin nhắn trễ 2 giờ",
+        "who": "chị Lan",
+        "when": "tuần trước",
+        "quote": "Tuần trước chị mất 3 đơn vì trả lời tin nhắn trễ 2 giờ",
+        "grounded": true,
+        "status": "evidence"
+      },
+      "current_workaround": {
+        "content": "Trả lời tay qua Zalo, ghi đơn vào Excel",
+        "who": "chị Lan",
+        "when": "hiện nay",
+        "quote": "Hiện chị trả lời tay qua Zalo, ghi đơn vào Excel",
+        "grounded": true,
+        "status": "evidence"
+      },
+      "solution": {
+        "content": "Bot tự trả lời câu hỏi giá và tồn kho",
+        "who": "",
+        "when": "",
+        "quote": "",
+        "grounded": false,
+        "status": "assumption"
+      },
+      "ai_leverage": {
+        "content": "",
+        "who": "",
+        "when": "",
+        "quote": "",
+        "grounded": false,
+        "status": "empty"
+      },
+      "mvp_scope": {
+        "content": "",
+        "who": "",
+        "when": "",
+        "quote": "",
+        "grounded": false,
+        "status": "empty"
+      },
+      "metrics": {
+        "content": "",
+        "who": "",
+        "when": "",
+        "quote": "",
+        "grounded": false,
+        "status": "empty"
+      },
+      "prior_art": {
+        "content": "",
+        "who": "",
+        "when": "",
+        "quote": "",
+        "grounded": false,
+        "status": "empty"
+      }
+    },
+    "flags": {
+      "no_ai_needed": false,
+      "solved_elsewhere": false
+    },
+    "intent": "answer"
+  },
+  "output": {
+    "proposal": {
+      "verdict": "GO",
+      "reply": "GO. Cả 4 ô lõi đều có chuyện thật. Bạn xem Canvas rồi duyệt để sang Planning.",
+      "next_cell": null,
+      "reasons": [
+        "Cả 4 ô lõi đều có chuyện thật: một người cụ thể, một lần cụ thể.",
+        "Còn cần làm rõ ở Planning: Solution, AI Leverage, MVP Scope, Metrics, Prior Art & Edge."
+      ],
+      "canvas": {
+        "persona": {
+          "content": "Chị Lan, chủ shop mỹ phẩm có 2 nhân viên",
+          "who": "chị Lan",
+          "when": "tuần trước",
+          "quote": "chị Lan, chủ shop mỹ phẩm 2 nhân viên",
+          "grounded": true,
+          "status": "evidence"
+        },
+        "jtbd": {
+          "content": "Trả lời khách kịp thời để không mất đơn",
+          "who": "chị Lan",
+          "when": "tuần trước",
+          "quote": "Tuần trước chị mất 3 đơn vì trả lời tin nhắn trễ 2 giờ",
+          "grounded": true,
+          "status": "evidence"
+        },
+        "pain_point": {
+          "content": "Mất 3 đơn vì trả lời tin nhắn trễ 2 giờ",
+          "who": "chị Lan",
+          "when": "tuần trước",
+          "quote": "Tuần trước chị mất 3 đơn vì trả lời tin nhắn trễ 2 giờ",
+          "grounded": true,
+          "status": "evidence"
+        },
+        "current_workaround": {
+          "content": "Trả lời tay qua Zalo, ghi đơn vào Excel",
+          "who": "chị Lan",
+          "when": "hiện nay",
+          "quote": "Hiện chị trả lời tay qua Zalo, ghi đơn vào Excel",
+          "grounded": true,
+          "status": "evidence"
+        },
+        "solution": {
+          "content": "Bot tự trả lời câu hỏi giá và tồn kho",
+          "who": "",
+          "when": "",
+          "quote": "",
+          "grounded": false,
+          "status": "assumption"
+        },
+        "ai_leverage": {
+          "content": "",
+          "who": "",
+          "when": "",
+          "quote": "",
+          "grounded": false,
+          "status": "empty"
+        },
+        "mvp_scope": {
+          "content": "",
+          "who": "",
+          "when": "",
+          "quote": "",
+          "grounded": false,
+          "status": "empty"
+        },
+        "metrics": {
+          "content": "",
+          "who": "",
+          "when": "",
+          "quote": "",
+          "grounded": false,
+          "status": "empty"
+        },
+        "prior_art": {
+          "content": "",
+          "who": "",
+          "when": "",
+          "quote": "",
+          "grounded": false,
+          "status": "empty"
+        }
+      },
+      "flags": {
+        "no_ai_needed": false,
+        "solved_elsewhere": false
+      },
+      "title": "GO: đủ bằng chứng ở 4 ô lõi",
+      "summary": "GO. Cả 4 ô lõi đều có chuyện thật. Bạn xem Canvas rồi duyệt để sang Planning.",
+      "steps": [
+        "Cả 4 ô lõi đều có chuyện thật: một người cụ thể, một lần cụ thể.",
+        "Còn cần làm rõ ở Planning: Solution, AI Leverage, MVP Scope, Metrics, Prior Art & Edge."
+      ],
+      "confidence": 1.0
+    }
+  }
+}

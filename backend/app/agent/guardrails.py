@@ -2,6 +2,7 @@
 
 - Đầu vào: giới hạn độ dài + regex prompt injection cơ bản.
 - Đầu ra: validate lại bằng schema Pydantic + cắt khoảng trắng / bước rỗng.
+- Bằng chứng của từng ô được kiểm bằng code ở app/agent/canvas.py (đoạn trích phải có thật trong tin nhắn).
 """
 
 import re
@@ -33,5 +34,7 @@ def clean_proposal(proposal: Proposal | dict) -> Proposal:
     data = proposal.model_dump() if isinstance(proposal, Proposal) else dict(proposal)
     data["title"] = str(data.get("title", "")).strip()[:120]
     data["summary"] = str(data.get("summary", "")).strip()[:800]
-    data["steps"] = [s.strip()[:300] for s in data.get("steps", []) if str(s).strip()][:7]
+    data["reply"] = str(data.get("reply", "")).strip()[:1200]
+    data["steps"] = [s.strip()[:300] for s in data.get("steps", []) if str(s).strip()][:9]
+    data["reasons"] = [s.strip()[:300] for s in data.get("reasons", []) if str(s).strip()][:9]
     return Proposal.model_validate(data)

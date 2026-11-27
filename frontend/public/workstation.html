@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tầng: workstation</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@300;400;500;600&display=swap">
+<link rel="stylesheet" href="/tang/style.css">
+</head>
+<body>
+
+<!-- MÀN 2: WORKSTATION (tab nội dung do app.js render vào #view) -->
+<section id="app" hidden>
+  <header class="top">
+    <button class="brand linklike" data-act="home" title="Về trang giới thiệu"><span class="logo" aria-hidden="true"><i></i><i></i><i></i></span>Tầng</button>
+    <input id="projectName" aria-label="Tên dự án">
+    <nav id="nav" aria-label="Các tab"></nav>
+    <div class="team" id="teamBar"></div>
+    <button class="btn soft small" data-act="reset" id="resetBtn">Đặt lại demo</button>
+  </header>
+  <div class="workspace" id="workspace">
+    <aside id="stage" aria-label="Mô hình 3D tiến độ sản phẩm">
+      <canvas id="progressCanvas" aria-label="Công trình đang xây, kéo để xoay"></canvas>
+      <div id="pins"></div>
+      <div class="stage-head">
+        <button class="health-chip" id="healthChip" data-act="tab" data-id="maintaining" title="Xem sức khỏe sản phẩm ở tab Maintaining"><i></i>Sức khỏe</button>
+        <div class="seg" role="group" aria-label="Chọn mô hình 3D">
+          <button data-model="house" class="on">Nhà tầng</button>
+          <button data-model="rubik">Rubik</button>
+          <button data-model="uni">University</button>
+          <button data-model="tree">Noel</button>
+        </div>
+      </div>
+      <div id="overlay"></div>
+    </aside>
+    <button id="sideToggle" data-act="collapse" aria-label="Ẩn hoặc hiện mô hình 3D" aria-expanded="true" title="Ẩn hoặc hiện mô hình 3D"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+    <main id="view" tabindex="-1"></main>
+  </div>
+  <!-- Agent: tạm dùng trả lời mẫu cục bộ (localReply trong app.js), nối API thật sau -->
+  <div class="drawer" id="drawer" hidden>
+    <div class="drawer-head"><span>Chat nhóm cùng agent</span><button class="btn soft small" data-act="drawer">Đóng</button></div>
+    <div id="drawerSlot"></div>
+  </div>
+</section>
+
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/motion@11.18.2/dist/motion.js"></script>
+<script src="/tang/scene.js"></script>
+<script src="/tang/data.js"></script>
+<script src="/tang/health.js"></script>
+<script src="/tang/app.js"></script>
+</body>
+</html>

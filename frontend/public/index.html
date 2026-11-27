@@ -43,42 +43,6 @@
   </div>
 </section>
 
-<!-- MÀN 2: WORKSTATION (tab nội dung do app.js render vào #view) -->
-<section id="app" hidden>
-  <header class="top">
-    <button class="brand linklike" data-act="home" title="Về trang giới thiệu"><span class="logo" aria-hidden="true"><i></i><i></i><i></i></span>Tầng</button>
-    <input id="projectName" aria-label="Tên dự án">
-    <nav id="nav" aria-label="Các tab"></nav>
-    <div class="team" id="teamBar"></div>
-    <button class="btn soft small" data-act="reset" id="resetBtn">Đặt lại demo</button>
-  </header>
-  <div class="workspace" id="workspace">
-    <aside id="stage" aria-label="Mô hình 3D tiến độ sản phẩm">
-      <canvas id="progressCanvas" aria-label="Công trình đang xây, kéo để xoay"></canvas>
-      <div id="pins"></div>
-      <div class="stage-head">
-        <div class="total"><span id="totalPct">0%</span><small>tiến độ sản phẩm</small></div>
-        <button class="health-chip" id="healthChip" data-act="tab" data-id="maintaining" title="Xem sức khỏe sản phẩm ở tab Maintaining"><i></i>Sức khỏe</button>
-        <div class="seg" role="group" aria-label="Kiểu mô hình">
-          <button data-model="house" class="on">Nhà tầng</button>
-          <button data-model="rubik">Rubik</button>
-        </div>
-        <button class="btn soft small" data-act="collapse" id="collapseBtn">Ẩn mô hình</button>
-      </div>
-      <div id="floorInfo"></div>
-      <div id="overlay"></div>
-    </aside>
-    <button class="btn primary small" id="reveal" data-act="collapse" hidden>Hiện mô hình</button>
-    <main id="view" tabindex="-1"></main>
-  </div>
-  <!-- Agent: tạm dùng trả lời mẫu cục bộ (localReply trong app.js), nối API thật sau -->
-  <button class="agent-fab" id="fab" data-act="drawer">Hỏi agent</button>
-  <div class="drawer" id="drawer" hidden>
-    <div class="drawer-head"><span>Chat nhóm cùng agent</span><button class="btn soft small" data-act="drawer">Đóng</button></div>
-    <div id="drawerSlot"></div>
-  </div>
-</section>
-
 <div id="toast" role="status" aria-live="polite"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>

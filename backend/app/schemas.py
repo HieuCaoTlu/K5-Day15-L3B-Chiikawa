@@ -29,7 +29,7 @@ class ReviewIn(BaseModel):
     note: str = Field(default="", max_length=500)
 
 
-RunStatus = Literal["running", "blocked", "waiting_review", "approved", "rejected", "error"]
+RunStatus = Literal["running", "blocked", "needs_info", "waiting_review", "approved", "rejected", "error"]
 
 
 class RunOut(BaseModel):

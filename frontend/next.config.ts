@@ -15,9 +15,10 @@ export default function config(phase: string): NextConfig {
       ...base,
       // Agent gọi LLM có thể > 30 s (mặc định của proxy dev) → nâng lên 3 phút.
       experimental: { proxyTimeout: 180_000 },
-      // Caddy phục vụ out/index.html tại /. Dev cần trỏ / tới file tĩnh tương ứng.
+      // Caddy phục vụ out/index.html tại / và out/workstation.html tại /workstation (try_files {path}.html). Dev cần trỏ tới file tĩnh tương ứng.
       rewrites: async () => [
         { source: '/', destination: '/index.html' },
+        { source: '/workstation', destination: '/workstation.html' },
         ...backend.map((source) => ({ source, destination: `${api}${source}` })),
       ],
     };
