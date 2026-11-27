@@ -79,3 +79,10 @@ def test_mock_all_nodes_runs_without_human(set_env, client):
         run = c.post("/api/v1/agent/runs", json={"request": "gì cũng được"}).json()
     assert run["status"] == "approved"
     assert run["source"] == "mock"
+
+
+def test_run_usage_zero_without_llm_and_404_for_unknown(client):
+    run = _say(client, "Ý tưởng thô, chưa hỏi ai cả.")
+    usage = client.get(f"/api/v1/agent/runs/{run['id']}/usage").json()
+    assert usage == {"calls": 0, "input_tokens": 0, "output_tokens": 0, "cost_usd": 0.0, "models": []}
+    assert client.get("/api/v1/agent/runs/khong-co/usage").status_code == 404

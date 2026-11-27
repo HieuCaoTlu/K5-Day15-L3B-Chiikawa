@@ -6,8 +6,8 @@ from sqlalchemy.orm import Session
 
 from app.agent import service
 from app.db import get_session
-from app.models import AgentRun
-from app.schemas import ReviewIn, RunCreate, RunOut
+from app.models import AgentRun, LlmCall
+from app.schemas import ReviewIn, RunCreate, RunOut, RunUsageOut
 
 router = APIRouter(prefix="/agent", tags=["agent"])
 
@@ -35,6 +35,21 @@ def get_run(run_id: str, session: Session = Depends(get_session)):
     if run is None:
         raise HTTPException(404, "Không tìm thấy lượt chạy")
     return run
+
+
+@router.get("/runs/{run_id}/usage", response_model=RunUsageOut)
+def run_usage(run_id: str, session: Session = Depends(get_session)):
+    """Token và chi phí của một lượt chạy: cộng các lượt gọi LLM ghi trong llm_calls."""
+    if session.get(AgentRun, run_id) is None:
+        raise HTTPException(404, "Không tìm thấy lượt chạy")
+    calls = session.scalars(select(LlmCall).where(LlmCall.run_id == run_id, LlmCall.ok.is_(True))).all()
+    return RunUsageOut(
+        calls=len(calls),
+        input_tokens=sum(c.input_tokens for c in calls),
+        output_tokens=sum(c.output_tokens for c in calls),
+        cost_usd=round(sum(c.cost_usd for c in calls), 6),
+        models=sorted({c.model for c in calls}),
+    )
 
 
 @router.post("/runs/{run_id}/review", response_model=RunOut)

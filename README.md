@@ -62,6 +62,7 @@ Chốt trước khi code, sửa ở đây khi đổi (FE đọc chi tiết ở `
 | POST | `/api/v1/agent/runs` | `{request, session_id?}` | `Run` — `status`: `waiting_review` \| `blocked` \| `error` |
 | GET | `/api/v1/agent/runs?status=` | — | `Run[]` (50 mới nhất) |
 | GET | `/api/v1/agent/runs/{id}` | — | `Run` |
+| GET | `/api/v1/agent/runs/{id}/usage` | — | `{calls, input_tokens, output_tokens, cost_usd, models[]}` (cộng từ `llm_calls`; khung `python run.py` dùng để đo token) |
 | POST | `/api/v1/agent/runs/{id}/review` | `{approved, note?}` | `Run` — `approved` \| `rejected`; không chờ duyệt → 409 |
 | GET | `/api/v1/admin/stats` | — | số lượt chạy theo trạng thái/nguồn, tỉ lệ duyệt, số phiên |
 | GET | `/api/v1/admin/usage?days=7` | — | token, chi phí theo ngày/model/node, lượt gọi gần nhất, ngân sách hôm nay |

@@ -32,6 +32,16 @@ class ReviewIn(BaseModel):
 RunStatus = Literal["running", "blocked", "needs_info", "waiting_review", "approved", "rejected", "error"]
 
 
+class RunUsageOut(BaseModel):
+    """Token và chi phí của một lượt chạy (cộng từ bảng llm_calls). Khung `python run.py` dùng để đo."""
+
+    calls: int
+    input_tokens: int
+    output_tokens: int
+    cost_usd: float
+    models: list[str]
+
+
 class RunOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
