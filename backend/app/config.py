@@ -14,10 +14,21 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:3000"
     seed_on_start: bool = True
 
+    # LLM provider: "auto" (mặc định) | "gemini" | "openrouter".
+    # auto: có GOOGLE_API_KEY thì dùng Gemini, chỉ có OPENROUTER_API_KEY thì dùng OpenRouter.
+    llm_provider: str = "auto"
+
     # Gemini: Flash cho hầu hết bước, Pro chỉ cho bước suy luận khó. Trống key → luật dự phòng (mock-first).
     google_api_key: str = ""
     gemini_model_fast: str = "gemini-2.5-flash"
     gemini_model_pro: str = "gemini-2.5-pro"
+
+    # OpenRouter: dùng khi LLM_PROVIDER=openrouter. Trống key → luật dự phòng.
+    openrouter_api_key: str = ""
+    openrouter_base_url: str = "https://openrouter.ai/api/v1"
+    openrouter_model_fast: str = "google/gemini-3.5-flash-lite"
+    openrouter_model_pro: str = "google/gemini-3.5-flash-lite"
+
     llm_timeout_seconds: float = 30
 
     # Chi phí: giá USD / 1 triệu token (kiểm tra lại bảng giá Gemini trước khi pitch số liệu).
@@ -57,6 +68,16 @@ class Settings(BaseSettings):
     @property
     def planning_demo_enabled(self) -> bool:
         return self.app_env != "production" or self.demo_mode
+
+    @property
+    def active_llm_provider(self) -> str:
+        """Provider thực sự dùng: giá trị LLM_PROVIDER, hoặc tự chọn theo key có sẵn khi là auto."""
+        p = self.llm_provider.strip().lower()
+        if p in ("gemini", "openrouter"):
+            return p
+        if not self.google_api_key and self.openrouter_api_key:
+            return "openrouter"
+        return "gemini"
 
     @property
     def is_postgres(self) -> bool:

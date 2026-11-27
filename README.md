@@ -30,7 +30,7 @@ docker compose up -d --build --wait
 | Admin (tổng quan, chi phí & token, phiên chat, hàng chờ duyệt) | http://localhost/admin |
 | API docs (OpenAPI) | http://localhost/docs |
 
-Muốn dùng Gemini thật: điền `GOOGLE_API_KEY` trong `.env` rồi `docker compose up -d` lại. Cổng 80 bận: đặt `HTTP_PORT=8088`.
+Muốn dùng Gemini thật: điền `GOOGLE_API_KEY` trong `.env` rồi `docker compose up -d` lại. Muốn dùng qua OpenRouter: điền `OPENROUTER_API_KEY` trong `.env` (khi không có `GOOGLE_API_KEY`, backend tự chọn OpenRouter). Cổng 80 bận: đặt `HTTP_PORT=8088`.
 
 ### Planning
 

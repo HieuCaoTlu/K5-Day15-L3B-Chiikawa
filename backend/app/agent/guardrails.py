@@ -6,14 +6,21 @@
 """
 
 import re
+import unicodedata
 
 from app.agent.state import Proposal
 
 INJECTION = re.compile(
     r"(ignore|disregard|forget)\s+(all\s+|any\s+)?(the\s+)?(previous|prior|above|earlier)\s+(instructions?|prompts?|rules?)"
     r"|bỏ\s+qua\s+(mọi|tất\s+cả|các|những)?\s*(hướng\s+dẫn|chỉ\s+dẫn|quy\s+tắc|lệnh)"
-    r"|system\s+prompt|you\s+are\s+now|jailbreak|developer\s+mode|\bDAN\b"
+    r"|you\s+are\s+now|(?:show|print|reveal|output|tiết\s+lộ)\s+(?:me\s+)?(?:the\s+|your\s+)?system\s+prompt"
     r"|<\s*/?\s*(system|assistant)\s*>",
+    re.IGNORECASE,
+)
+INJECTION_KEYWORDS = re.compile(r"system\s+prompt|jailbreak|developer\s+mode|\bDAN\b", re.IGNORECASE)
+INTERVIEW_QUOTE = re.compile(
+    r"\b(?:nói(?:\s+(?:rằng|thẳng))?|kể(?:\s+lại)?|trả\s+lời|cho\s+biết|said|replied)"
+    r'\s*:\s*(?:"[^"\n]+"|“[^”\n]+”)',
     re.IGNORECASE,
 )
 
@@ -25,7 +32,8 @@ def check_input(text: str, max_chars: int) -> str | None:
         return "Yêu cầu trống"
     if len(stripped) > max_chars:
         return f"Yêu cầu dài quá {max_chars} ký tự"
-    if INJECTION.search(stripped):
+    normalized = unicodedata.normalize("NFC", stripped)
+    if INJECTION.search(normalized) or INJECTION_KEYWORDS.search(INTERVIEW_QUOTE.sub(" ", normalized)):
         return "Yêu cầu có dấu hiệu prompt injection"
     return None
 

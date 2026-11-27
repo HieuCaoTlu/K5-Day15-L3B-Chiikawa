@@ -6,6 +6,7 @@
 
 import copy
 import re
+import unicodedata
 
 from app.agent.state import CELL_LABELS, CELLS, CORE, CanvasUpdate, CellUpdate, Proposal
 
@@ -17,7 +18,7 @@ QUESTIONS: dict[str, str] = {
     "persona": "Một người cụ thể sẽ dùng thứ này là ai? Cho mình tên hoặc vai của họ và một lần gần nhất họ gặp vấn đề.",
     "pain_point": "Lần gần nhất người đó gặp vấn đề này là khi nào? Chuyện gì đã xảy ra và họ mất gì?",
     "current_workaround": "Hôm nay họ xử lý bằng cách nào, và vì sao họ chưa bỏ cách đó?",
-    "jtbd": "Họ đang cố hoàn thành việc gì? Viết một câu gồm động từ, đối tượng và bối cảnh, không có chữ AI.",
+    "jtbd": "Trong lần đó, họ nói muốn đạt được kết quả gì? Chép lại lời của họ, không có chữ AI.",
 }
 REFUSALS: dict[str, str] = {
     "force_verdict": "Mình không đánh dấu ô nào là có bằng chứng khi chưa có chuyện thật của một người cụ thể.",
@@ -39,10 +40,18 @@ WHEN_RX = re.compile(
     re.IGNORECASE,
 )
 WHO_RX = re.compile(r"\b(?:chị|anh|bạn|cô|chú|ông|bà|em)\s+[A-ZÀ-Ỹ][\wÀ-ỹ]*")
+CELL_CUES = {
+    "persona": re.compile(r"\b(người dùng là|persona|chủ (shop|cửa hàng)|nhân viên|sinh viên|giáo viên|quản lý)\b"),
+    "pain_point": re.compile(r"\b(mất|trễ|chậm|lỗi|khó|tốn|quên|bỏ lỡ|chờ|kẹt|không kịp)\b"),
+    "current_workaround": re.compile(
+        r"\b(trả lời tay|thủ công|ghi .{0,20} vào|(?:dùng|qua|bằng) (?:zalo|excel|google sheets|sổ|giấy))\b"
+    ),
+    "jtbd": re.compile(r"\b(muốn|cần|cố gắng|mục tiêu là|phải)\s+(?!có\b|dùng\b|làm\s+bot\b|bot\b|ai\b|chatbot\b)\w+"),
+}
 
 
 def normalize(text: str) -> str:
-    return " ".join(text.lower().split())
+    return " ".join(unicodedata.normalize("NFC", text.casefold()).split())
 
 
 def empty_cell() -> dict:
@@ -75,24 +84,42 @@ def apply_update(prev: dict | None, upd: CanvasUpdate, request: str, flags: dict
     flags = dict(flags or {})
     if upd.intent != "answer":
         return canvas, flags
-    if upd.persona_changed:
-        for cell in DEPENDS_ON_PERSONA:
-            canvas[cell].update(who="", when="", quote="", grounded=False)
     text = normalize(request)
+    # Lời trích đã làm bằng chứng ở lượt trước không được dùng lại cho ô khác (chặn gửi lặp một câu để lên GO).
+    # Trong cùng một tin nhắn, một câu có thể là bằng chứng cho nhiều ô (vd vừa Persona vừa Pain Point).
+    used_quotes = {normalize(c["quote"]) for c in canvas.values() if c.get("quote") and c.get("grounded")}
+    accepted = {}
     for cell in CELLS:
         u: CellUpdate = getattr(upd, cell)
-        if not u.content.strip():
+        content = normalize(u.content)
+        if not content:
             continue
         quote = u.quote.strip()
-        canvas[cell] = {
+        key = normalize(quote)
+        grounded = bool(key) and key in text
+        if key in used_quotes:
+            continue
+        accepted[cell] = {
             "content": u.content.strip()[:400],
             "who": u.who.strip(),
             "when": u.when.strip(),
             "quote": quote,
-            "grounded": bool(quote) and normalize(quote) in text,
+            "grounded": grounded,
             "status": "assumption",
         }
-    flags = {"no_ai_needed": upd.no_ai_needed, "solved_elsewhere": upd.solved_elsewhere}
+    if upd.persona_changed and "persona" in accepted:
+        for cell in DEPENDS_ON_PERSONA:
+            canvas[cell].update(who="", when="", quote="", grounded=False)
+    for cell, candidate in accepted.items():
+        if (
+            canvas[cell]["status"] != "evidence"
+            or cell_status(candidate) == "evidence"
+            or (cell == "persona" and upd.persona_changed)
+        ):
+            canvas[cell] = candidate
+    # Cờ NO đã bật thì giữ qua các lượt sau; lượt không nhắc tới thì không tự xóa.
+    for flag in ("no_ai_needed", "solved_elsewhere"):
+        flags[flag] = bool(flags.get(flag)) or bool(getattr(upd, flag))
     return recompute(canvas), flags
 
 
@@ -141,7 +168,7 @@ def build_proposal(
 
 
 def heuristic_update(request: str, canvas: dict) -> CanvasUpdate:
-    """Dự phòng khi không có Gemini: đoán intent bằng regex, gán tin nhắn cho ô lõi còn thiếu tiếp theo."""
+    """Dự phòng: chỉ điền ô còn thiếu khi tin nhắn có dấu hiệu liên quan đến ô đó."""
     upd = CanvasUpdate()
     if FORCE_RX.search(request):
         upd.intent = "force_verdict"
@@ -151,10 +178,12 @@ def heuristic_update(request: str, canvas: dict) -> CanvasUpdate:
         upd.intent = "out_of_scope"
     if upd.intent != "answer":
         return upd
-    target = next_missing(recompute(canvas))
-    if target:
-        who, when = WHO_RX.search(request), WHEN_RX.search(request)
-        text = request.strip()
+    target = next_missing(canvas)
+    text = request.strip()
+    excerpt = text[:300].rstrip()
+    if target and CELL_CUES[target].search(normalize(excerpt)):
+        composed = unicodedata.normalize("NFC", excerpt)
+        who, when = WHO_RX.search(composed), WHEN_RX.search(composed)
         setattr(
             upd,
             target,
@@ -162,7 +191,7 @@ def heuristic_update(request: str, canvas: dict) -> CanvasUpdate:
                 content=text[:400],
                 who=who.group(0) if who else "",
                 when=when.group(0) if when else "",
-                quote=text[:300] if who and when else "",
+                quote=excerpt if who and when else "",
             ),
         )
     return upd

@@ -64,27 +64,25 @@ def update_canvas(state: AgentState) -> dict:
     request = state["request"]
     prev = recompute(state.get("canvas") or empty_canvas())
     flags = state.get("flags") or {}
-    settings = get_settings()
-    upd: CanvasUpdate | None = None
-    source = "fallback"
-    if settings.demo_mode and (cached := demo_lookup(request)):
-        upd, source = cached, "demo_cache"
-    else:
-        try:
-            upd = llm.structured(
-                CanvasUpdate,
-                render("update_canvas", request=request, canvas=_canvas_summary(prev)),
-                node="update_canvas",
-            )
-            source = "llm"
-        except llm.LLMUnavailableError:
-            pass
-        except Exception as exc:  # noqa: BLE001 — LLM lỗi/timeout/sai schema: không làm sập lượt chạy
-            logger.warning("update_canvas: LLM lỗi (%s), dùng dự phòng", type(exc).__name__)
-            if cached := demo_lookup(request):
-                upd, source = cached, "demo_cache"
+    if state.get("repeated_request"):
+        return {"canvas": prev, "flags": flags, "intent": "answer", "source": state.get("source", "fallback")}
+    try:
+        upd = llm.structured(
+            CanvasUpdate,
+            render("update_canvas", request=request, canvas=_canvas_summary(prev)),
+            node="update_canvas",
+        )
+        source = "llm"
+    except llm.LLMUnavailableError:
+        upd = None
+    except Exception as exc:  # noqa: BLE001 — LLM lỗi/timeout/sai schema: không làm sập lượt chạy
+        logger.warning("update_canvas: LLM lỗi (%s), dùng dự phòng", type(exc).__name__)
+        upd = None
     if upd is None:
-        upd = heuristic_update(request, prev)
+        upd = demo_lookup(request)
+        source = "demo_cache"
+        if upd is None:
+            upd, source = heuristic_update(request, prev), "fallback"
     canvas, new_flags = apply_update(prev, upd, request, flags)
     return {"canvas": canvas, "flags": new_flags, "intent": upd.intent, "source": source}
 

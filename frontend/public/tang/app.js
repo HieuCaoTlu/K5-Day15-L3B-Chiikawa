@@ -1134,7 +1134,7 @@
   const VERDICT = { GO: 'var(--green)', 'NOT YET': 'var(--orange)', NO: 'var(--red)' };
   async function api(path, opts) {
     const res = await fetch(API + path, Object.assign({ headers: { 'Content-Type': 'application/json' } }, opts));
-    if (!res.ok) throw new Error('HTTP ' + res.status);
+    if (!res.ok) throw Object.assign(new Error('HTTP ' + res.status), { status: res.status });
     return res.json();
   }
   function syncScore(canvas) {
@@ -1159,7 +1159,12 @@
     if (status === 'waiting_review') actions = `${btn('think-approve', 'Duyệt Canvas', 'tone small', 'style="--c:var(--green)"')}${btn('think-reject', 'Chưa duyệt', 'soft small')}`;
     if (status === 'approved') actions = '<span class="tag" style="--c:var(--green)">Đã duyệt</span>';
     if (status === 'rejected') actions = '<span class="tag" style="--c:var(--orange)">Chưa duyệt, cần bổ sung</span>';
-    const src = run && run.source === 'fallback' ? '<span class="tag" style="--c:var(--orange)" title="Chưa có GOOGLE_API_KEY hoặc Gemini lỗi, agent dùng luật dự phòng">Chế độ dự phòng</span>' : run && run.source === 'mock' ? '<span class="tag">Dữ liệu mẫu</span>' : '';
+    const sources = {
+      fallback: '<span class="tag" style="--c:var(--orange)">Luật dự phòng</span>',
+      demo_cache: '<span class="tag">Kết quả mẫu có sẵn</span>',
+      mock: '<span class="tag">Dữ liệu mẫu</span>'
+    };
+    const src = sources[run && run.source] || '';
     $('#tkEval').innerHTML = p
       ? `<div class="tk-head"><h3>Đánh giá của agent</h3><span class="tk-verdict" style="--c:${VERDICT[p.verdict] || 'var(--mute)'}">${esc(p.verdict)}</span>${src}</div>
          <ul class="tk-reasons">${(p.reasons || []).map(r => `<li>${esc(r)}</li>`).join('')}</ul><div class="tk-actions">${actions}</div>`
@@ -1173,15 +1178,29 @@
     if (send) send.disabled = tk.busy;
     if (scrollEnd) box.scrollTop = box.scrollHeight;
   }
-  async function thinkLoad() {
+  function thinkApplyRun(run) {
+    tk.run = run;
+    if (run && run.proposal) syncScore(run.proposal.canvas);
+    const handoff = !!(run && run.status === 'approved' && run.result && run.result.handoff === 'planning');
+    if (Boolean(S.done.product) !== handoff) {
+      S.done.product = handoff;
+      save('done');
+    }
+  }
+  async function thinkLoad(refresh = false) {
+    const session = local.think.session, current = tk.run;
     try {
-      const runs = await api(`/runs?session_id=${encodeURIComponent(local.think.session)}`);
-      tk.run = runs.find(r => r.proposal && r.proposal.canvas) || null;
+      const runs = await api(`/runs?session_id=${encodeURIComponent(session)}&has_canvas=true`);
+      if (local.think.session !== session || tk.run !== current || (!refresh && tk.busy)) return;
+      thinkApplyRun(runs[0] || null);
       tk.offline = false;
-      if (tk.run) syncScore(tk.run.proposal.canvas);
-    } catch (e) { tk.offline = true; }
+    } catch (e) {
+      if (local.think.session !== session) return;
+      tk.offline = true;
+    }
     renderThink(true);
     syncProgress();
+    renderNav();
   }
   function thinkMount() {
     renderThink(true);
@@ -1195,38 +1214,51 @@
     t.msgs = t.msgs.slice(-60);
     tk.busy = true; persist(); renderThink(true);
     try {
-      if (tk.run && tk.run.status === 'waiting_review') {
-        await api(`/runs/${tk.run.id}/review`, { method: 'POST', body: JSON.stringify({ approved: false, note: 'Trưởng nhóm tiếp tục trao đổi' }) });
-      }
       const run = await api('/runs', { method: 'POST', body: JSON.stringify({ request: text, session_id: t.session }) });
+      if (local.think !== t) return;
       tk.offline = false;
       if (run.status === 'blocked') {
         t.msgs.push({ who: 'agent', text: 'Mình không xử lý tin nhắn này: ' + ((run.result || {}).reason || 'bị chặn') + '.' });
-      } else {
-        tk.run = run;
+        await thinkLoad(true);
+      } else if (run.proposal && run.proposal.canvas) {
+        thinkApplyRun(run);
         t.msgs.push({ who: 'agent', text: run.proposal.reply });
-        syncScore(run.proposal.canvas);
-        if (S.done.product) { S.done.product = false; save('done'); }
+      } else {
+        t.msgs.push({ who: 'agent', text: 'Chưa xử lý được tin nhắn. Bạn thử gửi lại nhé.' });
       }
     } catch (e) {
       tk.offline = true;
       t.msgs.push({ who: 'agent', text: 'Chưa kết nối được backend. Hãy chạy backend (cd backend, uv run uvicorn app.main:app --port 8000) rồi gửi lại.' });
     }
-    tk.busy = false; persist(); renderThink(true); syncProgress();
+    tk.busy = false; persist(); renderThink(true); syncProgress(); renderNav();
   }
   async function thinkReview(approved) {
     if (!tk.run || tk.busy) return;
     tk.busy = true; renderThink();
     try {
       const run = await api(`/runs/${tk.run.id}/review`, { method: 'POST', body: JSON.stringify({ approved, note: approved ? 'Trưởng nhóm duyệt Canvas' : 'Trưởng nhóm chưa duyệt, cần bổ sung' }) });
-      tk.run = run;
-      const handoff = approved && run.result && run.result.handoff === 'planning';
-      if (handoff) { S.done.product = true; save('done'); toast('Đã duyệt Canvas. Bước Planning đã mở.'); }
-      local.think.msgs.push({ who: 'agent', text: handoff ? 'Đã duyệt Canvas. Bạn có thể sang bước Planning.' : approved ? 'Đã ghi nhận kết luận. Canvas chưa đủ điều kiện sang Planning.' : 'Đã ghi nhận chưa duyệt. Bạn kể thêm để mình hỏi tiếp nhé.' });
-    } catch (e) { toast('Chưa gửi được quyết định duyệt. Kiểm tra backend.'); }
+      if (run.status === 'approved' || run.status === 'rejected') {
+        thinkApplyRun(run);
+        const handoff = run.result && run.result.handoff === 'planning';
+        if (handoff) toast('Đã duyệt Canvas. Bước Planning đã mở.');
+        local.think.msgs.push({ who: 'agent', text: handoff ? 'Đã duyệt Canvas. Bạn có thể sang bước Planning.' : run.status === 'approved' ? 'Đã ghi nhận kết luận. Canvas chưa đủ điều kiện sang Planning.' : 'Đã ghi nhận chưa duyệt. Bạn kể thêm để mình hỏi tiếp nhé.' });
+      } else {
+        await thinkLoad(true);
+        toast('Chưa lưu được quyết định duyệt. Bạn thử lại nhé.');
+      }
+    } catch (e) {
+      if (e.status === 409) {
+        tk.run = null;
+        await thinkLoad(true);
+        toast('Lượt này không còn chờ duyệt. Hãy xem trạng thái Canvas mới nhất.');
+      } else {
+        toast('Chưa gửi được quyết định duyệt. Bạn thử lại nhé.');
+      }
+    }
     tk.busy = false; persist(); renderThink(true); syncProgress(); renderNav();
   }
   function thinkReset() {
+    if (tk.busy) return;
     local.think = { session: 'th-' + Math.random().toString(36).slice(2, 10), msgs: [] };
     tk.run = null; tk.loaded = true;
     S.done.product = false; save('done'); persist();

@@ -17,7 +17,7 @@
 | Luồng hệ thống, agent graph, bảng DB, thư mục | [ARCHITECTURE.md](ARCHITECTURE.md) |
 | Hợp đồng API + schema DB (FE ↔ BE) | [README.md](README.md#hợp-đồng-api) · OpenAPI ở `/docs` |
 | Thêm/sửa agent node | `backend/app/agent/` + mục "Thêm agent node" bên dưới |
-| Prompt | `backend/prompts/*.md` (`{{placeholder}}`) — KHÔNG viết prompt dài trong Python |
+| Prompt | `backend/prompts/*.md` (`{{placeholder}}`) — KHÔNG viết prompt dài trong Python. Ngoại lệ theo yêu cầu PO: prompt của node `update_canvas` nằm ở `backend/app/agent/prompt_update_canvas.py` |
 | Deploy, VPS | [deploy/README.md](deploy/README.md) |
 | Biến môi trường | [.env.example](.env.example) (mọi biến có chú thích) |
 | Quy trình nhánh / PR | [CONTRIBUTING.md](CONTRIBUTING.md) |
@@ -77,7 +77,7 @@ frontend/app/components.css  lớp d-* và nền tảng component Next.js
 1. Thêm field vào `AgentState` (`state.py`); output LLM → thêm schema Pydantic.
 2. Viết **`agent/mocks/<node>.json` TRƯỚC** (`input` = state vào, `output` = phần state trả ra). Đây là hợp đồng giữa
    các node — người làm node sau/UI dùng `MOCK_NODES=<node>` để chạy mà không chờ bạn.
-3. Viết node trong `nodes.py`, bọc `@mockable("<node>")`; prompt ở `backend/prompts/<node>.md`.
+3. Viết node trong `nodes.py`, bọc `@mockable("<node>")`; prompt ở `backend/prompts/<node>.md` (riêng `update_canvas` ở `app/agent/prompt_update_canvas.py`).
 4. Nối vào `graph.py`; nếu node hiện ra UI thì sửa `AGENT_STEPS` trong `frontend/components/chat/gemini.tsx`.
 5. Test trong `backend/tests/agent/test_nodes.py`: chạy node thật với `mock["input"]`, so với `mock["output"]`
    (node có LLM: kiểm tra schema + nhánh dự phòng). `test_every_node_has_mock` sẽ đỏ nếu thiếu mock.
