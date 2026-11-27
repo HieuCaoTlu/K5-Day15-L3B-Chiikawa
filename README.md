@@ -1,8 +1,8 @@
-# Tên sản phẩm
+# Tầng
 
-> Một câu: ai dùng, nỗi đau gì, agent giải quyết thế nào. *(Điền sau khi chốt đề tài.)*
+> Không gian làm việc cho đội xây sản phẩm AI, từ bàn ý tưởng đến vận hành.
 
-Dùng thử: <https://app.ten-mien.com> · Nhóm: [thành viên](#thành-viên)
+Dùng thử: <https://estatesmart.site/> · Nhóm: [thành viên](#thành-viên)
 
 ## Thành viên
 
@@ -24,7 +24,7 @@ docker compose up -d --build --wait
 
 | Trang | Địa chỉ |
 |---|---|
-| Landing | http://localhost |
+| Trang giới thiệu và workstation Tầng | http://localhost |
 | Chat (agent + duyệt đề xuất) | http://localhost/chat |
 | Admin (tổng quan, chi phí & token, phiên chat, hàng chờ duyệt) | http://localhost/admin |
 | API docs (OpenAPI) | http://localhost/docs |
@@ -90,7 +90,7 @@ make eval         # backend/eval/cases.json → "agent đúng X%"
 
 ```
 backend/     FastAPI + LangGraph (app/agent: graph, nodes, mocks, llm, guardrails) · tests · eval · prompts
-frontend/    Next.js: landing, chat, admin · components/kit (bộ component nhóm) · globals.css (token)
+frontend/    public/ (trang giới thiệu và workstation Tầng) · Next.js (chat, admin) · components/kit (bộ component nhóm) · globals.css (token)
 deploy/      Caddyfile · deploy.sh · bootstrap-vps.sh · README (hướng dẫn VPS + secrets cho GitHub Actions)
 .github/     workflows/ci-cd.yml · PR template
 ```

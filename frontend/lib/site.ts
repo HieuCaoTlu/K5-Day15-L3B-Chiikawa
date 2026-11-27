@@ -1,8 +1,8 @@
-// Đổi tên sản phẩm / mô tả ở MỘT chỗ này.
+// Tên và mô tả dùng trong các trang Next.js.
 export const SITE = {
-  name: 'Tên sản phẩm',
-  title: 'Tên sản phẩm — một câu nói rõ giá trị',
-  description: 'Một câu mô tả: ai dùng, nỗi đau gì, agent giải quyết thế nào.',
+  name: 'Tầng',
+  title: 'Tầng — từ Engineer thành AI Builder',
+  description: 'Không gian làm việc cho đội xây sản phẩm AI, từ bàn ý tưởng đến vận hành.',
 };
 
 export const SITE_URL = process.env.SITE_URL || 'http://localhost:3000';
