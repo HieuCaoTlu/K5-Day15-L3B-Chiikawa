@@ -39,6 +39,14 @@ chmod 600 /opt/hackathon/app/.env
 
 Trỏ bản ghi A của tên miền về IP VPS (Cloudflare: để **DNS only** lúc đầu cho Caddy xin chứng chỉ, sau đó mới bật proxy và đặt SSL mode = Full).
 
+Kết nối GitHub cho Planning làm trên web, không cần thêm biến nào. Khi bấm **Kết nối GitHub**, Planning hỏi mã cài đặt; lấy trên VPS:
+
+```bash
+cd /opt/hackathon/app && docker compose logs backend | grep "Mã cài đặt" | tail -1
+```
+
+Sao lưu volume `appdata` cùng database: mất `planning.key` thì phải kết nối GitHub lại.
+
 ## 3. Cho GitHub Actions SSH vào VPS
 
 Tạo một key **chỉ được chạy `deploy.sh`** (không mở shell). Trên VPS:

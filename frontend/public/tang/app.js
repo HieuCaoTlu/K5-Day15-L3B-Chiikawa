@@ -1,6 +1,6 @@
 /* Ứng dụng: điều hướng, bốn bước, agent, dữ liệu dùng chung và chuyển động. */
 (function () {
-  const { STEPS, FLOORS, CANVAS, CANVAS_TO_SCORE, SCORE, ROLES, STATUS, SAMPLE_SCORE, SEED, STACK, MONEY, FILES, AGENT, inDays, iso } = window.DATA;
+  const { STEPS, FLOORS, CANVAS, CANVAS_TO_SCORE, SCORE, ROLES, STATUS, SAMPLE_SCORE, SEED, AGENT, inDays, iso } = window.DATA;
   const { RULES, PROFIT, NAMES: HNAMES, LEVELS } = window.HEALTH;
   const $ = (s, p = document) => p.querySelector(s);
   const $$ = (s, p = document) => [...p.querySelectorAll(s)];
@@ -168,6 +168,475 @@
   const options = (sel, empty = 'Chưa giao') => `<option value="">${empty}</option>` +
     S.meta.members.map(m => `<option value="${esc(m.id)}" ${m.id === sel ? 'selected' : ''}>${esc(m.name)}</option>`).join('');
 
+  /* ---------- Planning: dữ liệu thật từ server ---------- */
+  const PLANNING_API = '/api/v1/planning';
+  const TONES = ['var(--green)', 'var(--indigo)', 'var(--orange)', 'var(--blue)'];
+
+  // live: undefined = đang tải, null = chưa đọc được, object = trả lời của GET /state
+  let live, boardPending = 0, boardStale = false, boardRound = 0, boardQueue = Promise.resolve(), boardStatus = '';
+
+  const joined = () => Boolean(live && live.role && live.board);
+  const canEdit = () => joined() && live.role === 'leader';
+  const liveTasks = () => (live && live.sprints ? live.sprints.flatMap(sprint => sprint.tasks) : []);
+  let draggedTask = null;
+  const editingBoard = () => {
+    const a = document.activeElement;
+    return draggedTask !== null || Boolean(a && a.dataset && a.dataset.live && /INPUT|TEXTAREA|SELECT/.test(a.tagName));
+  };
+
+  async function loadPlanning(force = false) {
+    // Đang gõ hoặc đang lưu thì chưa thay dữ liệu: bản lưu dựa trên phiên bản cũ sẽ được server từ chối.
+    if (!force && (boardPending || editingBoard())) { boardStale = true; return; }
+    let next = null;
+    try {
+      const response = await fetch(PLANNING_API + '/state', { cache: 'no-store' });
+      if (response.ok) next = await response.json();
+    } catch (e) { /* chưa kết nối được server */ }
+    if (!force && (boardPending || editingBoard())) { boardStale = true; return; }
+    boardStale = false;
+    if (next === null && live) return;
+    const same = live && next && live.profile && next.profile && live.profile.github_id === next.profile.github_id;
+    const view_ = value => JSON.stringify(value && [value.profile, value.role, value.members, value.repo, value.sprints, value.webhook, value.push_key, value.push_registered]);
+    const changed = force || live === undefined || view_(live) !== view_(next);
+    if (!same) { boardStatus = ''; boardRound++; }
+    const wasJoined = joined(), hadState = Boolean(live);
+    live = next;
+    // Vừa lập hoặc vào đội ngay trên trang thì giữ phần thiết lập đang mở để làm tiếp bước chọn repo.
+    if (hadState && !wasJoined && joined()) planningOpen = true;
+    if (!joined()) planningOpen = false;
+    updatePlanningPanel(tab === 'planning');
+    if (!changed) return;
+    drawPlanning();
+    syncProgress();
+  }
+
+  function drawPlanning() {
+    if (tab !== 'planning') return;
+    // Vẽ lại không được đưa trang hay các cột Task về đầu.
+    const y = view.scrollTop, x = $('.board', viewContent)?.scrollLeft || 0;
+    const columns = $$('[data-col]', viewContent).map(column => [column.dataset.col, $('.col-list', column).scrollTop]);
+    viewContent.innerHTML = views.planning();
+    fitBoard(); // đặt chiều cao trước khi trả lại vị trí cuộn của cột
+    view.scrollTop = y;
+    columns.forEach(([key, top]) => {
+      const list = $(`[data-col="${key}"] .col-list`, viewContent);
+      if (list) list.scrollTop = top;
+    });
+    const board = $('.board', viewContent);
+    if (board) board.scrollLeft = x;
+  }
+
+  // Máy tính: bảng Task cao vừa hết màn hình. Điện thoại giữ chiều cao mặc định trong CSS.
+  function fitBoard() {
+    const board = $('.board', viewContent), list = board && $('.col-list', board);
+    if (!list) return;
+    if (mobile.matches) { board.style.removeProperty('--col-h'); return; }
+    // offsetTop bỏ qua transform, nên đo đúng cả khi nội dung đang chạy hiệu ứng.
+    let top = 0;
+    for (let el = list; el && el !== view; el = el.offsetParent) top += el.offsetTop;
+    // Phần còn lại của card dưới danh sách thẻ. Hai mép cùng nằm trong một card nên hiệu ứng không làm lệch.
+    const below = board.closest('.panel').getBoundingClientRect().bottom - list.getBoundingClientRect().bottom;
+    const space = view.clientHeight - top - below - parseFloat(getComputedStyle(view).paddingBottom);
+    board.style.setProperty('--col-h', Math.max(320, Math.floor(space)) + 'px');
+  }
+
+  function setBoardStatus(text) {
+    boardStatus = text;
+    const box = $('#boardStatus');
+    if (box) box.textContent = text;
+  }
+
+  function editTask(field) {
+    if (!canEdit()) return;
+    const kind = field.dataset.live, id = +field.dataset.id, value = field.value;
+    field.blur();
+    if (kind === 'task-owner') saveTask(id, { assignee_id: value });
+    else if (kind === 'task-status') saveTask(id, { status: value });
+  }
+
+  // Màu và mô tả cột theo kiểu GitHub Projects.
+  const COLUMNS = {
+    todo: ['var(--green)', 'Chưa gửi review'],
+    review: ['var(--blue)', 'Chờ phản hồi và duyệt'],
+    done: ['var(--violet)', 'Đã hoàn thành']
+  };
+  // Bảng không có cột Đang làm: task đang làm (như PR nháp) nằm ở Cần làm để không biến mất.
+  const columnOf = progress => (progress === 'doing' ? 'todo' : progress);
+  // Màu theo thứ tự sprint, trùng thứ tự màu ở danh sách sprint trong khung.
+  const SPRINT_TONES = ['var(--indigo)', 'var(--orange)', 'var(--violet)', 'var(--blue)', 'var(--red)', 'var(--green)', 'var(--yellow)'];
+  function sprintOf(id) {
+    const index = (live.sprints || []).findIndex(sprint => sprint.tasks.some(task => task.id === id));
+    return index < 0 ? null : { title: live.sprints[index].title, tone: SPRINT_TONES[index % SPRINT_TONES.length] };
+  }
+  const dueFormat = new Intl.DateTimeFormat('vi-VN', { day: 'numeric', month: 'numeric', timeZone: 'Asia/Ho_Chi_Minh' });
+
+  // Avatar thành viên chọn trong hồ sơ, vẽ bởi avatar.js giống hệt khung Planning.
+  let avatarCount = 0;
+  function personAvatar(person) {
+    if (!person) return '<span class="av" aria-hidden="true">?</span>';
+    const look = Number(person.avatar) || 0;
+    return `<span class="pl-avatar pl-person-${look}" aria-hidden="true">${window.TangAvatar.markup(look, `av${++avatarCount}`)}</span>`;
+  }
+
+  function taskCard(t, edit) {
+    const owner = live.members.find(m => m.github_id === t.assignee_id);
+    const repo = live.repo && live.repo.name ? live.repo.name.split('/').pop() + ' ' : '';
+    const mark = '<i class="ring" aria-hidden="true"></i>';
+    // Ô chọn trong suốt nằm trên biểu tượng: đổi cột và đổi người được bằng bàn phím hay chạm.
+    const move = edit ? `<span class="task-pick">${mark}<select data-live="task-status" data-id="${t.id}" aria-label="Chuyển cột ${esc(t.code)}" title="Chuyển cột">${Object.keys(COLUMNS).map(k => `<option value="${k}" ${k === columnOf(t.progress) ? 'selected' : ''}>${STATUS[k][0]}</option>`).join('')}</select></span>` : mark;
+    const who = owner ? owner.name : 'Chưa giao';
+    const face = edit ? `<span class="task-pick task-owner" title="Người làm: ${esc(who)}">${personAvatar(owner)}<select data-live="task-owner" data-id="${t.id}" aria-label="Người làm ${esc(t.code)}">${live.members.map(m => `<option value="${esc(m.github_id)}" ${m.github_id === t.assignee_id ? 'selected' : ''}>${esc(m.name)}</option>`).join('')}</select></span>`
+      : `<span class="task-owner" title="Người làm: ${esc(who)}" role="img" aria-label="Người làm: ${esc(who)}">${personAvatar(owner)}</span>`;
+    const pulls = (t.pulls || []).map(pr => {
+      const name = `PR #${pr.number}${pr.state === 'draft' ? ' nháp' : ''}`;
+      return pr.url ? `<a class="task-tag" href="${esc(pr.url)}" target="_blank" rel="noopener" draggable="false">${name}</a>` : `<span class="task-tag">${name}</span>`;
+    }).join('');
+    const sprint = sprintOf(t.id);
+    const sprintTag = sprint ? `<span class="task-tag task-sprint">${esc(sprint.title)}</span>` : '';
+    const late = t.progress !== 'done' && Date.parse(t.deadline) < Date.now();
+    return `<div class="task" ${sprint ? `style="--sp:${sprint.tone}"` : ''} ${edit ? `draggable="true" data-drag="${t.id}"` : ''}>
+      <div class="task-top">${move}<span class="task-ref" title="${esc(repo + t.code)}"><span>${esc(repo.trim())}</span><b>${esc(t.code)}</b></span>${face}</div>
+      <div class="task-title" role="button" tabindex="0" data-open-task="${t.id}" aria-haspopup="dialog" aria-label="Xem chi tiết ${esc(t.code)}: ${esc(t.title)}" title="${esc(t.title)}">${esc(t.title)}</div>
+      <div class="task-tags">${sprintTag}${pulls}<span class="task-tag ${late ? 'late' : ''}">${late ? 'Quá hạn' : 'Hạn'} ${dueFormat.format(new Date(t.deadline))}</span></div></div>`;
+  }
+
+  // Nút GitHub và chuông trên đầu trang mở hộp nhỏ, dùng chung <dialog> với chi tiết task.
+  const GITHUB_MARK = '<svg viewBox="0 0 16 16" width="20" height="20" aria-hidden="true" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0016 8c0-4.42-3.58-8-8-8Z"/></svg>';
+  const BELL = '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9a6 6 0 0 1 12 0c0 6 2.5 7 2.5 7h-17S6 15 6 9Z"/><path d="M10 19.5a2.2 2.2 0 0 0 4 0"/></svg>';
+  const supportsPush = () => window.isSecureContext && 'serviceWorker' in navigator && 'Notification' in window && 'PushManager' in window;
+  const notifyOn = () => supportsPush() && Notification.permission === 'granted' && Boolean(live && live.push_registered);
+
+  function headActions() {
+    const repoState = !live.repo ? ['off', 'chưa kết nối'] : live.repo.access ? ['ok', 'đang theo dõi'] : ['warn', 'cần cấp lại quyền'];
+    const icon = (act, label, mark, dot) => `<button type="button" class="head-icon" data-act="${act}" aria-label="${esc(label)}" title="${esc(label)}" aria-haspopup="dialog">${mark}<i class="head-dot ${dot}" aria-hidden="true"></i></button>`;
+    return `<div class="head-actions">${icon('repo-open', 'Repo GitHub: ' + repoState[1], GITHUB_MARK, repoState[0])}${icon('notify-open', notifyOn() ? 'Thông báo: đang bật' : 'Thông báo: đang tắt', BELL, notifyOn() ? 'ok' : 'off')}${btn('planning-live', 'Đội, sprint và PR', 'primary small', `aria-expanded="${planningOpen}" aria-controls="planningLive" aria-haspopup="dialog"`)}</div>`;
+  }
+
+  function openSheet(title, body) {
+    detail.innerHTML = `<div class="task-dialog-head"><h3 id="taskDialogTitle">${title}</h3><button type="button" class="btn soft small" data-close>Đóng</button></div>${body}`;
+    if (!detail.open) detail.showModal();
+  }
+
+  function openRepo() {
+    if (!joined()) return;
+    const repo = live.repo, leader = canEdit(), demo = Boolean(live.profile && live.profile.demo);
+    if (!repo) {
+      openSheet('Repo GitHub', `<p class="muted">${leader ? 'Chọn repo để đọc pull request và theo dõi task.' : 'Trưởng nhóm sẽ kết nối repo cho đội.'}</p>${leader ? `<div class="task-dialog-actions">${btn('planning-repo', 'Kết nối repo', 'primary small')}</div>` : ''}`);
+      return;
+    }
+    const state = repo.access ? '<span class="side-chip ok">Đang theo dõi</span>' : '<span class="side-chip warn">Cần cấp lại quyền</span>';
+    const name = repo.url ? `<a href="${esc(repo.url)}" target="_blank" rel="noopener">${esc(repo.name)}</a>` : esc(repo.name);
+    const note = repo.access && !live.webhook && !demo ? '<p class="muted">Chưa nhận được thông báo từ GitHub. Máy chủ Tầng tự đọc PR khoảng mỗi 60 giây.</p>' : '';
+    const actions = leader ? `<div class="task-dialog-actions">${btn('planning-repo', repo.access ? 'Đổi repo' : 'Cấp quyền lại', 'soft small')}${!demo && repo.access ? btn('repo-refresh', 'Đọc lại PR', 'soft small') : ''}</div><p class="muted" id="sheetMessage" role="status"></p>` : '';
+    openSheet('Repo GitHub', `<div class="side-name">${name}</div><p>${state} <span class="muted">Nhánh theo dõi · ${esc(repo.branch)}</span></p>${note}${actions}`);
+  }
+
+  function openNotify(message = '') {
+    if (!joined()) return;
+    let status, actions = '';
+    if (!supportsPush()) status = 'Trình duyệt này chưa hỗ trợ thông báo. Mở Tầng bằng HTTPS hoặc localhost trên Chrome, Edge hay Firefox.';
+    else if (!live.push_key) status = 'Máy chủ đang tắt thông báo trình duyệt.';
+    else if (Notification.permission === 'denied') status = 'Trình duyệt đang chặn thông báo của trang này. Bấm biểu tượng cạnh thanh địa chỉ, cho phép Thông báo, rồi tải lại trang.';
+    else if (notifyOn()) {
+      status = 'Đang bật trên trình duyệt này.';
+      actions = btn('notify-test', 'Gửi thử', 'primary small') + btn('notify-off', 'Tắt thông báo', 'soft small');
+    } else {
+      status = 'Đang tắt. Bấm Bật thông báo, rồi chọn Cho phép khi trình duyệt hỏi.';
+      actions = btn('notify-on', 'Bật thông báo', 'primary small');
+    }
+    openSheet('Thông báo', `<p>${status}</p><p class="muted">Bạn được nhắc khi task của mình còn tối đa 24 giờ và 1 giờ, kể cả khi đã đóng tab. Trình duyệt và máy chủ Tầng cần đang chạy.</p>${actions ? `<div class="task-dialog-actions">${actions}</div>` : ''}<p class="muted" id="sheetMessage" role="status">${esc(message)}</p>`);
+  }
+
+  async function pushRequest(path, method, data) {
+    const response = await fetch(PLANNING_API + path, {
+      method,
+      headers: { 'Content-Type': 'application/json', 'X-Planning-Request': '1' },
+      body: data === undefined ? undefined : JSON.stringify(data)
+    });
+    if (!response.ok) {
+      const body = await response.json().catch(() => null);
+      throw new Error(body && typeof body.detail === 'string' ? body.detail : 'Chưa cập nhật được thông báo. Thử lại.');
+    }
+  }
+
+  // Phạm vi /planning nên không dùng serviceWorker.ready (chỉ trả về worker đang điều khiển trang này).
+  async function pushRegistration() {
+    const registration = await navigator.serviceWorker.register('/planning-sw.js', { scope: '/planning' });
+    const worker = registration.installing || registration.waiting;
+    if (!registration.active && worker) {
+      await new Promise((resolve, reject) => {
+        worker.addEventListener('statechange', () => {
+          if (worker.state === 'activated') resolve();
+          if (worker.state === 'redundant') reject(new Error('Chưa cài được bộ nhận thông báo. Tải lại trang rồi thử lại.'));
+        });
+      });
+    }
+    return registration;
+  }
+
+  async function notifyAction(button, work, done) {
+    button.disabled = true;
+    let message = done;
+    try {
+      await work();
+    } catch (error) {
+      message = error instanceof TypeError ? 'Chưa kết nối được server.' : error.message;
+    }
+    await loadPlanning(true);
+    if (detail.open) openNotify(message);
+  }
+
+  function enableNotify(button) {
+    // Phải xin quyền ngay trong lượt bấm, trước mọi việc bất đồng bộ khác.
+    const asked = Notification.requestPermission();
+    notifyAction(button, async () => {
+      if (await asked !== 'granted') throw new Error('Bạn chưa cho phép thông báo.');
+      const key = Uint8Array.from(atob(live.push_key.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
+      const registration = await pushRegistration();
+      let subscription = await registration.pushManager.getSubscription();
+      const used = new Uint8Array((subscription && subscription.options.applicationServerKey) || new ArrayBuffer(0));
+      if (subscription && (used.length !== key.length || used.some((byte, i) => byte !== key[i]))) {
+        await subscription.unsubscribe();
+        subscription = null;
+      }
+      try {
+        subscription = subscription || await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
+      } catch (e) {
+        throw new Error('Trình duyệt chưa đăng ký được dịch vụ thông báo. Với Brave, bật dịch vụ đẩy của Google trong cài đặt quyền riêng tư.');
+      }
+      const { endpoint, keys } = subscription.toJSON();
+      await pushRequest('/push/subscription', 'POST', { endpoint, keys });
+    }, 'Đã bật. Bấm Gửi thử để kiểm tra.');
+  }
+
+  function disableNotify(button) {
+    notifyAction(button, async () => {
+      const registration = await navigator.serviceWorker.getRegistration('/planning');
+      const subscription = registration && await registration.pushManager.getSubscription();
+      await pushRequest('/push/subscription', 'DELETE', { endpoint: subscription ? subscription.endpoint : null });
+      if (subscription) await subscription.unsubscribe();
+    }, 'Đã tắt thông báo trên trình duyệt này.');
+  }
+
+  function testNotify(button) {
+    notifyAction(button, () => pushRequest('/push/test', 'POST'),
+      'Đã gửi. Chưa thấy thì kiểm tra cài đặt thông báo của hệ điều hành cho trình duyệt.');
+  }
+
+  async function refreshRepo(button) {
+    if (!canEdit() || !live.repo) return;
+    button.disabled = true;
+    try {
+      const response = await fetch(PLANNING_API + '/repo/refresh', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Planning-Request': '1' },
+        body: JSON.stringify({ repo_version: live.repo_version })
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        throw new Error(body && typeof body.detail === 'string' ? body.detail : 'Chưa đọc được PR. Thử lại.');
+      }
+      sheetMessage('Đã đọc lại PR gần đây.');
+      planningFrame.contentWindow?.postMessage({ type: 'tang:planning-reload' }, location.origin);
+    } catch (error) {
+      sheetMessage(error instanceof TypeError ? 'Chưa kết nối được server.' : error.message);
+    } finally {
+      button.disabled = false;
+      await loadPlanning(true);
+    }
+  }
+
+  function sheetMessage(text) {
+    const box = detail.open && $('#sheetMessage', detail);
+    if (box) box.textContent = text; else toast(text);
+  }
+
+  function taskBoard() {
+    const tasks = liveTasks(), edit = canEdit();
+    const columns = Object.entries(COLUMNS).map(([key, [tone, about]]) => {
+      const list = tasks.filter(t => columnOf(t.progress) === key);
+      const label = STATUS[key][0];
+      return `<div class="col" data-col="${key}" style="--s:${tone}"><div class="col-head"><h4><i class="ring" aria-hidden="true"></i>${label}<span class="count">${list.length}</span></h4><p>${about}</p></div><div class="col-list">${list.map(t => taskCard(t, edit)).join('')}</div></div>`;
+    }).join('');
+    const hint = tasks.length ? '' : `<p class="muted" style="margin-bottom:10px">Chưa có task. ${live.repo ? 'Bấm Đội, sprint và PR để lập kế hoạch sprint. Task hiện ở đây sau khi áp dụng.' : 'Bấm Đội, sprint và PR để kết nối repo và lập kế hoạch sprint.'}</p>`;
+    const rule = 'Trạng thái tự đổi khi có sự kiện pull request nhắc mã task' + (edit ? '. Bạn cũng có thể kéo thẻ sang cột khác' : '');
+    return `<div class="panel">${panelHead('Task', `<span class="muted">${rule}</span>`)}${hint}<div class="board">${columns}</div>${edit ? `<p class="muted" id="boardStatus" role="status">${esc(boardStatus)}</p>` : ''}</div>`;
+  }
+
+  function saveTask(id, change) {
+    const task = liveTasks().find(t => t.id === id);
+    if (!task) return;
+    const move = Boolean(change.status);
+    Object.assign(task, change, move ? { progress: change.status } : {});
+    const round = boardRound;
+    boardPending++;
+    boardStale = true; // đọc lại sau khi lưu để lấy trạng thái server tính từ pull request
+    setBoardStatus('Đang lưu…');
+    boardQueue = boardQueue.then(async () => {
+      if (round !== boardRound || !canEdit()) return;
+      const { title, description, criteria, deadline, assignee_id, status } = task;
+      const response = await fetch(`${PLANNING_API}/tasks/${id}${move ? '/status' : ''}`, {
+        method: move ? 'PUT' : 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'X-Planning-Request': '1' },
+        body: JSON.stringify(move ? { repo_version: live.repo_version, status: change.status }
+          : { repo_version: live.repo_version, task: { title, description, criteria, deadline, assignee_id, status } })
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        throw new Error(body && typeof body.detail === 'string' ? body.detail : 'Chưa lưu được task. Thử lại.');
+      }
+      setBoardStatus('Đã lưu');
+      planningFrame.contentWindow?.postMessage({ type: 'tang:planning-reload' }, location.origin);
+    }).catch(error => {
+      boardRound++;
+      const text = error instanceof TypeError ? 'Chưa kết nối được server. Thay đổi vừa rồi chưa được lưu.' : error.message;
+      setBoardStatus(text);
+      toast(text);
+    }).finally(() => {
+      boardPending--;
+      if (!boardPending) loadPlanning(true);
+    });
+    if (move) { drawPlanning(); syncProgress(); } // thẻ sang cột mới ngay, lỗi thì lần đọc lại sẽ trả về
+  }
+
+  /* Hộp chi tiết chỉ để xem; sửa task ở card Đội, sprint và PR. Dùng <dialog> để có sẵn Esc và giữ focus. */
+  const detail = document.createElement('dialog');
+  detail.className = 'task-dialog';
+  detail.setAttribute('aria-labelledby', 'taskDialogTitle');
+  document.body.append(detail);
+
+  function openTask(id) {
+    const t = liveTasks().find(task => task.id === id);
+    if (!t) return;
+    const owner = live.members.find(m => m.github_id === t.assignee_id);
+    const due = new Intl.DateTimeFormat('vi-VN', { day: 'numeric', month: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date(t.deadline));
+    const pulls = (t.pulls || []).map(pr => {
+      const name = `#${pr.number} ${esc(pr.title || '')}`;
+      return `<li>${pr.url ? `<a href="${esc(pr.url)}" target="_blank" rel="noopener">${name}</a>` : name}${pr.note ? `<div class="muted">${esc(pr.note)}</div>` : ''}</li>`;
+    }).join('');
+    detail.innerHTML = `<div class="task-dialog-head"><span class="muted">${esc(t.code)}</span><button type="button" class="btn soft small" data-close>Đóng</button></div>
+      <h3 id="taskDialogTitle">${esc(t.title)}</h3>
+      <div class="task-dialog-meta" style="--s:${COLUMNS[columnOf(t.progress)][0]}"><span class="task-tag"><i class="ring" aria-hidden="true"></i>${STATUS[columnOf(t.progress)][0]}</span>${sprintOf(t.id) ? `<span class="task-tag task-sprint" style="--sp:${sprintOf(t.id).tone}">${esc(sprintOf(t.id).title)}</span>` : ''}<span class="task-dialog-owner">${personAvatar(owner)}${esc(owner ? owner.name : 'Chưa giao')}</span><span class="muted">Hạn ${due}</span></div>
+      <p class="task-dialog-text">${esc(t.description || 'Chưa có mô tả.')}</p>
+      ${(t.criteria || []).length ? `<h4>Tiêu chí hoàn thành</h4><ul>${t.criteria.map(item => `<li>${esc(item)}</li>`).join('')}</ul>` : ''}
+      ${pulls ? `<h4>Pull request</h4><ul>${pulls}</ul>` : ''}
+      ${t.can_start ? `<p class="muted">Bắt đầu task sẽ tạo nhánh task/t-${t.id} và một PR nháp đứng tên bạn. GitHub hỏi xác nhận trước.</p>` : ''}
+      <div class="task-dialog-actions">${t.can_start ? `<button type="button" class="btn primary small" data-start="${t.id}">Bắt đầu task</button>` : ''}<button type="button" class="btn soft small" data-copy="[${esc(t.code)}]">Chép mã cho PR</button>${canEdit() ? `<button type="button" class="btn soft small danger" data-ask-delete>Xóa task</button>` : ''}</div>
+      ${canEdit() ? `<div class="task-dialog-confirm" hidden><p>Xóa ${esc(t.code)}? Không khôi phục được và mã này không dùng lại. PR đang liên kết còn mở sẽ quay về mục cần đối chiếu.</p><div class="task-dialog-actions"><button type="button" class="btn small danger-solid" data-delete="${t.id}">Xóa hẳn</button><button type="button" class="btn soft small" data-keep>Giữ lại</button></div></div>` : ''}`;
+    detail.showModal();
+  }
+
+  detail.addEventListener('click', e => {
+    const button = e.target.closest('button');
+    // Bấm vào vùng mờ: sự kiện tới thẳng dialog và nằm ngoài khung hộp.
+    const box = detail.getBoundingClientRect();
+    const outside = e.target === detail && (e.clientX < box.left || e.clientX > box.right || e.clientY < box.top || e.clientY > box.bottom);
+    if (outside || button?.hasAttribute('data-close')) detail.close();
+    else if (button?.dataset.start) startTask(+button.dataset.start, button);
+    else if (button?.hasAttribute('data-ask-delete') || button?.hasAttribute('data-keep')) {
+      const asking = button.hasAttribute('data-ask-delete');
+      $('.task-dialog-confirm', detail).hidden = !asking;
+      $(asking ? '[data-keep]' : '[data-ask-delete]', detail).focus();
+    } else if (button?.dataset.delete) {
+      button.disabled = true;
+      deleteTask(+button.dataset.delete);
+    }
+    else if (button?.dataset.copy) {
+      Promise.resolve(navigator.clipboard?.writeText(button.dataset.copy))
+        .then(() => { button.textContent = navigator.clipboard ? 'Đã chép mã' : `Chép tay: ${button.dataset.copy}`; })
+        .catch(() => { button.textContent = `Chép tay: ${button.dataset.copy}`; });
+    }
+  });
+  async function startTask(id, button) {
+    button.disabled = true;
+    try {
+      const response = await fetch(`${PLANNING_API}/tasks/${id}/pr`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Planning-Request': '1' },
+        body: JSON.stringify({ repo_version: live.repo_version })
+      });
+      const body = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(body && typeof body.detail === 'string' ? body.detail : 'Chưa bắt đầu được task. Thử lại.');
+      location.assign(body.url);
+    } catch (error) {
+      button.disabled = false;
+      toast(error instanceof TypeError ? 'Chưa kết nối được server.' : error.message);
+    }
+  }
+
+  async function deleteTask(id) {
+    const task = liveTasks().find(item => item.id === id);
+    if (!task || !canEdit()) return;
+    boardPending++;
+    try {
+      const response = await fetch(`${PLANNING_API}/tasks/${id}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json', 'X-Planning-Request': '1' },
+        body: JSON.stringify({ repo_version: live.repo_version })
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        throw new Error(body && typeof body.detail === 'string' ? body.detail : 'Chưa xóa được task. Thử lại.');
+      }
+      detail.close();
+      toast(`Đã xóa ${task.code}.`);
+      planningFrame.contentWindow?.postMessage({ type: 'tang:planning-reload' }, location.origin);
+    } catch (error) {
+      toast(error instanceof TypeError ? 'Chưa kết nối được server. Task chưa bị xóa.' : error.message);
+      const retry = $('[data-delete]', detail);
+      if (retry) retry.disabled = false;
+    } finally {
+      boardPending--;
+      if (!boardPending) await loadPlanning(true);
+    }
+  }
+
+  // Bấm vào thẻ (trừ ô chọn và liên kết) để xem chi tiết.
+  document.addEventListener('click', e => {
+    const card = e.target.closest && e.target.closest('.board .task');
+    if (!card || e.target.closest('a, select, .task-pick')) return;
+    openTask(+card.querySelector('[data-open-task]').dataset.openTask);
+  });
+  document.addEventListener('keydown', e => {
+    const id = e.target.dataset && e.target.dataset.openTask;
+    if (id && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); openTask(+id); }
+  });
+
+  /* Kéo thả thẻ giữa các cột (chuột). Bàn phím và màn hình cảm ứng dùng vòng tròn trạng thái trên thẻ. */
+  function endDrag() {
+    draggedTask = null;
+    $$('.col.drop, .task.dragging').forEach(el => el.classList.remove('drop', 'dragging'));
+    if (boardStale && !boardPending) loadPlanning();
+  }
+  const columnAt = e => (draggedTask !== null && e.target.closest ? e.target.closest('[data-col]') : null);
+  document.addEventListener('dragstart', e => {
+    const card = e.target.closest && e.target.closest('[data-drag]');
+    if (!card || !canEdit()) return;
+    draggedTask = +card.dataset.drag;
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', card.dataset.drag);
+    card.classList.add('dragging');
+  });
+  document.addEventListener('dragover', e => {
+    const column = columnAt(e);
+    $$('.col.drop').forEach(el => { if (el !== column) el.classList.remove('drop'); });
+    if (!column) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    column.classList.add('drop');
+  });
+  document.addEventListener('drop', e => {
+    const column = columnAt(e);
+    if (!column) return;
+    e.preventDefault();
+    const id = draggedTask, status = column.dataset.col;
+    const task = liveTasks().find(t => t.id === id);
+    draggedTask = null;
+    if (task && columnOf(task.progress) !== status) saveTask(id, { status });
+    endDrag();
+  });
+  document.addEventListener('dragend', endDrag);
+
   /* ---------- Trạng thái bước: phải xong bước trước mới làm bước sau, nên không đo phần trăm ---------- */
   const STATE_LABEL = { done: ['Đã xong', 'var(--green)'], doing: ['Đang làm', 'var(--blue)'], locked: ['Chưa mở', 'var(--mute)'] };
   const stepState = i => (S.done[STEPS[i].id] ? 'done' : STEPS.slice(0, i).every(x => S.done[x.id]) ? 'doing' : 'locked');
@@ -196,10 +665,10 @@
       return cell ? `Còn thiếu chuyện thật ở ô ${cell[1]}` : 'Chờ agent đánh giá';
     }
     if (i === 1) {
-      const r = ROLES.find(r => !S.plan.roles[r]);
-      if (r) return `Chưa giao vai ${r}`;
-      const t = S.tasks.list.find(t => t.status !== 'done');
-      return t ? `${t.id}: ${t.title}` : 'Mọi task đã xong';
+      if (!joined()) return 'Thiết lập đội trong tab Planning';
+      if (!live.repo) return 'Kết nối repo để lập sprint';
+      const tasks = liveTasks(), next = tasks.find(t => t.progress !== 'done');
+      return next ? `${next.code} · ${next.title}` : tasks.length ? 'Mọi task đã xong' : 'Chưa có sprint đã giao';
     }
     if (i === 2) {
       const p = S.pitch;
@@ -696,32 +1165,12 @@
     },
 
     planning() {
-      const P = S.plan, T = S.tasks;
-      const cost = Object.entries({ teams: 'Số shop trả phí', tickets: 'Câu hỏi mỗi shop/tháng', inTok: 'Token vào mỗi câu', outTok: 'Token ra mỗi câu', priceIn: 'USD / 1 triệu token vào', priceOut: 'USD / 1 triệu token ra', infra: 'Hạ tầng USD/tháng', price: 'Giá mỗi shop USD/tháng' })
-        .map(([k, l]) => `<label>${l}<input type="number" min="0" step="any" data-bind="cost" data-id="${k}" value="${+P.cost[k] || 0}"></label>`).join('');
-      return head(1, 'Chia vai, chốt việc và kiểm tra bài toán tiền trước khi viết thêm code.') + `<div class="stack">
-        <div class="cols"><div class="panel">${panelHead('Tổng quan')}<textarea rows="6" data-bind="overview" aria-label="Tổng quan dự án">${esc(P.overview)}</textarea></div>
-        <div class="panel">${panelHead('Phân vai', btn('roles', 'Agent gợi ý chia vai', 'soft small'))}<div class="roles">${ROLES.map(r => `<div class="role">${avatar(P.roles[r])}<span>${r}</span><select aria-label="${r}" data-bind="role" data-id="${r}">${options(P.roles[r])}</select></div>`).join('')}</div></div></div>
-        <div class="panel">${panelHead('User story', '<span class="muted">Sửa trực tiếp, xóa trống để bỏ</span>')}<div class="stack" style="gap:8px">${P.stories.map((s, i) => `<textarea rows="2" data-bind="story" data-id="${i}" aria-label="User story ${i + 1}">${esc(s)}</textarea>`).join('')}</div><p style="margin-top:10px">${btn('story', 'Thêm user story', 'soft small')}</p></div>
-        <div class="panel">${panelHead('Task', '<span class="muted">Trạng thái tự đổi khi có sự kiện pull request nhắc mã task</span>')}
-          <div class="board">${Object.entries(STATUS).map(([key, [label]]) => {
-            const list = T.list.filter(t => t.status === key);
-            return `<div class="col"><h4><span>${label}</span><span>${list.length}</span></h4>${list.map(t => `<div class="task" data-task="${esc(t.id)}" style="--m:${member(t.owner) ? color(member(t.owner).color) : '#a6afc7'}"><div>${esc(t.id)}: ${esc(t.title)}</div><select data-bind="owner" data-id="${esc(t.id)}" aria-label="Người làm ${esc(t.id)}">${options(t.owner)}</select><select data-bind="status" data-id="${esc(t.id)}" aria-label="Trạng thái ${esc(t.id)}">${Object.entries(STATUS).map(([k, [l]]) => `<option value="${k}" ${k === key ? 'selected' : ''}>${l}</option>`).join('')}</select></div>`).join('')}</div>`;
-          }).join('')}</div>
-          <form class="compose" data-form="task" style="margin-top:10px"><input name="title" placeholder="Tên task mới" aria-label="Tên task mới"><button class="btn soft">Thêm task</button></form></div>
-        <div class="cols"><div class="panel">${panelHead('Giả lập pull request')}
-          <p class="muted">Bản demo chưa nhận webhook GitHub thật. Gửi sự kiện ở đây để xem quy tắc tự cập nhật.</p>
-          <form class="stack" style="gap:8px;margin-top:10px" data-form="pr"><input name="title" aria-label="Tiêu đề pull request" value="T-3: kết nối API đơn hàng" placeholder="Tiêu đề có mã task, ví dụ T-3">
-          <div class="row"><select name="event" aria-label="Sự kiện"><option value="draft">Mở PR nháp</option><option value="opened" selected>Mở PR chờ review</option><option value="changes">Yêu cầu sửa</option><option value="merged">Merge</option><option value="closed">Đóng, không merge</option></select><button class="btn tone">Gửi sự kiện</button></div>
-          <details><summary class="muted">Hoặc dán payload webhook GitHub</summary><textarea name="json" rows="4" aria-label="Payload webhook" placeholder='{"action":"closed","pull_request":{"title":"T-2: nạp chính sách","merged":true}}'></textarea></details></form></div>
-        <div class="panel">${panelHead('Nhật ký tự cập nhật')}<div class="log">${T.log.map(l => `<div>${esc(l)}</div>`).join('') || '<span class="muted">Chưa có sự kiện nào. Gửi thử một pull request.</span>'}</div></div></div>
-        <div class="cols"><div class="panel">${panelHead('File nên chuẩn bị cho pitching')}<div class="stack" style="gap:12px">${FILES.map(([id, name, why2, url, from]) => {
-          const mine = P.links[id] || '';
-          return `<div><div>${name}</div><div class="muted">${why2} ${url ? `<a href="${url}" target="_blank" rel="noopener">${from}</a>` : ''}</div><div class="row" style="margin-top:5px"><input style="flex:1" type="url" data-bind="link" data-id="${id}" value="${esc(mine)}" placeholder="Dán link file của đội (https://...)" aria-label="Link ${name}">${/^https:\/\//.test(mine) ? `<a href="${esc(mine)}" target="_blank" rel="noopener">Mở</a>` : ''}</div></div>`;
-        }).join('')}</div></div>
-        <div class="panel">${panelHead('Tech stack đề xuất', '<span class="muted">Mẫu cho dự án demo</span>')}<div class="scroll"><table><tbody>${STACK.map(r => `<tr><th>${r[0]}</th><td>${r[1]}<br><span class="muted">${r[2]}</span></td></tr>`).join('')}</tbody></table></div></div></div>
-        <div class="panel">${panelHead('Giả định chi phí và cách kiếm tiền', '<span class="muted">Đơn giá là giả định, hãy thay bằng bảng giá thật</span>')}<div class="cost">${cost}</div><div class="kpis" id="kpis">${kpis()}</div>
-          <div class="cards" style="margin-top:14px">${MONEY.map(m => `<div class="card"><span>${m[0]}</span><span class="muted">${m[1]}</span></div>`).join('')}</div></div></div>`;
+      const text = 'Chia việc theo sprint và theo dõi tiến độ từ pull request.';
+      // Chưa đăng nhập hoặc chưa có đội: chỉ còn tiêu đề và phần thiết lập đội bên dưới.
+      if (!joined()) return head(1, text);
+      return head(1, text, headActions()) + `<div class="stack">
+        ${taskBoard()}
+      </div>`;
     },
 
     pitching() {
@@ -1199,14 +1648,6 @@
     </button>`).join('')}</div>`;
   }
 
-  function kpis() {
-    const c = Object.fromEntries(Object.entries(S.plan.cost).map(([k, v]) => [k, +v || 0]));
-    const perShop = c.tickets * (c.inTok * c.priceIn + c.outTok * c.priceOut) / 1e6;
-    const ai = perShop * c.teams, cost = ai + c.infra, rev = c.teams * c.price, margin = c.price - perShop;
-    const n = x => Math.round(x).toLocaleString('vi-VN') + ' USD';
-    return [['Chi phí AI/tháng', n(ai)], ['Tổng chi/tháng', n(cost)], ['Doanh thu/tháng', n(rev)], ['Lãi gộp/tháng', n(rev - cost)],
-      ['Hòa vốn hạ tầng', margin > 0 ? Math.ceil(c.infra / margin) + ' shop' : 'Không đạt']].map(k => `<div class="kpi"><b>${k[1]}</b><span>${k[0]}</span></div>`).join('');
-  }
   function activeDashboardData() {
     const slug = activeDashSlug();
     if (slug && dashStats && dashStats.slug === slug) return dashStats;
@@ -1391,14 +1832,6 @@
       renderChat();
       save('score', 'chat');
       return ['score', () => rise($$('#view .score'))];
-    },
-    async roles() {
-      const ids = S.meta.members.map(m => m.id);
-      const out = await generate(`Chia vai cho các thành viên. id hợp lệ: ${ids.join(', ')}. Dựa vào điều họ đã nói trong chat.`, JSON.stringify(Object.fromEntries(ROLES.map(r => [r, 'id']))),
-        o => o && ROLES.every(r => ids.includes(o[r])), () => ({ 'Product owner': 'minh', 'AI engineer': 'huy', 'Full-stack': 'lan', 'UX và pitching': 'thao' }));
-      S.plan.roles = Object.fromEntries(ROLES.map(r => [r, ids.includes(out[r]) ? out[r] : '']));
-      save('plan');
-      return ['plan', () => anim($$('#view .role .av'), { scale: [0, 1], rotate: [-90, 0] }, { type: 'spring', delay: canAnim ? M.stagger(0.08) : 0 })];
     },
     async form() {
       const ctx = pitchCtx();
@@ -1657,6 +2090,91 @@ nature là bản chất problem: "behavior" nếu là problem hành vi (duy trì
   /* ---------- Điều hướng và bố cục ---------- */
   let tab = 'overview', going = 0, stageAnim = null;
   const stage = $('#stage'), view = $('#view'), overlay = $('#overlay'), ws = $('#workspace');
+  const planningFrame = $('#planningFrame');
+  const planningLive = $('#planningLive');
+  const viewContent = $('#viewContent');
+  // Cỡ vùng nội dung đổi khi đổi cửa sổ, ẩn hiện mô hình hay xoay màn hình.
+  if (view) new ResizeObserver(() => { if (tab === 'planning') fitBoard(); }).observe(view);
+  const PLANNING_PARAMS = ['github', 'github_setup', 'setup_action', 'installation_id', 'task'];
+
+  // Khung cao bằng nội dung nên cuộn cùng trang. Khung cần biết vùng đang thấy để đặt hộp thoại.
+  let viewportFrame = 0;
+  function sendPlanningViewport() {
+    if (!planningLive || viewportFrame || planningLive.hidden) return;
+    viewportFrame = requestAnimationFrame(() => {
+      viewportFrame = 0;
+      const drawer = planningLive.classList.contains('as-drawer');
+      const frame = planningFrame.getBoundingClientRect(), box = (drawer ? $('#planningBody') : view).getBoundingClientRect();
+      const start = Math.max(0, box.top) - frame.top;
+      const end = Math.min(frame.height, Math.min(box.bottom, innerHeight - (mobile.matches && !drawer ? 64 : 0)) - frame.top);
+      const height = Math.min(frame.height, Math.max(320, end - Math.max(0, start)));
+      const top = Math.min(Math.max(0, start), Math.max(0, frame.height - height));
+      planningFrame.contentWindow?.postMessage({ type: 'tang:planning-viewport', top, height }, location.origin);
+    });
+  }
+  addEventListener('scroll', sendPlanningViewport, { capture: true, passive: true });
+  addEventListener('resize', sendPlanningViewport);
+
+  // Đã có đội thì phần đội, sprint và PR ẩn sẵn, bấm nút mới mở. Chưa có đội thì phải hiện để đăng nhập.
+  let planningOpen = false;
+  function updatePlanningPanel(visible) {
+    const asDrawer = joined();
+    const shown = visible && (asDrawer ? planningOpen : live !== undefined);
+    const open = shown && asDrawer;
+    // Chỉ đổi class và thuộc tính. Chuyển khung sang chỗ khác trong DOM sẽ làm khung tải lại.
+    planningLive.hidden = !shown;
+    planningLive.classList.toggle('as-drawer', asDrawer);
+    $('#planningBackdrop').hidden = !open;
+    view.classList.toggle('drawer-open', open);
+    if (open) { planningLive.setAttribute('role', 'dialog'); planningLive.setAttribute('aria-modal', 'true'); }
+    else { planningLive.removeAttribute('role'); planningLive.removeAttribute('aria-modal'); }
+    ['.top', '#stage', '#viewContent', '#sideToggle'].forEach(selector => { const el = $(selector); if (el) el.inert = open; });
+    sendPlanningViewport();
+  }
+
+  function setPlanningOpen(next) {
+    if (!joined() || planningOpen === next) return;
+    planningOpen = next;
+    updatePlanningPanel(tab === 'planning');
+    drawPlanning();
+    (next ? $('#planningClose') : $('[data-act="planning-live"]', view))?.focus({ preventScroll: true });
+  }
+
+  function showPlanning(visible) {
+    updatePlanningPanel(visible);
+    const url = new URL(location.href);
+    if (url.searchParams.get('tab') === 'planning') url.searchParams.delete('tab');
+    if (visible) {
+      if (!planningFrame.hasAttribute('src')) {
+        const query = new URLSearchParams({ embed: 'workstation' });
+        for (const name of PLANNING_PARAMS) {
+          const value = url.searchParams.get(name);
+          if (value !== null) query.set(name, value);
+          url.searchParams.delete(name);
+        }
+        if (query.size > 1) {
+          // Vừa quay về từ GitHub hoặc mở từ thông báo: mở sẵn để thấy kết quả.
+          planningOpen = true;
+          updatePlanningPanel(visible);
+          planningFrame.addEventListener('load', () => planningLive.scrollIntoView({ block: 'start' }), { once: true });
+        }
+        planningFrame.src = '/planning?' + query;
+      }
+    }
+    if (url.href !== location.href) history.replaceState(history.state, '', url);
+  }
+
+  window.addEventListener('message', event => {
+    if (event.origin !== location.origin || !planningFrame || event.source !== planningFrame.contentWindow) return;
+    const data = event.data;
+    if (data?.type === 'tang:planning-changed') loadPlanning();
+    if (data?.type === 'tang:planning-close') setPlanningOpen(false);
+    if (data?.type === 'tang:planning-height' && Number.isFinite(data.height)) {
+      planningFrame.style.height = Math.min(20000, Math.max(200, Math.ceil(data.height))) + 'px';
+      sendPlanningViewport();
+    }
+  });
+
 
   function renderTeam() {
     $('#teamBar').innerHTML = S.meta.members.map(m => avatar(m.id)).join('');
@@ -1670,9 +2188,11 @@ nature là bản chất problem: "behavior" nếu là problem hành vi (duy trì
     view.style.setProperty('--c', t.hex);
     view.dataset.tab = tab;
     const desktopOverview = tab === 'overview' && !mobile.matches;
-    if (desktopOverview) { overlay.innerHTML = views.overview(); view.innerHTML = ''; }
-    else { view.innerHTML = views[tab](); overlay.innerHTML = ''; }
+    showPlanning(tab === 'planning');
+    if (desktopOverview) { overlay.innerHTML = views.overview(); viewContent.innerHTML = ''; }
+    else { viewContent.innerHTML = views[tab](); overlay.innerHTML = ''; }
     if (tab === 'product') thinkMount();
+    if (tab === 'planning') fitBoard();
     if (tab === 'pitching') { loadPublishedSurveys(); renderSidePanel(); }
   }
   function layout(animate) {
@@ -1709,7 +2229,7 @@ nature là bản chất problem: "behavior" nếu là problem hành vi (duy trì
       $('#pins').style.opacity = canAnim ? 0 : 1;
     } else {
       $('#pins').style.opacity = 0;
-      rise($$('#view > .view-head, #view > .mind, #view .panel, #view .ms', view).slice(0, 14), 0.1);
+      rise($$('#viewContent > .view-head, #viewContent > .mind, #view .panel, #view .ms', view).slice(0, 14), 0.1);
     }
     anim($$('.grow', view), { scaleX: [0, 1] }, { duration: 0.8, ease: EASE, delay: 0.3 });
   }
@@ -1722,6 +2242,7 @@ nature là bản chất problem: "behavior" nếu là problem hành vi (duy trì
     await done(anim(tab === 'overview' && !mobile.matches ? overlay : view, { opacity: [1, 0] }, { duration: 0.15 }));
     if (n !== going) return;
     tab = id;
+    if (id === 'planning') local.collapsed = false;
     history.replaceState(null, '', '#' + id);
     renderNav();
     { const fab = $('#fab'); if (fab) fab.hidden = id === 'product'; }
@@ -1766,6 +2287,7 @@ nature là bản chất problem: "behavior" nếu là problem hành vi (duy trì
     if (mockMode) document.body.insertAdjacentHTML('beforeend', '<div class="preview-badge">Chế độ xem mock: dữ liệu mẫu, không lưu</div>');
     $('#app').hidden = false;
     tab = id;
+    if (id === 'planning') local.collapsed = false;
     renderTeam(); renderNav();
     { const fab = $('#fab'); if (fab) fab.hidden = id === 'product'; }
     render();
@@ -1917,35 +2439,6 @@ nature là bản chất problem: "behavior" nếu là problem hành vi (duy trì
 
   /* Vẽ lại tab hiện tại, giữ vị trí cuộn */
   function rerender() { const y = view.scrollTop; render(); view.scrollTop = y; syncProgress(); }
-  /* Bảng task: các thẻ trượt mượt sang cột mới */
-  function moveTasks(change) {
-    const before = new Map($$('.task', view).map(e => [e.dataset.task, e.getBoundingClientRect()]));
-    change();
-    rerender();
-    $$('.task', view).forEach(e => {
-      const a = before.get(e.dataset.task), b = e.getBoundingClientRect();
-      if (!a) anim(e, { opacity: [0, 1], scale: [0.8, 1] }, { type: 'spring' });
-      else if (Math.abs(a.x - b.x) + Math.abs(a.y - b.y) > 2) anim(e, { x: [a.x - b.x, 0], y: [a.y - b.y, 0], scale: [1.06, 1] }, { type: 'spring', stiffness: 200, damping: 24 });
-    });
-  }
-  function pullRequest(title, event) {
-    const ids = [...new Set((title.match(/\bT-?\d+\b/gi) || []).map(x => 'T-' + x.replace(/\D/g, '')))];
-    const target = { draft: 'doing', opened: 'review', changes: 'doing', merged: 'done', closed: 'todo' }[event];
-    const names = { draft: 'mở PR nháp', opened: 'mở PR chờ review', changes: 'yêu cầu sửa', merged: 'merge PR', closed: 'đóng PR' };
-    const hit = S.tasks.list.filter(t => ids.includes(t.id));
-    if (!hit.length) return toast('Không thấy mã task hợp lệ. Đặt mã như T-3 vào tiêu đề PR.');
-    moveTasks(() => {
-      hit.forEach(t => {
-        const old = STATUS[t.status][0];
-        t.status = target;
-        S.tasks.log.unshift(`${new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })} ${names[event]}: ${t.id} chuyển từ ${old} sang ${STATUS[target][0]}`);
-      });
-      S.tasks.log = S.tasks.log.slice(0, 30);
-    });
-    save('tasks');
-    toast(`${hit.map(t => t.id).join(', ')} chuyển sang ${STATUS[target][0]}`);
-  }
-
   /* ---------- Sự kiện ---------- */
   let resetArmed = 0;
   const actions = {
@@ -1954,6 +2447,19 @@ nature là bản chất problem: "behavior" nếu là problem hành vi (duy trì
     replay: () => replay(),
     flow: () => $('#flow').scrollIntoView({ behavior: reduced ? 'auto' : 'smooth' }),
     tab: b => go(b.dataset.id),
+    'planning-live': () => setPlanningOpen(true),
+    'repo-open': openRepo,
+    'notify-open': () => openNotify(),
+    'notify-on': enableNotify,
+    'notify-off': disableNotify,
+    'notify-test': testNotify,
+    'planning-repo'() {
+      if (detail.open) detail.close();
+      setPlanningOpen(true);
+      planningFrame.contentWindow?.postMessage({ type: 'tang:planning-repo' }, location.origin);
+    },
+    'repo-refresh': refreshRepo,
+    'planning-close': () => setPlanningOpen(false),
     collapse() { local.collapsed = !local.collapsed; persist(); layout(true); },
     drawer: toggleDrawer,
     me(b) { local.me = b.dataset.id; persist(); renderChat(); anim($('.speak .me', chat), { scale: [0.6, 1] }, { type: 'spring' }); },
@@ -2187,7 +2693,6 @@ nature là bản chất problem: "behavior" nếu là problem hành vi (duy trì
       save(...Object.keys(S)); renderTeam(); renderChat(); rerender(); enterContent(); toast('Đã đặt lại dữ liệu demo');
     },
     dot(b) { const s = S.score[b.dataset.id], n = +b.dataset.n; s.score = s.score === n ? n - 1 : n; save('score'); rerender(); anim($$(`.score[data-key="${b.dataset.id}"] .dots .on`, view), { scaleY: [2.2, 1] }, { type: 'spring', delay: canAnim ? M.stagger(0.04) : 0 }); },
-    story() { S.plan.stories.push('Là ..., tôi muốn ... để ...'); save('plan'); rerender(); const all = $$('[data-bind="story"]', view), last = all[all.length - 1]; rise([last]); last.focus(); last.select(); },
     async seed(b) {
       const slug = activeDashSlug();
       if (slug) {
@@ -2379,26 +2884,6 @@ nature là bản chất problem: "behavior" nếu là problem hành vi (duy trì
     const f = e.target, kind = f.dataset.form;
     if (kind === 'think') { const i = $('input', f); thinkSend(i.value); i.value = ''; }
     if (kind === 'chat') { const i = $('input', f); if (typing) return toast('Đợi agent trả lời xong đã.'); send(i.value); i.value = ''; }
-    if (kind === 'task') {
-      const v = f.elements.title.value.trim();
-      if (!v) return toast('Nhập tên task trước.');
-      const n = Math.max(0, ...S.tasks.list.map(t => +t.id.slice(2) || 0)) + 1;
-      moveTasks(() => S.tasks.list.push({ id: 'T-' + n, title: v.slice(0, 120), owner: '', status: 'todo' }));
-      save('tasks');
-    }
-    if (kind === 'pr') {
-      let title = f.elements.title.value, event = f.elements.event.value;
-      const json = f.elements.json.value.trim();
-      if (json) {
-        try {
-          const p = JSON.parse(json), pr = p.pull_request;
-          title = String(pr.title);
-          event = p.action === 'closed' ? (pr.merged ? 'merged' : 'closed') : p.action === 'converted_to_draft' || pr.draft ? 'draft' : p.review && p.review.state === 'changes_requested' ? 'changes' : ['opened', 'reopened', 'ready_for_review', 'synchronize'].includes(p.action) ? 'opened' : null;
-          if (!event) return toast('Hành động này không đổi trạng thái task.');
-        } catch (err) { return toast('Payload chưa đúng. Cần JSON có action và pull_request.title.'); }
-      }
-      pullRequest(title, event);
-    }
     if (kind === 'run') {
       const g = n => (f.elements[n] ? String(f.elements[n].value).trim() : '');
       const nn = n => (g(n) === '' || !isFinite(+g(n)) ? null : Math.max(0, +g(n)));
@@ -2495,16 +2980,12 @@ nature là bản chất problem: "behavior" nếu là problem hành vi (duy trì
   document.addEventListener('change', e => {
     const t = e.target, k = t.dataset.bind, id = t.dataset.id;
     if (t.id === 'projectName') { S.meta.name = t.value.trim() || 'Dự án chưa đặt tên'; save('meta'); return; }
+    if (t.dataset.live) { editTask(t); return; }
     if (!k) return;
     const v = t.value;
     if (k === 'score') { S.score[id].text = v; if (!v.trim()) S.score[id].score = 0; save('score'); }
-    if (k === 'overview') { S.plan.overview = v; save('plan'); }
-    if (k === 'role') { S.plan.roles[id] = v; save('plan'); rerender(); }
-    if (k === 'story') { if (v.trim()) S.plan.stories[+id] = v; else S.plan.stories.splice(+id, 1); save('plan'); if (!v.trim()) rerender(); }
-    if (k === 'link') { S.plan.links[id] = v.trim(); save('plan'); if (v && !/^https:\/\//.test(v)) toast('Link cần bắt đầu bằng https://'); else rerender(); }
     if (k === 'cost') {
-      S.plan.cost[id] = Math.max(0, +v || 0); save('plan');
-      if ($('#kpis')) { $('#kpis').innerHTML = kpis(); anim($$('#kpis b'), { opacity: [0.2, 1], y: [6, 0] }, { duration: 0.4 }); } else rerender();
+      S.plan.cost[id] = Math.max(0, +v || 0); save('plan'); rerender();
     }
     if (k === 'revmodel') {
       S.quality.revenueModel = ['sub', 'usage', 'setup'].includes(v) ? v : 'sub';
@@ -2516,7 +2997,6 @@ nature là bản chất problem: "behavior" nếu là problem hành vi (duy trì
       if (x) x[fl] = fl === 'target' ? (+v || 0) : fl === 'baseline' ? num(v) : fl === 'direction' ? (v === 'down' ? 'down' : 'up') : fl === 'kind' ? (KIND[v] ? v : 'value') : v.trim().slice(0, { unit: 12, name: 60 }[fl] || 200);
       save('quality'); rerender();
     }
-    if (k === 'owner' || k === 'status') { moveTasks(() => { const x = S.tasks.list.find(x => x.id === id); if (x) x[k] = v; }); save('tasks'); }
     if (k === 'mowner') { const x = S.maintain.schedule.find(x => x.id === id); if (x) x.owner = v; save('maintain'); }
     if (bindPitchText(t, true)) return;
     if (k === 'qType') {
@@ -2540,7 +3020,9 @@ nature là bản chất problem: "behavior" nếu là problem hành vi (duy trì
       if (d2) d2.scrollLeft = activeSlideIdx * (d2.clientWidth + 12);
     }
   });
-  document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeDrawer(); closeSurveySide(); } });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeDrawer(); setPlanningOpen(false); closeSurveySide(); } });
+  document.addEventListener('focusout', () => setTimeout(() => { if (boardStale && !boardPending && !editingBoard()) loadPlanning(); }));
+  addEventListener('focus', () => { if (inApp) loadPlanning(); });
   mobile.addEventListener('change', () => { if (inApp) { render(); layout(false); syncProgress(); } });
   let rt, lastW = innerWidth;
   addEventListener('resize', () => { if (innerWidth === lastW) return; lastW = innerWidth; clearTimeout(rt); rt = setTimeout(() => { if (inApp) layout(false); }, 120); });
@@ -2580,7 +3062,12 @@ nature là bản chất problem: "behavior" nếu là problem hành vi (duy trì
   }
 
   if ($('#landing')) landing();
-  if ($('#app')) { const h = location.hash.slice(1); startApp(TABS.some(t => t.id === h) ? h : 'overview'); }
+  if ($('#app')) {
+    // GitHub và thông báo quay về bằng ?tab=planning; chuyển tab trong trang dùng #tab.
+    const h = new URLSearchParams(location.search).get('tab') === 'planning' ? 'planning' : location.hash.slice(1);
+    startApp(TABS.some(t => t.id === h) ? h : 'overview');
+    loadPlanning();
+  }
   connect().catch(() => {});
   ready.then(() => { if (inApp && tab === 'pitching') rerender(); });
 })();
