@@ -3,6 +3,7 @@
 import asyncio
 import threading
 
+import anyio
 import pytest
 from starlette.websockets import WebSocketDisconnect
 
@@ -164,3 +165,55 @@ def test_revoke_closes_socket_even_when_send_hangs(people, monkeypatch):  # noqa
         _write(leader, "DELETE", f"/members/{member_id}")
         socket.receive_json()
     assert closed.value.code == 1008
+
+
+class _ClosingSocket:
+    """WebSocket giả: trình duyệt ngắt kết nối khi test ra hiệu."""
+
+    headers: dict[str, str] = {}
+
+    def __init__(self) -> None:
+        self.gone = asyncio.Event()
+
+    async def accept(self) -> None: ...
+
+    async def close(self, code: int = 1000) -> None: ...
+
+    async def receive_text(self) -> str:
+        await self.gone.wait()
+        raise WebSocketDisconnect(1000)
+
+
+def test_server_cancel_during_cleanup_stays_inside_its_scope(monkeypatch):
+    """Server hủy đúng lúc đang dọn tác vụ: lệnh hủy không được lọt ra ngoài và listener vẫn được gỡ."""
+    monkeypatch.setattr(live, "_member_of", lambda _socket: ("team", "user"))
+
+    async def run() -> None:
+        socket = _ClosingSocket()
+        scope = anyio.CancelScope()
+
+        async def slow_to_stop(_socket, _listener):
+            try:
+                await asyncio.Future()
+            except asyncio.CancelledError:
+                scope.cancel()
+                with anyio.CancelScope(shield=True):
+                    for _ in range(3):
+                        await asyncio.sleep(0)
+                raise
+
+        monkeypatch.setattr(live, "_send", slow_to_stop)
+
+        async def serve() -> None:
+            with scope:
+                await live.watch_team(socket)
+
+        server = asyncio.create_task(serve())
+        await asyncio.sleep(0.05)
+        socket.gone.set()
+        await server
+
+    # Thứ tự của set tác vụ không cố định nên lặp nhiều lần.
+    for _ in range(40):
+        asyncio.run(run())
+        assert not live._listeners
