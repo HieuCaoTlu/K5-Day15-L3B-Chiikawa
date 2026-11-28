@@ -1192,7 +1192,7 @@
     const status = run && run.status;
     let actions = '<span class="muted">Trả lời câu hỏi của agent để tiếp tục</span>';
     if (status === 'waiting_review') actions = `${btn('think-approve', 'Duyệt Canvas', 'tone small', 'style="--c:var(--green)"')}${btn('think-reject', 'Chưa duyệt', 'soft small')}`;
-    if (status === 'approved') actions = '<span class="tag" style="--c:var(--green)">Đã duyệt</span>';
+    if (status === 'approved') actions = '<span class="tag" style="--c:var(--green)">Đã duyệt</span>' + (run.result && run.result.handoff === 'planning' ? btn('tab', 'Sang bước Planning', 'primary small', 'data-id="planning"') : '');
     if (status === 'rejected') actions = '<span class="tag" style="--c:var(--orange)">Chưa duyệt, cần bổ sung</span>';
     const sources = {
       fallback: '<span class="tag" style="--c:var(--orange)">Luật dự phòng</span>',
@@ -1314,7 +1314,7 @@
 
   const finishBtn = i => (i === 0 ? '' : stepState(i) === 'doing' ? btn('finish', 'Hoàn thành bước này', 'tone small', `data-id="${STEPS[i].id}"`) : stepState(i) === 'done' ? btn('reopen', 'Mở lại', 'soft small', `data-id="${STEPS[i].id}"`) : '');
   const lockNote = () => '';
-  const head = (i, sub, extra = '') => `<div class="view-head"><div><h2>${STEPS[i].name}${stateTag(i)}</h2>${sub ? `<p>${sub}</p>` : ''}</div><div class="head-tools">${finishBtn(i)}${extra}</div></div>${lockNote(i)}`;
+  const head = (i, sub, extra = '') => `<div class="view-head"><div><h2>${STEPS[i].name}${stateTag(i, `data-state="${i}"`)}</h2>${sub ? `<p>${sub}</p>` : ''}</div><div class="head-tools">${finishBtn(i)}${extra}</div></div>${lockNote(i)}`;
   const panelHead = (t, extra = '') => `<div class="panel-head"><h3>${t}</h3>${extra}</div>`;
   const btn = (act, label, cls = 'tone', data = '') => `<button class="btn ${cls}" data-act="${act}" ${data}>${label}</button>`;
 
