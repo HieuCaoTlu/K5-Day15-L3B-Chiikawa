@@ -239,7 +239,7 @@ Nhóm dùng stack khác (Node, Streamlit, notebook…): sửa hàm `run_app()` t
 | Lời gọi AI ở quyết định trung tâm | **Thật** (bắt buộc từ CP3) | Model: `gemini-3.5-flash-lite` (Gemini API), node `update_canvas`, mỗi tin nhắn gọi đúng 1 lần |
 | GO / NOT YET / NO, đánh dấu bằng chứng | **Thật**, bằng code | `backend/app/agent/canvas.py`, không dùng LLM |
 | Planning, Pitching, Quality, Maintaining | **Một phần giả** | Pitching có luồng sinh nội dung thật; Planning mô phỏng sự kiện pull request, chưa nhận webhook GitHub thật; Quality và Maintaining là luật bằng code và dữ liệu mẫu. Chi tiết `spec.md` §4 |
-| `codebase/` (khung `python run.py`) | **Giả** | Chưa nối với agent Thinking ở `backend/` |
+| `codebase/` (khung `python run.py`) | **Thật** | `codebase/agent.py` gọi trực tiếp agent Thinking ở `backend/`; `python run.py eval` và `python run.py simulate` đo trên agent này |
 | Không có `GOOGLE_API_KEY` | Chế độ dự phòng | Agent chạy luật dự phòng, giao diện hiện nhãn "Chế độ dự phòng" |
 
 ## Dùng AI vào việc gì
