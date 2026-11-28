@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.agent.guardrails import check_input
 from app.config import get_settings
 from app.db import get_session
+from app.planning import handoff
 from app.planning.access import leader_for, require_repo, team_for
 from app.planning.auth import require_same_origin
 from app.planning.generator import check_plan, check_task, make_plan, sprint_offset
@@ -18,6 +19,7 @@ from app.planning.schemas import (
     Brief,
     DemoPR,
     DraftInput,
+    Plan,
     PRLink,
     RepoVersion,
     TaskMove,
@@ -47,6 +49,34 @@ def _check_dates(db: Session, team: PlanningTeam, brief: Brief) -> None:
     previous = db.scalar(select(func.max(PlanningSprint.ends_on)).where(PlanningSprint.team_id == team.id))
     if previous is not None and brief.starts_on <= previous:
         raise HTTPException(409, "Sprint mới phải bắt đầu sau sprint đã áp dụng gần nhất.")
+
+
+def add_sprints(db: Session, team_id: str, plan: Plan) -> None:
+    for proposal in plan.sprints:
+        sprint = PlanningSprint(
+            team_id=team_id,
+            title=proposal.title,
+            goal=proposal.goal,
+            starts_on=proposal.starts_on,
+            ends_on=proposal.ends_on,
+        )
+        db.add(sprint)
+        db.flush()
+        db.add_all(
+            [
+                PlanningTask(
+                    team_id=team_id,
+                    sprint_id=sprint.id,
+                    title=task.title,
+                    description=task.description,
+                    criteria=task.criteria,
+                    assignee_id=task.assignee_id,
+                    deadline=utc(task.deadline),
+                    status=task.status,
+                )
+                for task in proposal.tasks
+            ]
+        )
 
 
 @router.post("/draft")
@@ -99,31 +129,7 @@ def apply_draft(data: ApplyInput, request: Request, db: Session = Depends(get_se
         check_plan(data.plan, brief, {item.github_id for item in members_in(db, team)})
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from exc
-    for proposal in data.plan.sprints:
-        sprint = PlanningSprint(
-            team_id=team.id,
-            title=proposal.title,
-            goal=proposal.goal,
-            starts_on=proposal.starts_on,
-            ends_on=proposal.ends_on,
-        )
-        db.add(sprint)
-        db.flush()
-        db.add_all(
-            [
-                PlanningTask(
-                    team_id=team.id,
-                    sprint_id=sprint.id,
-                    title=task.title,
-                    description=task.description,
-                    criteria=task.criteria,
-                    assignee_id=task.assignee_id,
-                    deadline=utc(task.deadline),
-                    status=task.status,
-                )
-                for task in proposal.tasks
-            ]
-        )
+    add_sprints(db, team.id, data.plan)
     team.draft = None
     db.commit()
 
@@ -201,6 +207,8 @@ def delete_task(task_id: int, data: RepoVersion, request: Request, db: Session =
     db.flush()
     if not db.scalar(select(PlanningTask.id).where(PlanningTask.sprint_id == sprint_id).limit(1)):
         db.execute(delete(PlanningSprint).where(PlanningSprint.id == sprint_id))  # sprint rỗng sẽ chặn ngày
+        if not db.scalar(select(PlanningSprint.id).where(PlanningSprint.team_id == team.id).limit(1)):
+            handoff.mark_done(db, team)  # trưởng nhóm tự dọn bảng: Canvas đang có không tự tạo lại
     db.commit()
 
 

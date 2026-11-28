@@ -3,7 +3,7 @@ from sqlalchemy import delete
 from sqlalchemy.orm import Session
 
 from app.db import get_session
-from app.planning import github
+from app.planning import github, handoff
 from app.planning.access import check_version, leader_for, require_repo, team_for
 from app.planning.auth import require_same_origin
 from app.planning.models import (
@@ -43,6 +43,7 @@ def _activate(team: PlanningTeam, repo: dict, db: Session, pulls: list[Pull]) ->
     if team.repo_id != repo["id"]:
         for table in (PlanningLog, PlanningPullRequest, PlanningTask, PlanningSprint):
             db.execute(delete(table).where(table.team_id == team.id))
+        handoff.forget(db, team.id)
         team.repo_version += 1
         team.connected_at = now()
         team.draft = None

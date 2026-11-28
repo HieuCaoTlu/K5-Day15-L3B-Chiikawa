@@ -34,6 +34,7 @@ export type PlanningState = {
   github_enabled: boolean; demo_enabled: boolean; profile: Profile | null; role: 'leader' | 'member' | null;
   members: Member[]; repo: Repo | null; repo_version: number; choices: RepoChoice[] | null; install_url: string | null;
   sprints: Sprint[]; inbox: Pull[]; draft: Draft | null; push_key: string | null; push_registered: boolean;
+  auto_plan: boolean;
   setup: { needed: boolean; code_required: boolean }; webhook: boolean;
   board: Board | null; invite_code: string | null; log: { id: number; at: string; message: string }[];
 };

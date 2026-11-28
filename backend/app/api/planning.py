@@ -10,9 +10,11 @@ from app.config import get_settings
 from app.db import get_session
 from app.planning import (
     auth,
+    auto,
     board,
     github,
     github_app,
+    handoff,
     invites,
     live,
     push,
@@ -46,6 +48,7 @@ for child in (
     start_pr.router,
     repos.router,
     work.router,
+    auto.router,
     webhooks.router,
     push.router,
 ):
@@ -161,6 +164,7 @@ def read_state(request: Request, response: Response, db: Session = Depends(get_s
         "sprints": [],
         "inbox": [],
         "draft": None,
+        "auto_plan": False,
         "push_key": None,
         "push_registered": False,
         "board": None,
@@ -205,6 +209,7 @@ def read_state(request: Request, response: Response, db: Session = Depends(get_s
         state["choices"] = repos.available_repos(session)
         state["install_url"] = None if team.demo else github.install_url()
         state["draft"] = team.draft
+        state["auto_plan"] = handoff.pending(db, team) is not None
     state["sprints"], state["inbox"] = _board(db, team, member.leader, session)
     if keys := push.vapid():
         state["push_key"] = keys.public
