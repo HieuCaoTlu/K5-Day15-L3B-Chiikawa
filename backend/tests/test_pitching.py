@@ -327,3 +327,187 @@ def test_pitch_deck_overview_and_ads_flow(client):
 
     assert client.delete(f"/api/v1/pitching/decks/{deck_slug}").status_code == 204
     assert client.get(f"/api/v1/pitching/decks/{deck_slug}").status_code == 404
+
+
+# ---------- Guardrail số liệu của agent Pitching (slide, overview, quảng cáo) ----------
+
+from app.agent import llm, pitching_gen  # noqa: E402
+from app.schemas import (  # noqa: E402
+    PitchAdPost,
+    PitchSlide,
+    ProblemContextIn,
+    SurveyOptionStat,
+    SurveyQuestionStat,
+    SurveyStatsOut,
+)
+
+
+def _ctx() -> ProblemContextIn:
+    return ProblemContextIn(
+        project_name="Trợ lý trả lời khách shop online",
+        target_role="Chủ shop",
+        persona="Chị Lan, chủ shop quần áo ở Đà Nẵng",
+        problem="Tuần trước mất 3 đơn vì trả lời khách trễ lúc tối",
+        leverage="AI hiểu câu hỏi tự do về giá và size",
+        scope="Chỉ trả lời giá và size trên Zalo",
+        metric="Không mất quá 1 đơn mỗi tuần",
+    )
+
+
+def _stats(sample: int = 8) -> SurveyStatsOut:
+    def opt(label: str, count: int, answered: int = 22) -> SurveyOptionStat:
+        return SurveyOptionStat(label=label, count=count, pct=round(count / answered * 100, 1))
+
+    return SurveyStatsOut(
+        survey_id="s",
+        slug="demo",
+        title="Khảo sát",
+        total_responses=22,
+        real_responses=22 - sample,
+        sample_responses=sample,
+        questions=[
+            SurveyQuestionStat(
+                id="q0",
+                type="choice",
+                q="Quên trả lời khách mấy lần?",
+                answered=22,
+                options=[opt("1–2 lần", 7), opt("3–5 lần", 9), opt("Gần như mỗi ngày", 6)],
+            ),
+            SurveyQuestionStat(
+                id="q1",
+                type="multi",
+                q="Đang xử lý thế nào?",
+                answered=22,
+                options=[opt("Trả lời tay", 7), opt("Nhờ người nhà", 12)],
+            ),
+            SurveyQuestionStat(id="q2", type="scale", q="Bất tiện?", answered=22, avg=3.9, options=[]),
+            SurveyQuestionStat(id="q3", type="text", q="Góp ý?", answered=1, texts=["Sợ bot báo sai giá"]),
+        ],
+    )
+
+
+def test_survey_facts_are_computed_by_code():
+    facts = pitching_gen._survey_facts(_stats())
+    assert facts[0] == "Quy mô: 22 phản hồi (14 thật, 8 mẫu)"
+    assert any('"3–5 lần" 9/22 (40.9%)' in f for f in facts)
+    assert any("điểm trung bình 3.9/5" in f for f in facts)
+    assert any("lời người thật" in f and "Sợ bot báo sai giá" in f for f in facts)
+    assert pitching_gen._survey_facts(None) == []
+
+
+def test_clean_slides_guardrails():
+    raw = [
+        PitchSlide(title="Mở đầu", body="- A: x\n- B: y", layout="split"),
+        PitchSlide(
+            kicker="Vấn đề",
+            title="86.4% chủ shop quên trả lời",
+            body="- Thật: 9/22 quên 3–5 lần\n- Bịa: 73% bỏ đơn",
+            highlight="86.4% từng quên",
+            layout="split",
+        ),
+        PitchSlide(kicker="MVP", title="Gọn", body="- Trong MVP: a\n- Chưa làm: b\n- Mục tiêu: c", layout="compare"),
+        PitchSlide(
+            kicker="Bằng chứng", title="Tín hiệu khảo sát", body="- Điểm 3.9/5", highlight="Cao", layout="metric"
+        ),
+        PitchSlide(kicker="Đo lường", title="Chỉ số", body="- Giảm 50% bỏ đơn\n- Tỉ lệ đúng giờ", layout="metric"),
+        PitchSlide(
+            kicker="Bước tiếp theo",
+            title="Kế hoạch",
+            body="- Bước 1: làm\n- Bước 2: mời 30 người\n- Bước 3: đo",
+            layout="steps",
+        ),
+    ]
+    out = pitching_gen._clean_slides(raw, 10, _ctx(), _stats())
+
+    assert out[0].layout == "hero"
+    assert "9/22" in out[1].body and "73%" not in out[1].body
+    assert out[1].highlight == "" and "[?]" in out[1].title
+    assert out[2].layout == "cards"  # compare phải đúng 2 vế
+    assert out[3].highlight == "22 phản hồi · 14 thật"  # metric không có số → lấy quy mô khảo sát
+    assert "mẫu" in out[3].body  # có phản hồi mẫu thì slide bằng chứng phải ghi rõ
+    assert out[4].layout == "split" and "50%" not in out[4].body
+    assert out[5].body.splitlines() == ["- Bước 1: làm", "- Bước 2: đo"]  # đánh số lại sau khi bỏ bước
+
+
+def test_metric_bare_number_gets_label_only_when_unique():
+    stats = _stats()
+    slides = [
+        PitchSlide(title="Mở", body="- a\n- b\n- c", layout="hero"),
+        PitchSlide(kicker="Bằng chứng", title="Tín hiệu", body="- x", highlight="9/22", layout="metric"),
+        PitchSlide(kicker="Bằng chứng", title="Tín hiệu", body="- x", highlight="7/22", layout="metric"),
+    ]
+    out = pitching_gen._clean_slides(slides, 10, _ctx(), stats)
+    assert out[1].highlight == '9/22 chọn "3–5 lần"'
+    assert out[2].highlight == "7/22"  # hai phương án cùng 7/22 → không đoán
+
+
+def test_fallback_deck_uses_facts_and_discloses_samples():
+    deck = pitching_gen._rule_based_deck(_ctx(), _stats(), 7)
+    evidence = next(s for s in deck.slides if s.kicker == "Bằng chứng")
+    assert evidence.layout == "metric"
+    assert "14 thật, 8 mẫu" in evidence.body
+    no_stats = pitching_gen._rule_based_deck(_ctx(), None, 7)
+    assert all("22" not in s.body for s in no_stats.slides)
+
+
+def test_overview_and_ads_drop_fabricated_numbers(monkeypatch):
+    def fake_structured(schema, prompt, node=""):
+        assert "Quy mô: 22 phản hồi" in prompt  # prompt nhận số tính sẵn, không phải JSON thô
+        if schema is pitching_gen._GeneratedOverview:
+            return schema(
+                overview="Có 22 phản hồi, 8 là mẫu. 9/22 quên 3–5 lần.\n100% chủ shop muốn dùng ngay. Cần thêm phỏng vấn."
+            )
+        return schema(
+            ads=[
+                PitchAdPost(
+                    hook="Chủ shop mất đơn vì trả lời trễ?",
+                    body="Đã giúp 500 shop tăng 30% đơn. Bản đầu chỉ trả lời giá và size.",
+                    cta="Đăng ký tại [Link]",
+                    placeholders=["[Link]"],
+                )
+            ]
+        )
+
+    monkeypatch.setattr(llm, "structured", fake_structured)
+    ov = pitching_gen.generate_pitch_overview(_ctx(), _stats())
+    assert ov.source == "llm"
+    assert "9/22" in ov.overview and "100%" not in ov.overview and "Cần thêm phỏng vấn." in ov.overview
+
+    ads = pitching_gen.generate_pitch_assets(_ctx(), _stats())
+    body = ads.ads[0].body
+    assert "500" not in body and "30%" not in body and "giá và size" in body
+
+
+def test_agent_ignores_sample_free_text(client, monkeypatch):
+    slug = client.post(
+        "/api/v1/pitching/surveys",
+        json={
+            "project_name": "Shop chị Lan",
+            "target_role": "Chủ shop",
+            "title": "Khảo sát shop",
+            "questions": [
+                {"id": "q0", "type": "choice", "q": "Tần suất?", "options": ["Ít", "Nhiều"], "required": True},
+                {"id": "q1", "type": "text", "q": "Góp ý?", "options": [], "required": True},
+            ],
+        },
+    ).json()["slug"]
+    client.post(
+        f"/api/v1/pitching/surveys/{slug}/responses", json={"answers": {"q0": "Nhiều", "q1": "Sợ bot báo sai giá"}}
+    )
+    client.post(f"/api/v1/pitching/surveys/{slug}/samples")
+
+    # Dashboard vẫn hiện đủ câu trả lời (thật + mẫu)
+    texts = client.get(f"/api/v1/pitching/surveys/{slug}/stats").json()["questions"][1]["texts"]
+    assert len(texts) == 9
+
+    prompts: list[str] = []
+
+    def capture(schema, prompt, node=""):
+        prompts.append(prompt)
+        raise llm.LLMUnavailableError("test")
+
+    monkeypatch.setattr(llm, "structured", capture)
+    res = client.post("/api/v1/pitching/overview", json={"context": _sample_context("Chủ shop"), "survey_slug": slug})
+    assert res.status_code == 200
+    assert "Sợ bot báo sai giá" in prompts[0]
+    assert "Cần có trích dẫn rõ nguồn" not in prompts[0]  # câu tự luận của phản hồi mẫu

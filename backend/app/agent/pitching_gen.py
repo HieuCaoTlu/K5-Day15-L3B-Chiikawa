@@ -343,9 +343,57 @@ def _format_stats_summary(stats: SurveyStatsOut | None) -> tuple[str, list[str]]
     return note + ("\n" + "\n".join(lines) if lines else ""), lines
 
 
+def _fmt_pct(value: float) -> str:
+    return f"{value:.0f}%" if float(value).is_integer() else f"{value:.1f}%"
+
+
+def _survey_facts(stats: SurveyStatsOut | None) -> list[str]:
+    """Dữ kiện khảo sát tính sẵn bằng Python. Slide chỉ được trích các con số có ở đây, LLM không tự tính."""
+    if not stats or not stats.total_responses:
+        return []
+    facts = [
+        f"Quy mô: {stats.total_responses} phản hồi ({stats.real_responses} thật, {stats.sample_responses} mẫu)",
+    ]
+    for q in stats.questions[:8]:
+        if not q.answered:
+            continue
+        if q.type == "text":
+            quotes = "; ".join(f'"{_clip(t, 90, "")}"' for t in q.texts[:3] if t.strip())
+            if quotes:
+                facts.append(f'Câu mở "{q.q}" (lời người thật): {quotes}')
+            continue
+        if q.type == "scale" and q.avg is not None:
+            high = sum(o.count for o in q.options if o.label in ("4", "5"))
+            facts.append(
+                f'"{q.q}": điểm trung bình {q.avg:.1f}/5; {high}/{q.answered} người '
+                f"({_fmt_pct(round(high / q.answered * 100, 1))}) chọn mức 4–5"
+            )
+            continue
+        ranked = sorted((o for o in q.options if o.count > 0), key=lambda o: o.count, reverse=True)[:2]
+        if ranked:
+            parts = "; ".join(f'"{o.label}" {o.count}/{q.answered} ({_fmt_pct(o.pct)})' for o in ranked)
+            facts.append(f'"{q.q}": {parts}')
+    return facts
+
+
+def _facts_block(stats: SurveyStatsOut | None) -> str:
+    facts = _survey_facts(stats)
+    if not facts:
+        return (
+            "Chưa có phản hồi khảo sát. Slide bằng chứng phải nói rõ là chưa có số liệu và nêu mục tiêu thu phản hồi. "
+            "KHÔNG đưa bất kỳ con số khảo sát nào."
+        )
+    note = ""
+    if stats and stats.sample_responses:
+        note = (
+            f"\nLưu ý: {stats.sample_responses}/{stats.total_responses} phản hồi là dữ liệu mẫu, "
+            "các tỉ lệ trên gồm cả phản hồi mẫu."
+        )
+    return "\n".join(f"- {f}" for f in facts) + note
+
+
 def _prompt_ctx_fields(ctx: ProblemContextIn, stats: SurveyStatsOut | None) -> dict[str, str]:
     role_label = _resolve_target_role(ctx)
-    stats_json = stats.model_dump_json() if stats else "Chưa chọn khảo sát hoặc chưa có phản hồi."
     return {
         "project_name": ctx.project_name.strip() or "Sản phẩm AI mới",
         "target_role": role_label,
@@ -355,31 +403,141 @@ def _prompt_ctx_fields(ctx: ProblemContextIn, stats: SurveyStatsOut | None) -> d
         "scope": ctx.scope.strip() or "(MVP thử nghiệm 4 tuần cho 1 luồng chính)",
         "metric": ctx.metric.strip() or "(thời gian tiết kiệm & tỉ lệ người dùng hài lòng)",
         "overview": ctx.overview.strip() or "(chưa có mô tả tổng quan)",
-        "survey_stats": stats_json,
+        "survey_facts": _facts_block(stats),
     }
 
 
-def _clean_slides(raw_slides: list[PitchSlide], limit: int = 10) -> list[PitchSlide]:
+_NUM_RE = re.compile(r"\d+(?:[.,]\d+)?")
+_EVIDENCE_RE = re.compile(r"bằng chứng|khảo sát|tín hiệu|số liệu", re.IGNORECASE)
+_BULLET_RE = re.compile(r"^\s*(?:[-•*]|\d+[.)])\s+")
+
+
+def _numbers(text: str) -> set[str]:
+    return {n.replace(",", ".") for n in _NUM_RE.findall(text)}
+
+
+def _unverified(text: str, allowed: set[str]) -> bool:
+    """Có con số không nằm trong dữ liệu đầu vào. Số nguyên nhỏ (Bước 1, 2 tuần, 4 tuần) được phép."""
+    return any(n not in allowed and ("." in n or int(n) > 10) for n in _numbers(text))
+
+
+def _allowed_numbers(ctx: ProblemContextIn | None, stats: SurveyStatsOut | None) -> set[str]:
+    """Các con số có trong đầu vào (bài toán + dữ kiện khảo sát tính sẵn). Ngoài tập này là số bịa."""
+    source = " ".join(_survey_facts(stats))
+    if stats:
+        source += f" {stats.total_responses} {stats.real_responses} {stats.sample_responses}"
+    if ctx:
+        source += " " + " ".join(ctx.model_dump().values())
+    return _numbers(source)
+
+
+def _drop_unverified_sentences(text: str, allowed: set[str]) -> str:
+    """Bỏ từng câu có con số không nằm trong dữ liệu, giữ nguyên xuống dòng của văn bản."""
+    lines = []
+    for line in text.splitlines():
+        sentences = re.split(r"(?<=[.!?])\s+", line)
+        kept = [s for s in sentences if not _unverified(s, allowed)]
+        if kept or not line.strip():
+            lines.append(" ".join(kept))
+    return re.sub(r"\n{3,}", "\n\n", "\n".join(lines)).strip()
+
+
+def _bullets(body: str) -> list[str]:
+    return [ln for ln in body.splitlines() if _BULLET_RE.match(ln)]
+
+
+def _fix_layout(slide: PitchSlide, idx: int, stats: SurveyStatsOut | None) -> PitchSlide:
+    """Ép layout khớp với nội dung để slide không vỡ khi hiển thị."""
+    layout, highlight = slide.layout, slide.highlight
+    n_items = len(_bullets(slide.body))
+    if idx == 0:
+        layout = "hero"
+    elif layout == "compare" and n_items != 2:
+        layout = "cards" if n_items >= 3 else "split"
+    elif layout in ("cards", "steps") and n_items < 2:
+        layout = "split"
+    elif layout == "metric" and not re.search(r"\d", highlight):
+        if stats and stats.total_responses and _EVIDENCE_RE.search(f"{slide.kicker} {slide.title}"):
+            highlight = f"{stats.total_responses} phản hồi · {stats.real_responses} thật"
+        else:
+            layout = "split"
+    elif layout == "metric" and stats and not re.search(r"[^\W\d_]", highlight):
+        highlight = _label_bare_number(highlight, stats)
+    return slide.model_copy(update={"layout": layout, "highlight": highlight})
+
+
+def _label_bare_number(highlight: str, stats: SurveyStatsOut) -> str:
+    """Số trần như "6/10" không cho người xem biết đó là gì: ghép nhãn phương án khảo sát tương ứng."""
+    value = highlight.strip().replace(",", ".")
+    labels = [
+        o.label
+        for q in stats.questions
+        if q.type in ("choice", "multi")
+        for o in q.options
+        if value in (f"{o.count}/{q.answered}", _fmt_pct(o.pct))
+    ]
+    if len(labels) == 1:  # trùng nhiều phương án thì không đoán, giữ nguyên
+        return _clip(f'{value} chọn "{labels[0]}"', 140, value)
+    return highlight
+
+
+def _clean_slides(
+    raw_slides: list[PitchSlide],
+    limit: int = 10,
+    ctx: ProblemContextIn | None = None,
+    stats: SurveyStatsOut | None = None,
+) -> list[PitchSlide]:
+    """Guardrail sau LLM: bỏ số liệu không có trong đầu vào, sửa layout, ghi rõ phản hồi mẫu."""
     capped = min(max(limit, 3), 10)
+    allowed = _allowed_numbers(ctx, stats)
+
     cleaned: list[PitchSlide] = []
     for idx, slide in enumerate(raw_slides[:capped]):
-        cleaned.append(
-            PitchSlide(
-                id=f"s{idx}",
-                kicker=_clip(slide.kicker, 80, f"Slide {idx + 1}"),
-                title=_clip(slide.title, 140, f"Nội dung {idx + 1}"),
-                body=slide.body.strip()[:800] or "Cần bổ sung nội dung.",
-                highlight=_clip(slide.highlight, 140, ""),
-                layout=slide.layout,
-            )
+        lines = [ln.strip() for ln in slide.body.strip().splitlines() if ln.strip()]
+        kept = [ln for ln in lines if not _unverified(ln, allowed)]
+        if lines and not kept:
+            kept = ["- Cần bổ sung nội dung có số liệu kiểm chứng."]
+        elif len(kept) < len(lines):
+            renumbered, step = [], 0
+            for ln in kept:
+                if re.match(r"^- Bước \d+:", ln):
+                    step += 1
+                    ln = re.sub(r"^- Bước \d+:", f"- Bước {step}:", ln)
+                renumbered.append(ln)
+            kept = renumbered
+        title = slide.title.strip()
+        if _unverified(title, allowed):
+            title = _NUM_RE.sub("[?]", title)
+        highlight = "" if _unverified(slide.highlight, allowed) else slide.highlight
+        draft = PitchSlide(
+            id=f"s{idx}",
+            kicker=_clip(slide.kicker, 80, f"Slide {idx + 1}"),
+            title=_clip(title, 140, f"Nội dung {idx + 1}"),
+            body="\n".join(kept)[:800] or "Cần bổ sung nội dung.",
+            highlight=_clip(highlight, 140, ""),
+            layout=slide.layout,
         )
+        cleaned.append(_fix_layout(draft, idx, stats))
+
+    if stats and stats.sample_responses and cleaned:
+        if not any("mẫu" in f"{s.body} {s.highlight}".lower() for s in cleaned):
+            target = next(
+                (i for i, s in enumerate(cleaned) if _EVIDENCE_RE.search(f"{s.kicker} {s.title}")),
+                None,
+            )
+            if target is not None:
+                s = cleaned[target]
+                note = (
+                    f"- Lưu ý: {stats.sample_responses}/{stats.total_responses} phản hồi là dữ liệu mẫu, "
+                    "chưa dùng làm kết luận."
+                )
+                cleaned[target] = _fix_layout(s.model_copy(update={"body": f"{s.body}\n{note}"[:800]}), target, stats)
     return cleaned
 
 
 def _rule_based_deck(ctx: ProblemContextIn, stats: SurveyStatsOut | None, slide_count: int) -> PitchDeckDraftOut:
     project = _clip(ctx.project_name, 90, "Sản phẩm AI")
     role_label = _resolve_target_role(ctx)
-    note, lines = _format_stats_summary(stats)
     persona_line = _clip(ctx.persona, 160, f"{role_label} gặp tác vụ lặp lại hằng ngày.")
     problem_line = _clip(ctx.problem, 200, f"{role_label} tốn nhiều thời gian xử lý thủ công lặp lại.")
     leverage_line = _clip(
@@ -389,10 +547,10 @@ def _rule_based_deck(ctx: ProblemContextIn, stats: SurveyStatsOut | None, slide_
     metric_line = _clip(ctx.metric, 180, "Thời gian hoàn thành tác vụ & tỉ lệ bản nháp được dùng lại.")
     overview_line = _clip(ctx.overview, 180, f"Giúp {role_label} xử lý nhanh và chuẩn hơn ngay từ bản đầu.")
 
-    if stats and stats.total_responses:
-        bullet_lines = [line if line.startswith("- ") else f"- {line}" for line in lines[:3]]
-        evidence_body = "\n".join([f"- Quy mô khảo sát: {note}", *bullet_lines])
-        evidence_highlight = f"{stats.real_responses} thật · {stats.sample_responses} mẫu"
+    facts = _survey_facts(stats)
+    if stats and facts:
+        evidence_body = "\n".join(f"- {_clip(f, 190, '')}" for f in facts[:4])
+        evidence_highlight = f"{stats.total_responses} phản hồi · {stats.real_responses} thật"
     else:
         evidence_body = (
             f"- Đối tượng mục tiêu: {role_label}\n"
@@ -430,7 +588,7 @@ def _rule_based_deck(ctx: ProblemContextIn, stats: SurveyStatsOut | None, slide_
             id="s3",
             kicker="Bằng chứng",
             title="Tín hiệu từ khảo sát người dùng",
-            body=_clip(evidence_body, 380, note),
+            body=evidence_body[:800],
             highlight=evidence_highlight,
             layout="metric",
         ),
@@ -462,7 +620,7 @@ def _rule_based_deck(ctx: ProblemContextIn, stats: SurveyStatsOut | None, slide_
     return PitchDeckDraftOut(
         title=f"Pitching: {project}",
         survey_slug=stats.slug if stats else "",
-        slides=slides[: min(max(slide_count, 3), 10)],
+        slides=_clean_slides(slides, slide_count, ctx, stats),
         source="fallback",
     )
 
@@ -476,7 +634,7 @@ def generate_pitch_deck(
     prompt = render("pitch_deck", **fields)
     try:
         generated = llm.structured(_GeneratedDeck, prompt, node="pitch_deck")
-        cleaned = _clean_slides(generated.slides, slide_count)
+        cleaned = _clean_slides(generated.slides, slide_count, ctx, stats)
         if len(cleaned) >= 3:
             return PitchDeckDraftOut(
                 title=_clip(generated.title, 180, f"Pitching: {fields['project_name']}"),
@@ -535,13 +693,18 @@ def generate_pitch_assets(ctx: ProblemContextIn, stats: SurveyStatsOut | None = 
     prompt = render("pitch_assets", **_prompt_ctx_fields(ctx, stats))
     try:
         generated = llm.structured(_GeneratedAssets, prompt, node="pitch_assets")
+        allowed = _allowed_numbers(ctx, stats)
+
+        def tidy(text: str, limit: int) -> str:
+            return _drop_unverified_sentences(_fill_ad_placeholders(text.strip(), project, role_label), allowed)[:limit]
+
         ads = [
             PitchAdPost(
                 id="ad0",
                 channel=_clip(ad.channel, 60, "Bài đăng chung"),
-                hook=_fill_ad_placeholders(ad.hook.strip(), project, role_label)[:300],
-                body=_fill_ad_placeholders(ad.body.strip(), project, role_label)[:1600],
-                cta=_fill_ad_placeholders(ad.cta.strip(), project, role_label)[:240],
+                hook=tidy(ad.hook, 300),
+                body=tidy(ad.body, 1600),
+                cta=tidy(ad.cta, 240),
                 placeholders=[
                     p.strip()[:60]
                     for p in ad.placeholders
@@ -603,8 +766,11 @@ def generate_pitch_overview(ctx: ProblemContextIn, stats: SurveyStatsOut | None 
     prompt = render("pitch_overview", **fields)
     try:
         generated = llm.structured(_GeneratedOverview, prompt, node="pitch_overview")
+        overview = _drop_unverified_sentences(generated.overview, _allowed_numbers(ctx, stats))
+        if len(overview) < 20:
+            return _rule_based_overview(stats)
         return PitchOverviewOut(
-            overview=generated.overview.strip()[:4000],
+            overview=overview[:4000],
             total_responses=stats.total_responses,
             real_responses=stats.real_responses,
             sample_responses=stats.sample_responses,
