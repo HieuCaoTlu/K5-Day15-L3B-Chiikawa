@@ -24,7 +24,11 @@
   const mockMode = new URLSearchParams(location.search).get('demo') === 'full';
   const BLANK = mockMode ? SEED : EMPTY;
   const KEY = 'tang-v4';
-  const SERVER = ['quality', 'maintain']; // hai phần này đọc và ghi trên server theo đội
+  const SERVER = ['quality', 'maintain']; // hai phần này chỉ nằm trên server theo đội
+  /* Ba phần này cũng chung cả đội, nhưng người chưa vào đội vẫn dùng bản trên máy. */
+  const LOCAL_FIRST = ['project', 'thinking', 'pitching'];
+  const SECTIONS = [...SERVER, ...LOCAL_FIRST];
+  const SECTION_OF = { meta: 'project', done: 'project', score: 'pitching', chat: 'pitching', pitch: 'pitching', thinking: 'thinking', quality: 'quality', maintain: 'maintain' };
   let S = BLANK();
   const local = { me: mockMode ? 'minh' : '', model: 'house', collapsed: false, chartMode: 'pie' };
   let surveysCache = null, surveysLoading = false, surveysError = '', activeSurveyDetail = null, armedDeleteSlug = '';
@@ -65,7 +69,9 @@
     ['schedule', 'suggest'].forEach(k => { if (!Array.isArray(S.maintain[k])) S.maintain[k] = []; });
   }
   migrate();
-  if (!local.think || !local.think.session) local.think = { session: 'th-' + Math.random().toString(36).slice(2, 10), msgs: [] };
+  const newThinkSession = () => 'th-' + Math.random().toString(36).slice(2, 10);
+  if (!local.think || !local.think.session) local.think = { session: newThinkSession(), msgs: [] };
+  if (!local.shared) local.shared = {}; // phần nào máy này đã đồng bộ với một đội
   const tk = { run: null, busy: false, offline: false, loaded: false, introDone: false };
   if (mockMode) {
     STEPS.forEach(x => { S.done[x.id] = true; });
@@ -100,7 +106,7 @@
   function save(...sections) {
     if (mockMode) return;
     persist();
-    sections.filter(k => SERVER.includes(k)).forEach(pushWorkspace);
+    [...new Set(sections.map(k => SECTION_OF[k]).filter(Boolean))].forEach(queueWorkspace);
     if (db && canWrite) {
       sections.filter(k => !SERVER.includes(k)).forEach(k => dirty.add(k));
       clearTimeout(saveTimer);
@@ -200,7 +206,7 @@
     if (!force && (boardPending || editingBoard())) { boardStale = true; return; }
     boardStale = false;
     if (next === null && live) return;
-    const workspaceChanged = !mockMode && syncWorkspace(next);
+    const updated = mockMode ? [] : syncWorkspace(next);
     const same = live && next && live.profile && next.profile && live.profile.github_id === next.profile.github_id;
     const view_ = value => JSON.stringify(value && [value.profile, value.role, value.members, value.repo, value.sprints, value.webhook, value.push_key, value.push_registered]);
     const changed = force || live === undefined || view_(live) !== view_(next);
@@ -211,38 +217,99 @@
     if (hadState && !wasJoined && joined()) planningOpen = true;
     if (!joined()) planningOpen = false;
     updatePlanningPanel(tab === 'planning');
-    if (workspaceChanged || (changed && !mockMode)) showWorkspace();
+    if (updated.length || (changed && !mockMode)) showWorkspace();
+    // Canvas nằm ở lượt chạy của agent: trưởng nhóm nhắn hay duyệt thì tải lại theo.
+    if (updated.includes('thinking')) { tk.loaded = true; thinkLoad(true); }
+    else if (changed) renderThink();
     if (!changed) return;
     drawPlanning();
     syncProgress();
   }
 
-  /* ---------- Thành viên, Quality và Maintaining: dữ liệu của đội trên server ---------- */
+  /* ---------- Thành viên và dữ liệu chung của đội trên server ---------- */
   const MEMBER_COLORS = ['#ec4899', '#0fb5ae', '#a9672f', '#6d8f10', '#4d5bf0', '#ff8a1f', '#a24ce8', '#0a9cf0'];
-  let wsVersion = { quality: null, maintain: null }, wsPending = 0, wsStale = false, wsQueue = Promise.resolve();
-  /* Đang gõ trong form của hai tab này thì chưa vẽ lại, để không mất nội dung. */
-  const typingInView = () => {
-    const a = document.activeElement;
-    return Boolean(a && a.closest('#viewContent') && /INPUT|TEXTAREA|SELECT/.test(a.tagName));
+  let wsVersion = Object.fromEntries(SECTIONS.map(k => [k, null])), wsPending = 0, wsStale = false, wsQueue = Promise.resolve();
+  const wsTimers = {}, wsSeeded = new Set();
+  const thinkReadOnly = () => !mockMode && Boolean(live && live.role && live.role !== 'leader');
+  const cut = (value, size) => String(value ?? '').slice(0, size);
+  const copy = value => JSON.parse(JSON.stringify(value));
+
+  /* read: dữ liệu gửi lên server. write: đưa bản server vào trang. has: máy này có nội dung đáng giữ. */
+  const serverSection = key => ({ read: () => S[key], write: data => { S[key] = data; } });
+  const SHARED = {
+    quality: serverSection('quality'),
+    maintain: serverSection('maintain'),
+    project: {
+      read: () => ({ name: cut(S.meta.name, 80), done: Object.fromEntries(STEPS.map(x => [x.id, Boolean(S.done[x.id])])) }),
+      write: data => { S.meta.name = data.name; S.done = Object.assign(EMPTY().done, data.done); },
+      has: () => Boolean((S.meta.name && S.meta.name !== 'Dự án chưa đặt tên') || Object.values(S.done).some(Boolean))
+    },
+    thinking: {
+      read: () => ({ session: local.think.session, msgs: local.think.msgs.slice(-60).map(m => ({ who: m.who === 'me' ? 'me' : 'agent', text: cut(m.text, 4000) })) }),
+      write: data => {
+        const session = data.session || newThinkSession();
+        // Cùng phiên thì giữ nguyên đối tượng để tin đang gửi không bị bỏ dở.
+        if (session === local.think.session) { local.think.msgs = data.msgs; return; }
+        local.think = { session, msgs: data.msgs };
+        tk.run = null; tk.busy = false; tk.introDone = false;
+      },
+      has: () => local.think.msgs.length > 0
+    },
+    pitching: {
+      read: () => ({
+        pitch: S.pitch,
+        score: Object.fromEntries(Object.entries(S.score).map(([k, v]) => [k, { text: cut(v && v.text, 4000), score: Math.max(0, Math.min(5, Math.round(+(v && v.score) || 0))) }])),
+        chat: S.chat.slice(-60).map(m => ({ who: cut(m.who, 48), text: cut(m.text, 4000) }))
+      }),
+      write: data => { S.pitch = Object.assign(EMPTY().pitch, data.pitch); S.score = Object.assign(EMPTY().score, data.score); S.chat = data.chat; },
+      has: () => Boolean(S.chat.length || Object.values(S.score).some(v => v && v.text) ||
+        ['form', 'responses', 'deck', 'adPosts'].some(k => S.pitch[k] && S.pitch[k].length) || S.pitch.overview || S.pitch.ads)
+    }
   };
 
-  /* Đưa dữ liệu server vào S. Trả về true khi Quality hoặc Maintaining đổi. */
+  /* Đang gõ trong form thì chưa vẽ lại, để không mất nội dung. */
+  const typingInView = () => {
+    const a = document.activeElement;
+    return Boolean(a && a.closest('#viewContent, #overlay, .side-panel') && /INPUT|TEXTAREA|SELECT/.test(a.tagName));
+  };
+
+  /* Đưa dữ liệu server vào trang. Trả về danh sách phần vừa đổi. */
   function syncWorkspace(state) {
     const team = state && state.role ? state.members : [];
     S.meta.members = team.map((m, i) => ({ id: m.github_id, name: m.name || m.login, look: Number(m.avatar) || 0, color: MEMBER_COLORS[i % MEMBER_COLORS.length] }));
     local.me = (state && state.profile && state.role && state.profile.github_id) || '';
-    if (wsPending) { wsStale = true; return false; }
-    let changed = false;
-    SERVER.forEach(k => {
+    if (wsPending) { wsStale = true; return []; }
+    const changed = [], seed = [];
+    const member = Boolean(state && state.role && state.role !== 'leader');
+    SECTIONS.forEach(k => {
+      if (wsTimers[k]) return; // còn thay đổi chưa gửi
       const remote = state && state.role ? state[k] : null;
       const version = remote ? remote.version : null;
       if (version === wsVersion[k]) return;
-      const { version: _, ...data } = remote || EMPTY()[k];
-      S[k] = JSON.parse(JSON.stringify(data));
+      const keepsLocal = LOCAL_FIRST.includes(k);
       wsVersion[k] = version;
-      changed = true;
+      // Ngoài đội thì giữ nguyên bản trên máy.
+      if (keepsLocal && !remote) return;
+      /* Đội chưa lưu phần này và máy này chưa từng đồng bộ: giữ bản trên máy, có nội dung thì đẩy lên.
+         Thinking của thành viên luôn theo server, vì chỉ trưởng nhóm được ghi. */
+      if (keepsLocal && version === 0 && !local.shared[k] && !(k === 'thinking' && member)) {
+        if (k === 'project' && member && S.done.product) { S.done.product = false; changed.push(k); }
+        if (SHARED[k].has() && !wsSeeded.has(k)) { wsSeeded.add(k); seed.push(k); }
+        return;
+      }
+      // Bản trên máy sắp bị thay lần đầu: cất một bản dự phòng.
+      if (keepsLocal && !local.shared[k] && SHARED[k].has()) {
+        try { localStorage.setItem('tang-v4-backup-' + k, JSON.stringify(SHARED[k].read())); } catch (e) { /* bỏ qua */ }
+      }
+      if (keepsLocal && version > 0) local.shared[k] = true;
+      const { version: _, ...data } = remote || EMPTY()[k];
+      SHARED[k].write(copy(data));
+      changed.push(k);
     });
-    if (changed) { migrate(); runEdit = null; lastLevel = null; }
+    if (changed.length) migrate();
+    if (changed.some(k => SERVER.includes(k))) { runEdit = null; lastLevel = null; }
+    seed.forEach(pushWorkspace);
+    persist();
     return changed;
   }
 
@@ -254,6 +321,20 @@
     syncProgress();
   }
 
+  /* Gộp các lần gõ liên tiếp thành một lần lưu. */
+  function queueWorkspace(section) {
+    if (wsVersion[section] === null) return;
+    if (section === 'thinking' && thinkReadOnly()) return;
+    if (!LOCAL_FIRST.includes(section)) { pushWorkspace(section); return; }
+    clearTimeout(wsTimers[section]);
+    wsTimers[section] = setTimeout(() => flushWorkspace(section), 700);
+  }
+  function flushWorkspace(section) {
+    clearTimeout(wsTimers[section]);
+    delete wsTimers[section];
+    pushWorkspace(section);
+  }
+
   /* Lưu nối tiếp nhau để mỗi lần gửi đúng phiên bản vừa nhận. */
   function pushWorkspace(section) {
     if (wsVersion[section] === null) return;
@@ -261,15 +342,20 @@
     wsQueue = wsQueue.then(async () => {
       let failed = '';
       try {
-        const response = await fetch(`${PLANNING_API}/${section}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json', 'X-Planning-Request': '1' },
-          body: JSON.stringify({ ...S[section], version: wsVersion[section] })
-        });
-        if (response.ok) wsVersion[section]++;
-        else if (response.status === 409) failed = 'Đội vừa sửa phần này ở nơi khác. Đã tải bản mới, bạn sửa lại nhé.';
-        else if (response.status === 401 || response.status === 403) failed = 'Chưa lưu được. Đăng nhập lại ở tab Planning.';
-        else failed = 'Chưa lưu được: kiểm tra lại giá trị vừa nhập.';
+        if (wsVersion[section] !== null) {
+          const response = await fetch(`${PLANNING_API}/${section}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', 'X-Planning-Request': '1' },
+            body: JSON.stringify({ ...SHARED[section].read(), version: wsVersion[section] })
+          });
+          if (response.ok) {
+            wsVersion[section]++;
+            if (LOCAL_FIRST.includes(section)) { local.shared[section] = true; persist(); }
+          } else if (response.status === 409) failed = 'Đội vừa sửa phần này ở nơi khác. Đã tải bản mới, bạn sửa lại nhé.';
+          else if (response.status === 401) failed = 'Chưa lưu được. Đăng nhập lại ở tab Planning.';
+          else if (response.status === 403) failed = 'Chưa lưu được: bạn không có quyền sửa phần này.';
+          else failed = 'Chưa lưu được: kiểm tra lại giá trị vừa nhập.';
+        }
       } catch (e) { failed = 'Chưa kết nối được server nên chưa lưu. Thử lại sau ít phút.'; }
       wsPending--;
       if (failed) {
@@ -1157,11 +1243,12 @@
     return res.json();
   }
   function syncScore(canvas) {
+    let changed = false;
     Object.entries(CANVAS_TO_SCORE).forEach(([cell, key]) => {
       const c = canvas && canvas[cell];
-      if (c && c.content && S.score[key]) S.score[key].text = c.content;
+      if (c && c.content && S.score[key] && S.score[key].text !== c.content) { S.score[key].text = c.content; changed = true; }
     });
-    save('score');
+    if (changed && !thinkReadOnly()) save('score');
   }
   /* Câu hỏi gợi ý cho từng ô Canvas, hiện giữa ô khi ô còn trống */
   const CANVAS_HELP = {
@@ -1179,7 +1266,10 @@
   function renderThink(scrollEnd) {
     if (!$('#tkCanvas')) return;
     const run = tk.run, p = run && run.proposal, canvas = (p && p.canvas) || {};
-    const intro = !tk.introDone && !tk.run && !local.think.msgs.length;
+    const readOnly = thinkReadOnly();
+    const intro = !readOnly && !tk.introDone && !tk.run && !local.think.msgs.length;
+    $('.tk-compose').hidden = readOnly;
+    $('[data-act="think-reset"]').hidden = readOnly;
     $('#think').classList.toggle('pending', !tk.settled);
     $('#think').classList.toggle('intro', tk.settled && intro);
     $('#tkCanvas').innerHTML = `<div class="tk-head"><h3>AI MVP Canvas</h3></div>
@@ -1190,8 +1280,8 @@
       }).join('')}</div>`;
 
     const status = run && run.status;
-    let actions = '<span class="muted">Trả lời câu hỏi của agent để tiếp tục</span>';
-    if (status === 'waiting_review') actions = `${btn('think-approve', 'Duyệt Canvas', 'tone small', 'style="--c:var(--green)"')}${btn('think-reject', 'Chưa duyệt', 'soft small')}`;
+    let actions = `<span class="muted">${readOnly ? 'Trưởng nhóm đang trao đổi với agent' : 'Trả lời câu hỏi của agent để tiếp tục'}</span>`;
+    if (status === 'waiting_review') actions = readOnly ? '<span class="tag" style="--c:var(--blue)">Chờ trưởng nhóm duyệt</span>' : `${btn('think-approve', 'Duyệt Canvas', 'tone small', 'style="--c:var(--green)"')}${btn('think-reject', 'Chưa duyệt', 'soft small')}`;
     if (status === 'approved') actions = '<span class="tag" style="--c:var(--green)">Đã duyệt</span>' + (run.result && run.result.handoff === 'planning' ? btn('tab', 'Sang bước Planning', 'primary small', 'data-id="planning"') : '');
     if (status === 'rejected') actions = '<span class="tag" style="--c:var(--orange)">Chưa duyệt, cần bổ sung</span>';
     const sources = {
@@ -1203,10 +1293,10 @@
     $('#tkEval').innerHTML = p
       ? `<div class="tk-head"><h3>Đánh giá của agent</h3><span class="tk-verdict" style="--c:${VERDICT[p.verdict] || 'var(--mute)'}">${esc(p.verdict)}</span>${src}</div>
          <ul class="tk-reasons">${(p.reasons || []).map(r => `<li>${esc(r)}</li>`).join('')}</ul><div class="tk-actions">${actions}</div>`
-      : `<div class="tk-head"><h3>Đánh giá của agent</h3></div><span class="muted">Chưa có đánh giá. Kể ý tưởng của bạn ở khung chat bên phải.</span>`;
+      : `<div class="tk-head"><h3>Đánh giá của agent</h3></div><span class="muted">${readOnly ? 'Chưa có đánh giá.' : 'Chưa có đánh giá. Kể ý tưởng của bạn ở khung chat bên phải.'}</span>`;
 
     const box = $('#tkMsgs'), msgs = local.think.msgs;
-    box.innerHTML = (msgs.length ? '' : '<p class="muted">Gõ ý tưởng thô của bạn để bắt đầu.</p>') +
+    box.innerHTML = (readOnly ? '<p class="muted" role="note">Bạn đang xem. Chỉ trưởng nhóm trao đổi với agent và duyệt Canvas.</p>' : msgs.length ? '' : '<p class="muted">Gõ ý tưởng thô của bạn để bắt đầu.</p>') +
       msgs.map(m => `<div class="tk-msg ${m.who === 'me' ? 'me' : ''}"><div class="tk-bubble">${esc(m.text)}</div></div>`).join('') +
       (tk.busy ? '<div class="tk-msg"><div class="tk-bubble muted">Đang suy nghĩ...</div></div>' : '');
     const send = $('.tk-compose button');
@@ -1217,7 +1307,8 @@
     tk.run = run;
     if (run && run.proposal) syncScore(run.proposal.canvas);
     const handoff = !!(run && run.status === 'approved' && run.result && run.result.handoff === 'planning');
-    if (Boolean(S.done.product) !== handoff) {
+    // Cờ tiến độ của Thinking do máy trưởng nhóm ghi; thành viên nhận qua server.
+    if (!thinkReadOnly() && Boolean(S.done.product) !== handoff) {
       S.done.product = handoff;
       save('done');
     }
@@ -1244,11 +1335,11 @@
   }
   async function thinkSend(text) {
     text = text.trim().slice(0, 2000);
-    if (!text || tk.busy) return;
+    if (!text || tk.busy || thinkReadOnly()) return;
     const t = local.think;
     t.msgs.push({ who: 'me', text });
     t.msgs = t.msgs.slice(-60);
-    tk.busy = true; persist(); renderThink(true);
+    tk.busy = true; save('thinking'); renderThink(true);
     try {
       const run = await api('/runs', { method: 'POST', body: JSON.stringify({ request: text, session_id: t.session }) });
       if (local.think !== t) return;
@@ -1266,10 +1357,10 @@
       tk.offline = true;
       t.msgs.push({ who: 'agent', text: 'Chưa kết nối được backend. Hãy chạy backend (cd backend, uv run uvicorn app.main:app --port 8000) rồi gửi lại.' });
     }
-    tk.busy = false; persist(); renderThink(true); syncProgress(); renderNav();
+    tk.busy = false; save('thinking'); renderThink(true); syncProgress(); renderNav();
   }
   async function thinkReview(approved) {
-    if (!tk.run || tk.busy) return;
+    if (!tk.run || tk.busy || thinkReadOnly()) return;
     tk.busy = true; renderThink();
     try {
       const run = await api(`/runs/${tk.run.id}/review`, { method: 'POST', body: JSON.stringify({ approved, note: approved ? 'Trưởng nhóm duyệt Canvas' : 'Trưởng nhóm chưa duyệt, cần bổ sung' }) });
@@ -1291,13 +1382,13 @@
         toast('Chưa gửi được quyết định duyệt. Bạn thử lại nhé.');
       }
     }
-    tk.busy = false; persist(); renderThink(true); syncProgress(); renderNav();
+    tk.busy = false; save('thinking'); renderThink(true); syncProgress(); renderNav();
   }
   function thinkReset() {
-    if (tk.busy) return;
-    local.think = { session: 'th-' + Math.random().toString(36).slice(2, 10), msgs: [] };
+    if (tk.busy || thinkReadOnly()) return;
+    local.think = { session: newThinkSession(), msgs: [] };
     tk.run = null; tk.loaded = true; tk.settled = true; tk.introDone = false;
-    S.done.product = false; save('done'); persist();
+    S.done.product = false; save('done', 'thinking');
     renderThink(true); syncProgress(); renderNav();
     toast('Đã làm mới. Bạn có thể bắt đầu lại từ đầu.');
   }
@@ -3511,6 +3602,13 @@ nature là bản chất problem: "behavior" nếu là problem hành vi (duy trì
   document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeDrawer(); setPlanningOpen(false); closeSurveySide(); } });
   document.addEventListener('focusout', () => setTimeout(() => { if (boardStale && !boardPending && !editingBoard()) loadPlanning(); }));
   addEventListener('focus', () => { if (inApp) loadPlanning(); });
+  // Thay đổi của người khác trong đội hiện ra mà không cần tải lại trang.
+  setInterval(() => { if (inApp && !mockMode && !document.hidden && joined() && !tk.busy) loadPlanning(); }, 10000);
+  // Rời tab thì gửi ngay phần đang chờ; quay lại thì tải bản mới.
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) Object.keys(wsTimers).forEach(flushWorkspace);
+    else if (inApp && !mockMode) loadPlanning();
+  });
   mobile.addEventListener('change', () => { if (inApp) { render(); layout(false); syncProgress(); } });
   let rt, lastW = innerWidth;
   addEventListener('resize', () => { if (innerWidth === lastW) return; lastW = innerWidth; clearTimeout(rt); rt = setTimeout(() => { if (inApp) layout(false); }, 120); });

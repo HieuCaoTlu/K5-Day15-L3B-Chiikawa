@@ -165,6 +165,9 @@ def read_state(request: Request, response: Response, db: Session = Depends(get_s
         "invite_code": None,
         "quality": None,
         "maintain": None,
+        "project": None,
+        "thinking": None,
+        "pitching": None,
         "log": [],
     }
     session = auth.session_for(request, db)
