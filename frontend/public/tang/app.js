@@ -99,8 +99,9 @@
   let db = null, canWrite = true;
   const synced = {}, dirty = new Set(), writing = new Set();
   let saveTimer;
+  let forgotten = false; // đã xoá dữ liệu trên máy: không để bản trong bộ nhớ ghi trở lại trước khi tải lại trang
   function persist() {
-    if (mockMode) return;
+    if (mockMode || forgotten) return;
     const kept = Object.fromEntries(Object.entries(S).filter(([k]) => !SERVER.includes(k)));
     try { localStorage.setItem(KEY, JSON.stringify({ S: db ? undefined : kept, local })); } catch (e) { /* bỏ qua */ }
   }
@@ -115,6 +116,15 @@
     }
     syncProgress();
   }
+  /* Đăng xuất: xoá dữ liệu trên máy rồi tải lại để bộ nhớ cũng sạch. */
+  function forgetAccount() {
+    if (forgotten) return;
+    forgotten = true;
+    try { window.SESSION.wipe(localStorage); } catch (e) { /* bộ nhớ trình duyệt không dùng được */ }
+    location.replace('/workstation');
+  }
+  // Đăng xuất ở tab khác hoặc trong khung Planning: trang này cũng phải bỏ dữ liệu đang giữ.
+  addEventListener('storage', e => { if (!mockMode && e.key === KEY && e.newValue === null) forgetAccount(); });
   async function flush() {
     for (const k of [...dirty]) {
       if (writing.has(k)) continue;
@@ -207,6 +217,8 @@
     if (!force && (boardPending || editingBoard())) { boardStale = true; return; }
     boardStale = false;
     if (next === null && live) return;
+    if (!mockMode && window.SESSION.stale(next, local)) { forgetAccount(); return; }
+    if (!mockMode && next && next.profile) { local.owner = next.profile.github_id; persist(); }
     const updated = mockMode ? [] : syncWorkspace(next);
     const same = live && next && live.profile && next.profile && live.profile.github_id === next.profile.github_id;
     const view_ = value => JSON.stringify(value && [value.profile, value.role, value.members, value.repo, value.sprints, value.webhook, value.push_key, value.push_registered]);
@@ -3112,9 +3124,14 @@ nature là bản chất problem: "behavior" nếu là problem hành vi (duy trì
     tab: b => go(b.dataset.id),
     async logout(b) {
       b.disabled = true;
-      try { await fetch(PLANNING_API + '/auth/logout', { method: 'POST', headers: { 'X-Planning-Request': '1' } }); } catch (e) { toast('Chưa đăng xuất được. Bạn thử lại nhé.'); }
-      await loadPlanning(true);
-      showWorkspace();
+      // Gửi nốt phần vừa gõ cho đội trước khi xoá bản trên máy.
+      Object.keys(wsTimers).forEach(flushWorkspace);
+      await wsQueue;
+      let signedOut = false;
+      try { signedOut = (await fetch(PLANNING_API + '/auth/logout', { method: 'POST', headers: { 'X-Planning-Request': '1' } })).ok; } catch (e) { /* báo lỗi bên dưới */ }
+      if (signedOut) { forgetAccount(); return; }
+      b.disabled = false;
+      toast('Chưa đăng xuất được. Bạn thử lại nhé.');
     },
     'planning-live': () => setPlanningOpen(true, 'board'),
     'planning-team': () => setPlanningOpen(true, 'team'),

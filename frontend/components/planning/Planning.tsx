@@ -25,6 +25,14 @@ const RETURN_MESSAGES: Record<string, string> = {
   discovered: 'Đã tải các repo được cấp quyền.',
 };
 const INVITE_KEY = 'tang.invite';
+
+// Xoá dữ liệu Workstation khi đăng xuất, cùng quy tắc khoá với public/tang/session.js.
+// Khi Planning nằm trong khung của Workstation, trang ngoài nhận sự kiện storage và tự tải lại.
+function forgetWorkstation() {
+  try {
+    Object.keys(window.localStorage).filter((key) => /^tang[-.]/.test(key)).forEach((key) => window.localStorage.removeItem(key));
+  } catch { /* không có localStorage */ }
+}
 const SUCCESS_RETURNS = new Set(['discovered', 'ready', 'configured']);
 
 function message(error: unknown) {
@@ -201,7 +209,8 @@ export function Planning() {
   };
 
   async function signOut() {
-    if (await mutate(planning.logout)) {
+    const logout = async () => { await planning.logout(); forgetWorkstation(); };
+    if (await mutate(logout)) {
       setView('board');
       setShowRepo(false);
       setEditTeam(false);
