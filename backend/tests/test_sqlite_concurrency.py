@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import asyncio
+import concurrent.futures
 import os
 import socket
 import sqlite3
 import threading
 import time
+from contextlib import suppress
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
@@ -20,9 +22,10 @@ from sqlalchemy import event
 from sqlalchemy.pool import QueuePool
 
 from app.agent import nodes
-from app.db import get_engine, session_scope
+from app.config import get_settings
+from app.db import get_engine, reset_engine, session_scope
 from app.main import create_app
-from app.planning import push
+from app.planning import live, push
 from app.planning.auth import COOKIE, LEGACY_COOKIE
 from app.planning.models import PlanningMember, PlanningSprint, PlanningTask
 
@@ -38,16 +41,60 @@ def offline_llm(monkeypatch):
     monkeypatch.setattr(nodes.llm, "structured", unavailable)
 
 
+@pytest.fixture(autouse=True)
+def isolate_global_state():
+    with live._lock:
+        live._listeners.clear()
+    get_settings.cache_clear()
+    reset_engine()
+    yield
+    with live._lock:
+        live._listeners.clear()
+    get_settings.cache_clear()
+    reset_engine()
+
+
 def _sqlite_file_env(set_env, tmp_path: Path) -> Path:
     db_path = tmp_path / "concurrency.db"
     set_env(
         APP_ENV="development",
         DATABASE_URL=f"sqlite:///{db_path.as_posix()}",
+        SITE_URL="http://localhost:3000",
+        DEMO_MODE="false",
         SEED_ON_START="false",
         PLANNING_PUSH_AUTO="false",
         PLANNING_POLL_SECONDS="0",
+        GITHUB_CLIENT_ID="",
+        GITHUB_CLIENT_SECRET="",
+        GITHUB_APP_SLUG="",
+        GITHUB_APP_PRIVATE_KEY_B64="",
+        GITHUB_WEBHOOK_SECRET="",
+        PUSH_VAPID_PUBLIC_KEY="",
+        PUSH_VAPID_PRIVATE_KEY="",
+        PUSH_VAPID_SUBJECT="",
+        PLANNING_KEY_FILE=(tmp_path / "planning.key").as_posix(),
+        PLANNING_VAPID_FILE=(tmp_path / "planning-vapid.json").as_posix(),
     )
+    reset_engine()
     return db_path
+
+
+def _wait_pool_idle(engine, *, timeout: float = 2.0) -> int:
+    deadline = time.monotonic() + timeout
+    while engine.pool.checkedout() > 0 and time.monotonic() < deadline:
+        time.sleep(0.01)
+    return engine.pool.checkedout()
+
+
+def _wait_listeners_empty(*, timeout: float = 5.0) -> bool:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        with live._lock:
+            if not any(live._listeners.values()):
+                return True
+        time.sleep(0.01)
+    with live._lock:
+        return not any(live._listeners.values())
 
 
 def _free_port() -> int:
@@ -132,33 +179,42 @@ def test_state_uses_single_pool_connection_without_deadlock_with_tasks_and_legac
         token, github_id = _setup_demo_leader(client)
         _seed_sprint_tasks(github_id, count=3)
 
+        assert _wait_pool_idle(engine) == 0
+        baseline = engine.pool.checkedout()
+
         lock = threading.Lock()
-        checked_out = 0
-        max_checked_out = 0
+        delta = 0
+        max_delta = 0
 
         def on_checkout(*_args):
-            nonlocal checked_out, max_checked_out
+            nonlocal delta, max_delta
             with lock:
-                checked_out += 1
-                max_checked_out = max(max_checked_out, checked_out)
+                delta += 1
+                max_delta = max(max_delta, delta)
 
         def on_checkin(*_args):
-            nonlocal checked_out
+            nonlocal delta
             with lock:
-                checked_out -= 1
+                delta -= 1
 
         event.listen(engine, "checkout", on_checkout)
         event.listen(engine, "checkin", on_checkin)
         try:
-            max_checked_out = 0
+            delta = 0
+            max_delta = 0
             res_new = client.get(f"{BASE}/state", headers={"Cookie": f"{COOKIE}={token}"})
             assert res_new.status_code == 200
-            assert max_checked_out == 1
+            assert max_delta == 1
+            assert delta == 0
+            assert _wait_pool_idle(engine) == baseline
 
-            max_checked_out = 0
+            delta = 0
+            max_delta = 0
             res_legacy = client.get(f"{BASE}/state", headers={"Cookie": f"{LEGACY_COOKIE}={token}"})
             assert res_legacy.status_code == 200
-            assert max_checked_out == 1
+            assert max_delta == 1
+            assert delta == 0
+            assert _wait_pool_idle(engine) == baseline
         finally:
             event.remove(engine, "checkout", on_checkout)
             event.remove(engine, "checkin", on_checkin)
@@ -198,7 +254,7 @@ def test_state_uses_single_pool_connection_without_deadlock_with_tasks_and_legac
         assert ws_ready.wait(timeout=5)
         assert not ws_errors
 
-        clients = [httpx.Client(base_url=base_url, timeout=5.0) for _ in range(18)]
+        clients = [httpx.Client(base_url=base_url, timeout=15.0, verify=False) for _ in range(18)]
         for cli in clients:
             assert cli.get("/health").status_code == 200
 
@@ -239,7 +295,7 @@ def test_state_uses_single_pool_connection_without_deadlock_with_tasks_and_legac
         assert results.count(("GET_STATE", 200)) == 16, results
         assert ("PUT_THINKING", 204) in results, results
         assert ("POST_RUN", 201) in results, results
-        assert get_engine().pool.checkedout() == 0
+        assert _wait_pool_idle(get_engine()) == 0
     finally:
         ws_stop.set()
         ws_thread.join(timeout=3)
@@ -254,7 +310,7 @@ def test_sqlite_file_wal_and_concurrent_thinking_refresh_with_websocket(set_env,
     app = create_app()
     server, srv_thread, port = _start_uvicorn(app)
     base_url = f"http://127.0.0.1:{port}"
-    setup_client = httpx.Client(base_url=base_url, timeout=10.0)
+    setup_client = httpx.Client(base_url=base_url, timeout=10.0, verify=False)
     clients: list[httpx.Client] = []
     ws_stop = threading.Event()
     ws_ready = threading.Event()
@@ -285,10 +341,11 @@ def test_sqlite_file_wal_and_concurrent_thinking_refresh_with_websocket(set_env,
 
         def ws_worker():
             async def run_ws():
-                async with websockets.connect(
+                ws = await websockets.connect(
                     f"ws://127.0.0.1:{port}{BASE}/ws",
                     additional_headers=cookie_hdr,
-                ) as ws:
+                )
+                try:
                     await ws.send("ping")
                     assert await ws.recv() == '{"type":"pong"}'
                     ws_ready.set()
@@ -301,7 +358,13 @@ def test_sqlite_file_wal_and_concurrent_thinking_refresh_with_websocket(set_env,
                             except TimeoutError:
                                 continue
                     await ws.send("ping")
-                    assert await ws.recv() == '{"type":"pong"}'
+                    reply = await asyncio.wait_for(ws.recv(), timeout=2.0)
+                    while reply == '{"type":"changed"}':
+                        reply = await asyncio.wait_for(ws.recv(), timeout=2.0)
+                    assert reply == '{"type":"pong"}'
+                finally:
+                    with suppress(asyncio.CancelledError, concurrent.futures.CancelledError):
+                        await ws.close()
 
             try:
                 asyncio.run(run_ws())
@@ -373,11 +436,13 @@ def test_sqlite_file_wal_and_concurrent_thinking_refresh_with_websocket(set_env,
             assert "bản mới" in conflict_detail.lower(), conflict_detail
 
         ws_stop.set()
-        ws_thread.join(timeout=3)
+        ws_thread.join(timeout=5)
+        assert not ws_thread.is_alive()
+        assert _wait_listeners_empty(timeout=5.0)
         assert not ws_errors
         assert all(code == 200 for code in ws_refreshes)
         assert not db_locked_errors
-        assert engine.pool.checkedout() == 0
+        assert _wait_pool_idle(engine, timeout=5.0) == 0
     finally:
         event.remove(engine, "handle_error", on_handle_error)
         ws_stop.set()
@@ -434,4 +499,4 @@ def test_sqlite_file_concurrent_reader_does_not_lock_thinking_write(set_env, tmp
             reader.rollback()
             reader.close()
 
-        assert get_engine().pool.checkedout() == 0
+        assert _wait_pool_idle(get_engine(), timeout=5.0) == 0

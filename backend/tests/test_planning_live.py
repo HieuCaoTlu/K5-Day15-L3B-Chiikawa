@@ -19,6 +19,15 @@ CHANGED = {"type": "changed"}
 PONG = {"type": "pong"}
 
 
+@pytest.fixture(autouse=True)
+def isolate_listeners():
+    with live._lock:
+        live._listeners.clear()
+    yield
+    with live._lock:
+        live._listeners.clear()
+
+
 def _next(socket):
     """Gửi ping rồi đọc tin kế tiếp: không có tín hiệu thì nhận pong ngay, test không bị treo."""
     socket.send_text("ping")
@@ -51,6 +60,7 @@ def test_member_joining_is_announced(people):  # noqa: F811
     _demo(leader)
     code = _invite(leader)
     with leader.websocket_connect(f"{BASE}/ws") as socket:
+        assert _next(socket) == PONG
         _join(people(), code)
         assert _next(socket) == CHANGED
 
@@ -61,6 +71,7 @@ def test_other_teams_are_not_told(people):  # noqa: F811
     second = people(demo=False)
     _demo(second)
     with first.websocket_connect(f"{BASE}/ws") as socket:
+        assert _next(socket) == PONG
         _rename(second, "Đội khác")
         assert _next(socket) == PONG
 
@@ -68,6 +79,7 @@ def test_other_teams_are_not_told(people):  # noqa: F811
 def test_rejected_write_is_not_announced(people):  # noqa: F811
     leader, member = _team(people)
     with leader.websocket_connect(f"{BASE}/ws") as socket:
+        assert _next(socket) == PONG
         _write(member, "PUT", "/thinking", {"version": 0, "session": "th-x", "msgs": []}, expected=403)
         assert _next(socket) == PONG
 
@@ -76,13 +88,18 @@ def test_removed_member_socket_is_closed(people):  # noqa: F811
     leader, member = _team(people)
     member_id = _state(member)["profile"]["github_id"]
     with leader.websocket_connect(f"{BASE}/ws") as kept:
-        with pytest.raises(WebSocketDisconnect) as closed, member.websocket_connect(f"{BASE}/ws") as socket:
+        assert _next(kept) == PONG
+        with member.websocket_connect(f"{BASE}/ws") as socket:
             assert _next(socket) == PONG
             _write(leader, "DELETE", f"/members/{member_id}")
-            while True:  # có thể nhận tín hiệu "changed" trước khi bị đóng
-                socket.receive_json()
+            with pytest.raises(WebSocketDisconnect) as closed:
+                while True:  # có thể nhận tín hiệu "changed" trước khi bị đóng
+                    assert socket.receive_json() == CHANGED
         assert closed.value.code == 1008
-        assert _next(kept) in (CHANGED, PONG)  # trưởng nhóm vẫn đang nghe
+        reply = _next(kept)
+        if reply == CHANGED:
+            reply = kept.receive_json()
+        assert reply == PONG
 
 
 @pytest.mark.parametrize("login", [False, True])
@@ -94,15 +111,18 @@ def test_outsiders_cannot_listen(people, login):  # noqa: F811
 
 
 def test_foreign_origin_is_refused_in_production(people, monkeypatch):  # noqa: F811
-    leader, _ = _team(people)
-    monkeypatch.setattr(get_settings(), "app_env", "production")
-    monkeypatch.setattr(get_settings(), "demo_mode", True)
+    settings = get_settings()
+    monkeypatch.setattr(settings, "site_url", "http://localhost:3000")
+    leader = people(demo=False)
+    _demo(leader)
+    monkeypatch.setattr(settings, "app_env", "production")
+    monkeypatch.setattr(settings, "demo_mode", True)
     headers = {"Origin": "https://trang-la.example"}
     with pytest.raises(WebSocketDisconnect) as closed:
         with leader.websocket_connect(f"{BASE}/ws", headers=headers) as socket:
             socket.receive_json()
     assert closed.value.code == 1008
-    with leader.websocket_connect(f"{BASE}/ws", headers={"Origin": get_settings().site_origin}) as socket:
+    with leader.websocket_connect(f"{BASE}/ws", headers={"Origin": settings.site_origin}) as socket:
         assert _next(socket) == PONG
 
 
