@@ -236,14 +236,17 @@ Nhóm dùng stack khác (Node, Streamlit, notebook…): sửa hàm `run_app()` t
 
 | Thành phần | Thật / Giả | Ghi chú |
 |---|---|---|
-| Lời gọi AI ở quyết định trung tâm | **Thật** (bắt buộc từ CP3) | Model: ____ |
-|  |  |  |
+| Lời gọi AI ở quyết định trung tâm | **Thật** (bắt buộc từ CP3) | Model: `gemini-3.5-flash-lite` (Gemini API), node `update_canvas`, mỗi tin nhắn gọi đúng 1 lần |
+| GO / NOT YET / NO, đánh dấu bằng chứng | **Thật**, bằng code | `backend/app/agent/canvas.py`, không dùng LLM |
+| Planning, Pitching, Quality, Maintaining | **Một phần giả** | Pitching có luồng sinh nội dung thật; Planning mô phỏng sự kiện pull request, chưa nhận webhook GitHub thật; Quality và Maintaining là luật bằng code và dữ liệu mẫu. Chi tiết `spec.md` §4 |
+| `codebase/` (khung `python run.py`) | **Giả** | Chưa nối với agent Thinking ở `backend/` |
+| Không có `GOOGLE_API_KEY` | Chế độ dự phòng | Agent chạy luật dự phòng, giao diện hiện nhãn "Chế độ dự phòng" |
 
 ## Dùng AI vào việc gì
 
 2–3 dòng (bắt buộc): nhóm dùng công cụ AI nào để làm gì, người kiểm lại phần nào. Chi tiết: [docs/ai-usage.md](docs/ai-usage.md). Coding agent đọc [AGENTS.md](AGENTS.md).
 
-____
+Nhóm dùng Claude Code để viết code agent Thinking, giao diện, slide và cập nhật tài liệu; Gemini là model chạy trong sản phẩm. Người kiểm lại: đội trưởng chạy test và bộ câu thử, thử tay luồng trên giao diện và đọc lại slide. Bộ câu thử do nhóm tự viết, chấm bằng code (`eval/grade.py`), không dùng AI chấm.
 
 ## File mẫu — điền ở bước nào
 

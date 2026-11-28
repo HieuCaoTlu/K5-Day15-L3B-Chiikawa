@@ -4,7 +4,7 @@ import unicodedata
 
 import pytest
 
-from app.agent.canvas import apply_update, decide, empty_canvas, next_missing, recompute
+from app.agent.canvas import apply_update, can_self_fill_prior_art, decide, empty_canvas, next_missing, recompute
 from app.agent.state import CanvasUpdate
 
 REQ = "Tuần trước chị Lan mất 3 đơn vì trả lời tin nhắn trễ 2 giờ."
@@ -28,6 +28,23 @@ def _full_core() -> dict:
         }
     )
     canvas, _ = apply_update(empty_canvas(), upd, "Tuần trước " + ", ".join(facts.values()), {})
+    return canvas
+
+
+def _full() -> dict:
+    """Đủ 9 ô: 4 ô lõi có bằng chứng, 4 ô sau có nội dung, đối thủ do agent tự điền."""
+    canvas = _full_core()
+    extra = {
+        "solution": "bot trả lời giá và size trên Zalo",
+        "ai_leverage": "AI hiểu câu hỏi tự do của khách",
+        "mvp_scope": "bản đầu chỉ trả lời giá và size",
+        "metrics": "mỗi tuần mất không quá 1 đơn",
+        "prior_art": "Zalo OA trả lời theo từ khoá; mình hiểu câu hỏi tự do",
+    }
+    upd = _upd(
+        **{cell: {"content": text, "who": "Agent" if cell == "prior_art" else ""} for cell, text in extra.items()}
+    )
+    canvas, _ = apply_update(canvas, upd, "tin nhắn bất kỳ", {})
     return canvas
 
 
@@ -57,12 +74,14 @@ def test_non_answer_intent_does_not_change_canvas():
     assert after == recompute(before)
 
 
-def test_go_only_when_all_four_core_cells_have_evidence():
-    verdict, reasons, next_cell = decide(_full_core(), {})
+def test_go_only_when_all_nine_cells_filled_and_core_has_evidence():
+    verdict, reasons, next_cell = decide(_full(), {})
     assert (verdict, next_cell) == ("GO", None)
     assert reasons
+    # Ô không lõi chỉ là giả định nên GO nhắc kiểm chứng ở Planning
+    assert any("Planning" in r for r in reasons)
 
-    partial = _full_core()
+    partial = _full()
     partial["pain_point"]["grounded"] = False
     partial = recompute(partial)
     verdict, _, next_cell = decide(partial, {})
@@ -73,6 +92,36 @@ def test_go_only_when_all_four_core_cells_have_evidence():
 def test_not_yet_asks_for_next_missing_in_order():
     assert next_missing(empty_canvas()) == "persona"
     assert decide(empty_canvas(), {})[0] == "NOT YET"
+
+
+def test_four_core_cells_alone_are_not_enough_to_evaluate():
+    """Đủ 4 ô lõi mà còn ô trống thì chưa được đánh giá; agent hỏi tiếp ô trống theo thứ tự."""
+    verdict, reasons, next_cell = decide(_full_core(), {})
+    assert verdict == "NOT YET"
+    assert next_cell == "solution"
+    assert any("AI Leverage còn trống" in r for r in reasons)
+
+
+def test_each_non_core_cell_gets_asked_in_order():
+    canvas = _full()
+    for cell in ("metrics", "mvp_scope", "ai_leverage", "solution"):
+        canvas[cell].update(content="", status="empty")
+        assert next_missing(recompute(canvas)) == next(
+            c for c in ("solution", "ai_leverage", "mvp_scope", "metrics") if recompute(canvas)[c]["status"] == "empty"
+        )
+
+
+def test_prior_art_is_agent_filled_once_solution_and_ai_leverage_exist():
+    canvas = _full_core()
+    assert not can_self_fill_prior_art(canvas)
+    canvas, _ = apply_update(canvas, _upd(solution={"content": "bot Zalo"}), "bot Zalo", {})
+    assert not can_self_fill_prior_art(canvas)
+    canvas, _ = apply_update(canvas, _upd(ai_leverage={"content": "hiểu câu hỏi tự do"}), "x", {})
+    assert can_self_fill_prior_art(canvas)
+    # Agent tự điền thì chỉ là giả định, không bao giờ là bằng chứng
+    canvas, _ = apply_update(canvas, _upd(prior_art={"content": "Zalo OA", "who": "Agent"}), "x", {})
+    assert canvas["prior_art"]["status"] == "assumption"
+    assert not can_self_fill_prior_art(canvas)
 
 
 def test_flags_force_no_even_with_evidence():

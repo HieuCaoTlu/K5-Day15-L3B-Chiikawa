@@ -2,8 +2,8 @@
 ngoài qua llm.py / service riêng, để test được bằng mock data.
 
 guard_input (code) → update_canvas (LLM, structured output) → mark_evidence (code)
-   → còn ô lõi thiếu: ask_next (code) → END, chờ tin nhắn tiếp theo
-   → đủ 4 ô lõi (hoặc NO): verdict (code) → human_review (HITL, interrupt) → finalize (code)
+   → chưa đủ 9 ô, hoặc ô lõi chưa có chuyện thật: ask_next (code) → END, chờ tin nhắn tiếp theo
+   → đủ 9 ô và 4 ô lõi có bằng chứng (hoặc NO): verdict (code) → human_review (HITL, interrupt) → finalize (code)
 
 Luật GO / NOT YET / NO và việc đánh dấu "có bằng chứng" nằm ở app/agent/canvas.py (code thuần).
 """
@@ -16,9 +16,11 @@ from langgraph.types import interrupt
 
 from app.agent import llm
 from app.agent.canvas import (
+    AGENT_FILLED,
     REFUSALS,
     apply_update,
     build_proposal,
+    can_self_fill_prior_art,
     decide,
     empty_canvas,
     heuristic_update,
@@ -41,6 +43,37 @@ def demo_lookup(request: str) -> CanvasUpdate | None:
     cache = json.loads(DEMO_CACHE.read_text(encoding="utf-8"))
     hit = cache.get(normalize(request))
     return CanvasUpdate.model_validate(hit) if hit else None
+
+
+PRIOR_ART_PLACEHOLDER = (
+    "Agent chưa tra cứu được đối thủ ở chế độ dự phòng. Nhóm tự rà các sản phẩm làm việc tương tự "
+    "và ghi điểm khác biệt trước khi làm."
+)
+
+
+def _gate_agent_prior_art(canvas: dict) -> dict:
+    """Agent chưa được tự điền đối thủ khi chưa có Solution và AI Leverage: bỏ phần LLM điền sớm."""
+    cell = canvas[AGENT_FILLED]
+    if cell.get("who") == "Agent" and (
+        canvas["solution"]["status"] == "empty" or canvas["ai_leverage"]["status"] == "empty"
+    ):
+        canvas[AGENT_FILLED] = empty_canvas()[AGENT_FILLED]
+    return canvas
+
+
+def _self_fill_prior_art(canvas: dict) -> dict:
+    """Đối thủ xung quanh do agent tự đánh giá, không đợi người dùng nhập. Luôn là giả định (không người, không lần cụ thể)."""
+    if not can_self_fill_prior_art(canvas):
+        return canvas
+    canvas[AGENT_FILLED] = {
+        "content": PRIOR_ART_PLACEHOLDER,
+        "who": "Agent",
+        "when": "",
+        "quote": "",
+        "grounded": False,
+        "status": "assumption",
+    }
+    return canvas
 
 
 def _canvas_summary(canvas: dict) -> str:
@@ -84,6 +117,7 @@ def update_canvas(state: AgentState) -> dict:
         if upd is None:
             upd, source = heuristic_update(request, prev), "fallback"
     canvas, new_flags = apply_update(prev, upd, request, flags)
+    canvas = _self_fill_prior_art(_gate_agent_prior_art(canvas))
     return {"canvas": canvas, "flags": new_flags, "intent": upd.intent, "source": source}
 
 
@@ -115,11 +149,11 @@ def verdict(state: AgentState) -> dict:
     canvas, flags = state["canvas"], state.get("flags") or {}
     result, reasons, next_cell = decide(canvas, flags)
     if result == "GO":
-        body = "GO. Cả 4 ô lõi đều có chuyện thật. Bạn xem Canvas rồi duyệt để sang Planning."
+        body = "GO. Canvas đã đủ 9 ô và 4 ô lõi đều có chuyện thật. Bạn xem Canvas rồi duyệt để sang Planning."
     elif result == "NO":
         body = f"NO. {reasons[0]} Bạn quyết định có đồng ý kết luận này không."
     else:  # NOT YET chỉ tới đây khi graph bị ép rẽ nhánh; vẫn trả đúng schema
-        body = "NOT YET. Còn ô lõi chưa có chuyện thật."
+        body = "NOT YET. Canvas chưa đủ 9 ô hoặc còn ô lõi chưa có chuyện thật."
     reply = " ".join(p for p in (_refusal(state.get("intent", "answer")), body) if p)
     proposal = clean_proposal(build_proposal(canvas, flags, result, reasons, next_cell, reply))
     return {"proposal": proposal.model_dump()}
