@@ -3,6 +3,7 @@
 1. **Vai trò + phần mình làm:** Thành viên, phụ trách kết nối hệ thống với GitHub và module **Planning** (`backend/app/planning/`, `backend/app/api/planning.py`).
    Làm lại tab Planning và nối GitHub thật (`1a41f3e`): kết nối bằng một nút không cần sửa `.env`, mã mời vào đội, bảng Task kéo thả, nút "Bắt đầu task" tạo nhánh và PR nháp, tự cập nhật task theo PR, thông báo trình duyệt nhắc hạn.
    Đồng bộ dữ liệu theo đội, thêm WebSocket để báo thay đổi (`ac9ccee`, `34928d9`); thêm nút từ Thinking sang Planning (`e4e2d47`).
+   Tự lập sprint từ Canvas đã duyệt và giao task cho cả đội, LLM lỗi hoặc thiếu việc thì dùng luật (`93603a4`); cho mô hình 3D sáng theo tiến độ thật của từng bước (`d8b60e5`).
    Ngoài ra: sửa lỗi chuyển tab bị trắng trang (`933d959`), nối Quality và Maintaining vào dữ liệu thật của đội (`143ebbf`), thiết kế lại trang giới thiệu (`00bba4e`, `6f35f83`), sửa bài quảng cáo Pitching bị mất dấu (`ab38121`).
 
 2. **AI hỗ trợ mình thế nào:** Mình dùng **Claude Code** để viết code, chạy test, thử trên trình duyệt, gỡ lỗi và tạo PR. Những chỗ mình phải yêu cầu sửa:
