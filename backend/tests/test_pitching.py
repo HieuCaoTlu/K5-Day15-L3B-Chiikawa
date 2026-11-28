@@ -329,6 +329,62 @@ def test_pitch_deck_overview_and_ads_flow(client):
     assert client.get(f"/api/v1/pitching/decks/{deck_slug}").status_code == 404
 
 
+_UNACCENTED_AD = {
+    "channel": "Bai dang chung",
+    "hook": "Ban co dang mat don hang vao buoi toi chi vi khong kip tra loi tin nhan cua khach?",
+    "body": (
+        "Dung de viec cham tre lam ban mat di khach hang. Chiikawa la giai phap ho tro Học viên giai quyet "
+        "nhanh chong van de nay trong thoi gian [Thời gian mở thử nghiệm] voi [Số lượng] suat dung thu."
+    ),
+    "cta": "Dang ky ngay tai [Link khảo sát / Link đăng ký dùng thử]",
+    "placeholders": ["[Thời gian mở thử nghiệm]", "[Số lượng]", "[Link khảo sát / Link đăng ký dùng thử]"],
+}
+_ACCENTED_AD = {
+    **_UNACCENTED_AD,
+    "channel": "Bài đăng chung",
+    "hook": "Bạn có đang mất đơn hàng vào buổi tối chỉ vì không kịp trả lời tin nhắn của khách?",
+    "body": "Chiikawa giúp bạn trả lời khách kịp thời, mở thử nghiệm [Thời gian mở thử nghiệm].",
+    "cta": "Đăng ký ngay tại [Link khảo sát / Link đăng ký dùng thử]",
+}
+
+
+def _fake_llm(monkeypatch, *ads: dict) -> list[str]:
+    from app.agent import llm
+
+    replies = iter(ads)
+    prompts: list[str] = []
+
+    def structured(schema, prompt, **_kwargs):
+        prompts.append(prompt)
+        return schema.model_validate({"ads": [next(replies)]})
+
+    monkeypatch.setattr(llm, "structured", structured)
+    return prompts
+
+
+def test_pitch_assets_retries_when_llm_drops_diacritics(monkeypatch):
+    from app.agent.pitching_gen import generate_pitch_assets
+    from app.schemas import ProblemContextIn
+
+    prompts = _fake_llm(monkeypatch, _UNACCENTED_AD, _ACCENTED_AD)
+    out = generate_pitch_assets(ProblemContextIn(**_sample_context()))
+    assert out.source == "llm"
+    assert out.ads[0].hook == _ACCENTED_AD["hook"]
+    assert len(prompts) == 2
+    assert "CÓ ĐẦY ĐỦ DẤU" in prompts[1]
+
+
+def test_pitch_assets_falls_back_when_llm_stays_unaccented(monkeypatch):
+    from app.agent.pitching_gen import generate_pitch_assets
+    from app.schemas import ProblemContextIn
+
+    prompts = _fake_llm(monkeypatch, _UNACCENTED_AD, _UNACCENTED_AD)
+    out = generate_pitch_assets(ProblemContextIn(**_sample_context()))
+    assert out.source == "fallback"
+    assert "Nhóm mình đang thử nghiệm" in out.ads[0].body
+    assert len(prompts) == 2
+
+
 # ---------- Guardrail số liệu của agent Pitching (slide, overview, quảng cáo) ----------
 
 from app.agent import llm, pitching_gen  # noqa: E402

@@ -111,6 +111,10 @@ Chốt trước khi code, sửa ở đây khi đổi (FE đọc chi tiết ở `
 | PUT | `/api/v1/planning/board` | `{version,overview,stories,roles,links,stack,cost,revenue}` | Lưu nội dung tab (204); trưởng nhóm; 409 nếu `version` cũ. `GET /state` trả `board` và `invite_code` (chỉ trưởng nhóm) |
 | PUT | `/api/v1/planning/quality` | `{version,metrics,runs,source,nature,revenueModel,cost,tips?}` (`tips`: tối đa 8 `{id,title,how,why}`) | Lưu tab Quality (204); mọi thành viên; 409 nếu `version` cũ. `GET /state` trả `quality` (`null` khi chưa vào đội; đội mới thì trống) |
 | PUT | `/api/v1/planning/maintain` | `{version,schedule,suggest}` | Lưu tab Maintaining (204); mọi thành viên; 409 nếu `version` cũ; người làm không thuộc đội thành chưa giao. `GET /state` trả `maintain` |
+| PUT | `/api/v1/planning/project` | `{version,name,done}` | Lưu tên dự án và tiến độ năm bước (204); mọi thành viên, riêng `done.product` chỉ trưởng nhóm đổi (403); 409 nếu `version` cũ. `GET /state` trả `project` |
+| PUT | `/api/v1/planning/thinking` | `{version,session,msgs}` | Lưu mã phiên và tin nhắn Thinking (204); chỉ trưởng nhóm, thành viên chỉ đọc qua `thinking` trong `GET /state`; 409 nếu `version` cũ |
+| PUT | `/api/v1/planning/pitching` | `{version,pitch,score,chat}` | Lưu bản nháp Pitching, scorecard và chat với agent (204); mọi thành viên; `pitch` tối đa 500 KB; 409 nếu `version` cũ. `GET /state` trả `pitching` |
+| WS | `/api/v1/planning/ws` | cookie phiên Planning | Gửi `{"type":"changed"}` khi dữ liệu của đội đổi, client đọc lại `GET /state`; gửi chữ `ping` nhận `{"type":"pong"}`. Chưa vào đội hoặc sai Origin (production) thì đóng với mã 1008. Cần backend chạy một tiến trình |
 | POST / DELETE | `/api/v1/planning/invite` | — | Tạo hoặc đổi mã, tắt mã (204); trưởng nhóm |
 | POST | `/api/v1/planning/join` | `{code,name,experience,tags,avatar}` | Vào đội (204); 404 sai mã, 409 đã có đội hoặc đội đủ 16 người, 429 sai 10 lần/10 phút |
 | DELETE | `/api/v1/planning/members/{github_id}` | — | Xóa thành viên (204); 409 nếu là trưởng nhóm hoặc còn task |
@@ -166,7 +170,7 @@ Các yêu cầu ghi Planning từ trình duyệt gửi header `X-Planning-Reques
 | `planning_pull_requests`, `planning_deliveries` | Metadata PR, liên kết task, ghi chú và mã lượt gửi webhook |
 | `planning_subscriptions` | Đăng ký Web Push của trình duyệt theo phiên |
 | `planning_boards` | Nội dung tab Planning (JSON) và phiên bản của từng đội |
-| `planning_workspaces` | Dữ liệu tab Quality và Maintaining của từng đội (mỗi phần một dòng JSON và phiên bản) |
+| `planning_workspaces` | Dữ liệu chung của từng đội: Quality, Maintaining, tên dự án và tiến độ, Thinking, Pitching (mỗi phần một dòng JSON và phiên bản) |
 | `planning_logs` | Nhật ký task đổi tiến độ do pull request; `GET /state` trả `log` |
 | `planning_invites`, `planning_join_attempts` | Mã mời của đội, số lần nhập sai theo tài khoản |
 | `planning_github_app`, `planning_setup_states` | GitHub App tạo từ manifest (bí mật đã mã hóa), lượt tạo kết nối đang chờ |

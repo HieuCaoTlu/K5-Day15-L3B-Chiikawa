@@ -1,5 +1,6 @@
+import json
 from datetime import UTC, date, datetime, timedelta, timezone
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
@@ -169,6 +170,55 @@ class MaintainInput(Input):
     version: int = Field(ge=0)
     schedule: list[MaintenanceJob] = Field(max_length=100)
     suggest: list[MaintenanceSuggestion] = Field(max_length=10)
+
+
+class ProjectDone(Input):
+    product: bool
+    planning: bool
+    pitching: bool
+    quality: bool
+    maintaining: bool
+
+
+class ProjectInput(Input):
+    version: int = Field(ge=0)
+    name: str = Field(max_length=80)
+    done: ProjectDone
+
+
+class ThinkingMessage(Input):
+    who: Literal["me", "agent"]
+    text: str = Field(max_length=4000)
+
+
+class ThinkingInput(Input):
+    version: int = Field(ge=0)
+    session: str = Field(pattern=r"^[A-Za-z0-9_-]{0,64}$")
+    msgs: list[ThinkingMessage] = Field(max_length=60)
+
+
+class ScoreItem(Input):
+    text: str = Field(max_length=4000)
+    score: int = Field(ge=0, le=5)
+
+
+class ChatMessage(Input):
+    who: str = Field(max_length=48)
+    text: str = Field(max_length=4000)
+
+
+class PitchingInput(Input):
+    version: int = Field(ge=0)
+    # Bản nháp Pitching do giao diện quản lý (form, slide, bài đăng) nên chỉ giới hạn kích thước.
+    pitch: dict[str, Any]
+    score: dict[Annotated[str, StringConstraints(max_length=40)], ScoreItem] = Field(max_length=20)
+    chat: list[ChatMessage] = Field(max_length=60)
+
+    @model_validator(mode="after")
+    def draft_size(self):
+        if len(json.dumps(self.pitch, ensure_ascii=False).encode()) > 500_000:
+            raise ValueError("Bản nháp Pitching quá lớn.")
+        return self
 
 
 class RepoVersion(Input):

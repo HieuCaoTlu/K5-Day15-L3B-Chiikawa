@@ -14,6 +14,7 @@ from app.planning import (
     github,
     github_app,
     invites,
+    live,
     push,
     repos,
     setup,
@@ -40,6 +41,7 @@ for child in (
     setup.router,
     board.router,
     workspace.router,
+    live.router,
     invites.router,
     start_pr.router,
     repos.router,
@@ -165,6 +167,9 @@ def read_state(request: Request, response: Response, db: Session = Depends(get_s
         "invite_code": None,
         "quality": None,
         "maintain": None,
+        "project": None,
+        "thinking": None,
+        "pitching": None,
         "log": [],
     }
     session = auth.session_for(request, db)
