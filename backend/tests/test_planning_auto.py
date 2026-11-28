@@ -12,7 +12,7 @@ from app.models import AgentRun
 from app.planning import github
 from app.planning.models import PlanningMember, PlanningTeam
 from app.planning.schemas import Plan, ProposedSprint, ProposedTask, now
-from tests.test_planning import _apply, _choose, _demo, _draft, _login, _state, _tasks, _team, _write
+from tests.test_planning import _apply, _choose, _demo, _draft, _login, _real_team, _state, _tasks, _team, _write
 from tests.test_planning_pr import GITHUB_ENV, PEOPLE, REPO
 
 CANVAS = {
@@ -242,23 +242,23 @@ def real(set_env, monkeypatch):
     monkeypatch.setattr(llm, "structured", broken)
     with TestClient(create_app()) as client:
         _login(client, "lead")
-        _team(client, "lead", "lan")
+        _real_team(client, "lead", "lan")
         _login(client, "lead", "repos")
         _choose(client, "11")
         _approve(client)
         yield client, repo
 
 
-def test_everyone_in_the_repo_joins_and_gets_work(real):
+def test_repo_people_are_suggested_not_added(real):
+    """Người trong repo chưa vào đội chỉ được gợi ý mời; không ai bị thêm vào đội khi chưa tự nhập mã mời."""
     client, _ = real
     done = _auto(client)
-    assert done["added"] == ["minh"]
-    assert done["skipped"] == []
+    assert done["added"] == []
+    assert done["invite_suggestions"] == ["minh"]
     assert done["collaborators"] == "ok"
-    assert done["members"] == 3
-    assert _ids(client) == {"301", "302", "303"}
-    assert _assignees(client) == {"301", "302", "303"}
-    # Hồ sơ tự thêm vẫn lưu lại được trong form đội.
+    assert _ids(client) == {"301", "302"}
+    assert _assignees(client) == {"301", "302"}
+    # Hồ sơ thành viên đã có vẫn lưu lại được trong form đội.
     rows = [{k: v for k, v in member.items() if k != "leader"} for member in _state(client)["members"]]
     _write(client, "PUT", "/members", {"members": rows})
 
@@ -297,7 +297,7 @@ def test_unreadable_collaborators_still_plans_for_the_team(real, monkeypatch):
     assert _assignees(client) == {"301", "302"}
 
 
-def test_people_in_another_team_or_over_the_limit_are_skipped(real):
+def test_people_in_another_team_are_never_pulled_in(real):
     client, repo = real
     with session_scope() as db:
         db.add(PlanningTeam(id="doi-khac", demo=False))
@@ -310,12 +310,12 @@ def test_people_in_another_team_or_over_the_limit_are_skipped(real):
         db.commit()
     repo.append(_collaborator("400", "ban-ron"))
     repo.extend(_collaborator(str(500 + n), f"dev-{n}") for n in range(20))
-    done = _auto(client)
-    assert done["members"] == len(_ids(client)) == 16
-    assert "ban-ron" in done["skipped"]
+    _auto(client)
     assert "400" not in _ids(client)
-    assert len(done["skipped"]) == 1 + 23 - 16  # 1 người đội khác + người vượt 16 chỗ
+    assert _ids(client) == {"301", "302"}
     assert _assignees(client) == _ids(client)
+    with session_scope() as db:
+        assert db.get(PlanningMember, "400").team_id == "doi-khac"
 
 
 def test_collaborators_are_people_who_can_write(set_env, monkeypatch):

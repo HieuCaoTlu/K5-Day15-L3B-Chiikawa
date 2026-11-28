@@ -1,11 +1,15 @@
 """Dữ liệu riêng của Planning. Các bảng được tạo qua app.db.init_db."""
 
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 
 from sqlalchemy import JSON, Boolean, Date, DateTime, ForeignKey, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db import Base
+
+
+def _now() -> datetime:
+    return datetime.now(UTC)
 
 
 class PlanningGithubApp(Base):
@@ -183,3 +187,13 @@ class PlanningSubscription(Base):
     session_id: Mapped[str] = mapped_column(String(64), index=True)
     github_id: Mapped[str] = mapped_column(String(48), index=True)
     data: Mapped[dict] = mapped_column(JSON)
+
+
+class PlanningThinkingSession(Base):
+    """Nguồn sở hữu duy nhất của phiên Thinking theo đội; không xóa khi đội đổi phiên."""
+
+    __tablename__ = "planning_thinking_sessions"
+
+    session_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    team_id: Mapped[str] = mapped_column(ForeignKey("planning_teams.id"), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)

@@ -1,11 +1,10 @@
-"""Canvas đã duyệt + repo đã kết nối → đưa người trong repo vào đội, lập sprint và giao task, không cần bản nháp."""
+"""Lập sprint từ Canvas đã duyệt và giao task cho thành viên của đội."""
 
 import logging
 from collections import Counter
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.db import get_session
@@ -13,14 +12,11 @@ from app.planning import github, handoff
 from app.planning.access import leader_for, require_repo, team_for
 from app.planning.auth import require_same_origin
 from app.planning.generator import check_plan, make_plan
-from app.planning.invites import TEAM_LIMIT
-from app.planning.models import PlanningMember
 from app.planning.schemas import VIETNAM, RepoVersion
 from app.planning.work import add_sprints, members_in
 
 router = APIRouter(dependencies=[Depends(require_same_origin)])
 logger = logging.getLogger(__name__)
-NEW_PROFILE = "Tự thêm từ repo. Chưa nhập kinh nghiệm."
 
 
 def _repo_people(db: Session, team_id: str, version: int) -> tuple[list[dict], str]:
@@ -34,34 +30,6 @@ def _repo_people(db: Session, team_id: str, version: int) -> tuple[list[dict], s
         logger.warning("Chưa đọc được người trong repo (GitHub %s)", exc.status)
         require_repo(team, version)
         return [], "unavailable"
-
-
-def _add_people(db: Session, team_id: str, people: list[dict]) -> tuple[list[str], list[str]]:
-    """Thêm người chưa có đội. Trả (đã thêm, bỏ qua vì ở đội khác hoặc đội hết chỗ)."""
-    size = len(members_in(db, team_for(db, team_id)))
-    added, skipped = [], []
-    for person in people:
-        row = db.get(PlanningMember, person["github_id"])
-        if row and row.team_id == team_id:
-            continue
-        if row or size >= TEAM_LIMIT:
-            skipped.append(person["login"])
-            continue
-        db.add(
-            PlanningMember(
-                github_id=person["github_id"],
-                team_id=team_id,
-                leader=False,
-                login=person["login"],
-                name=person["name"],
-                experience=NEW_PROFILE,
-                tags=[],
-                avatar=size % 8,
-            )
-        )
-        size += 1
-        added.append(person["login"])
-    return added, skipped
 
 
 @router.post("/auto")
@@ -81,12 +49,7 @@ def auto_plan(data: RepoVersion, request: Request, db: Session = Depends(get_ses
     if not run:
         return {"created": False}
     run_id, canvas = run.id, run.proposal["canvas"]
-    added, skipped = _add_people(db, team_id, people)
-    try:
-        db.commit()
-    except IntegrityError as exc:
-        db.rollback()
-        raise HTTPException(409, "Danh sách thành viên vừa thay đổi. Tải lại Planning để tiếp tục.") from exc
+    db.commit()
 
     brief = handoff.brief_from_canvas(canvas, datetime.now(VIETNAM).date())
     members = members_in(db, team_for(db, team_id))
@@ -103,17 +66,21 @@ def auto_plan(data: RepoVersion, request: Request, db: Session = Depends(get_ses
         check_plan(plan, brief, current)
     except ValueError as exc:
         raise HTTPException(409, "Danh sách thành viên vừa thay đổi. Tải lại Planning để tiếp tục.") from exc
+    demo = team.demo
     add_sprints(db, team_id, plan)
     handoff.mark_done(db, team)
     db.commit()
     tasks = [task for sprint in plan.sprints for task in sprint.tasks]
-    return {
+    result = {
         "created": True,
         "source": source,
         "sprints": len(plan.sprints),
         "tasks": len(tasks),
         "members": len({task.assignee_id for task in tasks}),
-        "added": added,
-        "skipped": skipped,
+        "added": [],
+        "skipped": [],
         "collaborators": collaborators,
     }
+    if not demo:
+        result["invite_suggestions"] = [person["login"] for person in people if person["github_id"] not in current]
+    return result

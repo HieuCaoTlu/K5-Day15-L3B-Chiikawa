@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 
 from app.main import create_app
 from app.planning import github, sync
-from tests.test_planning import _apply, _choose, _demo, _draft, _login, _state, _tasks, _team
+from tests.test_planning import _apply, _choose, _demo, _draft, _login, _real_team, _state, _tasks
 
 GITHUB_ENV = {
     "GITHUB_CLIENT_ID": "test-client",
@@ -44,7 +44,7 @@ def connected(set_env, monkeypatch):
         client.__enter__()
         clients.append(client)
         _login(client, "lead")
-        _team(client, "lead", "lan")
+        _real_team(client, "lead", "lan")
         _login(client, "lead", "repos")
         _choose(client, "11")
         _apply(client, _draft(client))

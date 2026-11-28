@@ -8,6 +8,7 @@ Danh sách kết nối nằm trong bộ nhớ: đúng khi backend chạy một t
 import asyncio
 import threading
 from collections import defaultdict
+from contextlib import suppress
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, status
 from fastapi.concurrency import run_in_threadpool
@@ -26,13 +27,15 @@ _PENDING = "planning_live_teams"
 
 
 class _Listener:
-    def __init__(self) -> None:
+    def __init__(self, github_id: str = "") -> None:
         self.loop = asyncio.get_running_loop()
         self.outbox: asyncio.Queue[str] = asyncio.Queue()
+        self.revoked = asyncio.Event()
         self.waiting = False  # đã có tín hiệu chờ gửi thì không xếp thêm
+        self.github_id = github_id
 
     def _queue_change(self) -> None:
-        if not self.waiting:
+        if not self.revoked.is_set() and not self.waiting:
             self.waiting = True
             self.outbox.put_nowait(CHANGED)
 
@@ -40,6 +43,10 @@ class _Listener:
         # Commit chạy ở luồng khác với vòng lặp giữ WebSocket.
         if not self.loop.is_closed():
             self.loop.call_soon_threadsafe(self._queue_change)
+
+    def close(self) -> None:
+        if not self.loop.is_closed():
+            self.loop.call_soon_threadsafe(self.revoked.set)
 
 
 _listeners: defaultdict[str, set[_Listener]] = defaultdict(set)
@@ -68,12 +75,21 @@ def _discard(db: Session) -> None:
     db.info.pop(_PENDING, None)
 
 
-def _team_of(socket: WebSocket) -> str | None:
+def revoke(team_id: str, github_id: str) -> int:
+    """Đóng mọi WebSocket của một người với đội này, gọi sau khi người đó bị xóa khỏi đội. Trả số kết nối bị đóng."""
+    with _lock:
+        targets = [listener for listener in _listeners.get(team_id, ()) if listener.github_id == github_id]
+    for listener in targets:
+        listener.close()
+    return len(targets)
+
+
+def _member_of(socket: WebSocket) -> tuple[str, str] | None:
     # Đóng phiên DB ngay: kết nối WebSocket sống lâu, không được giữ chỗ trong pool.
     with session_scope() as db:
         session = session_for(socket, db)
         member = db.get(PlanningMember, session.github_id) if session else None
-        return member.team_id if member else None
+        return (member.team_id, member.github_id) if member else None
 
 
 def _allowed_origin(socket: WebSocket) -> bool:
@@ -100,23 +116,43 @@ async def _receive(socket: WebSocket, listener: _Listener) -> None:
 @router.websocket("/ws")
 async def watch_team(socket: WebSocket):
     await socket.accept()
-    team = await run_in_threadpool(_team_of, socket) if _allowed_origin(socket) else None
-    if not team:
+    found = await run_in_threadpool(_member_of, socket) if _allowed_origin(socket) else None
+    if not found:
         await socket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
-    listener = _Listener()
+    team, github_id = found
+    listener = _Listener(github_id)
     with _lock:
         _listeners[team].add(listener)
-    tasks = [asyncio.create_task(job(socket, listener)) for job in (_send, _receive)]
+    tasks: list[asyncio.Task] = []
     try:
-        done, _ = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+        # Kiểm tra lại membership sau khi đã đăng ký listener để tránh lọt khi bị xóa đúng lúc đang kết nối.
+        if listener.revoked.is_set() or await run_in_threadpool(_member_of, socket) != (team, github_id):
+            with suppress(WebSocketDisconnect, RuntimeError):
+                await socket.close(code=status.WS_1008_POLICY_VIOLATION)
+            return
+        send_task = asyncio.create_task(_send(socket, listener))
+        recv_task = asyncio.create_task(_receive(socket, listener))
+        revoke_task = asyncio.create_task(listener.revoked.wait())
+        tasks = [send_task, recv_task, revoke_task]
+        done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+        for task in pending:
+            task.cancel()
+        await asyncio.gather(*pending, return_exceptions=True)
+        if revoke_task in done or listener.revoked.is_set():
+            with suppress(WebSocketDisconnect, RuntimeError):
+                await socket.close(code=status.WS_1008_POLICY_VIOLATION)
+            return
         for task in done:
             error = task.exception()
             if error and not isinstance(error, (WebSocketDisconnect, RuntimeError)):
                 raise error
     finally:
         for task in tasks:
-            task.cancel()
+            if not task.done():
+                task.cancel()
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
         with _lock:
             _listeners[team].discard(listener)
             if not _listeners[team]:

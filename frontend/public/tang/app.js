@@ -98,14 +98,38 @@
   }
   let db = null, canWrite = true;
   const synced = {}, dirty = new Set(), writing = new Set();
-  let saveTimer;
+  let saveTimer, saveRetryTimer;
+  let wiping = false;
+  const hasLocalTeam = () => Object.values(local.shared).some(Boolean);
+  // Đăng xuất hoặc mất quyền vào đội: xóa dữ liệu đội lưu trên máy để người dùng chung máy không thấy, rồi tải lại trang.
+  function wipeLocalTeam() {
+    if (mockMode || wiping) return;
+    wiping = true;
+    clearTimeout(saveTimer);
+    clearTimeout(saveRetryTimer);
+    dirty.clear();
+    clearTimeout(socketTimer);
+    closeTeamSocket();
+    for (const section of Object.keys(wsTimers)) {
+      clearTimeout(wsTimers[section]);
+      delete wsTimers[section];
+    }
+    boardRound++;
+    try {
+      // Giữ khóa chính để lần tải sau không nhập lại dữ liệu từ bản cũ.
+      const { model, collapsed, chartMode } = local;
+      localStorage.setItem(KEY, JSON.stringify({ local: { model, collapsed, chartMode } }));
+      localStorage.removeItem('tang.invite');
+    } catch (e) { /* không có localStorage */ }
+    location.reload();
+  }
   function persist() {
-    if (mockMode) return;
+    if (mockMode || wiping) return;
     const kept = Object.fromEntries(Object.entries(S).filter(([k]) => !SERVER.includes(k)));
     try { localStorage.setItem(KEY, JSON.stringify({ S: db ? undefined : kept, local })); } catch (e) { /* bỏ qua */ }
   }
   function save(...sections) {
-    if (mockMode) return;
+    if (mockMode || wiping) return;
     persist();
     [...new Set(sections.map(k => SECTION_OF[k]).filter(Boolean))].forEach(queueWorkspace);
     if (db && canWrite) {
@@ -117,6 +141,7 @@
   }
   async function flush() {
     for (const k of [...dirty]) {
+      if (wiping) return;
       if (writing.has(k)) continue;
       dirty.delete(k);
       const json = JSON.stringify(S[k]);
@@ -128,7 +153,10 @@
         else toast('Chưa lưu được lên dữ liệu chung. Thử lại sau ít phút.');
       }
       writing.delete(k);
-      if (dirty.has(k)) setTimeout(flush, 400);
+      if (dirty.has(k)) {
+        clearTimeout(saveRetryTimer);
+        saveRetryTimer = setTimeout(flush, 400);
+      }
     }
   }
   async function connect() {
@@ -197,6 +225,7 @@
   };
 
   async function loadPlanning(force = false) {
+    if (wiping) return;
     // Đang gõ hoặc đang lưu thì chưa thay dữ liệu: bản lưu dựa trên phiên bản cũ sẽ được server từ chối.
     if (!force && (boardPending || editingBoard())) { boardStale = true; return; }
     let next = null;
@@ -204,16 +233,22 @@
       const response = await fetch(PLANNING_API + '/state', { cache: 'no-store' });
       if (response.ok) next = await response.json();
     } catch (e) { /* chưa kết nối được server */ }
+    if (wiping) return;
     if (!force && (boardPending || editingBoard())) { boardStale = true; return; }
     boardStale = false;
     if (next === null && live) return;
-    const updated = mockMode ? [] : syncWorkspace(next);
+    const wasJoined = joined(), hadState = Boolean(live);
+    // Phiên đã hết hoặc không còn trong đội: dọn bản trên máy trước khi đồng bộ.
+    if (!mockMode && next && !next.role && (wasJoined || hasLocalTeam())) { wipeLocalTeam(); return; }
     const same = live && next && live.profile && next.profile && live.profile.github_id === next.profile.github_id;
+    const leaderId = state => state?.members?.find(m => m.leader)?.github_id;
+    const sameTeam = same && leaderId(live) === leaderId(next);
+    if (!sameTeam || !next?.role || live?.repo?.id !== next.repo?.id || (next.sprints || []).length < 2) sprintPick = null;
+    const updated = mockMode ? [] : syncWorkspace(next);
     const view_ = value => JSON.stringify(value && [value.profile, value.role, value.members, value.repo, value.sprints, value.webhook, value.push_key, value.push_registered]);
     const changed = force || live === undefined || view_(live) !== view_(next);
-    // Đổi tài khoản thì nối lại để server đăng ký đúng đội.
-    if (!same) { boardStatus = ''; boardRound++; closeTeamSocket(); }
-    const wasJoined = joined(), hadState = Boolean(live);
+    // Đổi tài khoản hoặc đổi đội thì nối lại để server đăng ký đúng đội.
+    if (!sameTeam) { boardStatus = ''; boardRound++; closeTeamSocket(); }
     live = next;
     watchTeam();
     // Vừa lập hoặc vào đội ngay trên trang thì giữ phần thiết lập đang mở để làm tiếp bước chọn repo.
@@ -411,12 +446,12 @@
 
   /* Lưu nối tiếp nhau để mỗi lần gửi đúng phiên bản vừa nhận. */
   function pushWorkspace(section) {
-    if (wsVersion[section] === null) return;
+    if (wiping || wsVersion[section] === null) return;
     wsPending++;
     wsQueue = wsQueue.then(async () => {
       let failed = '';
       try {
-        if (wsVersion[section] !== null) {
+        if (!wiping && wsVersion[section] !== null) {
           const response = await fetch(`${PLANNING_API}/${section}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json', 'X-Planning-Request': '1' },
@@ -432,6 +467,7 @@
         }
       } catch (e) { failed = 'Chưa kết nối được server nên chưa lưu. Thử lại sau ít phút.'; }
       wsPending--;
+      if (wiping) return;
       if (failed) {
         toast(failed);
         wsVersion[section] = -1; // ép lấy lại bản trên server
@@ -693,9 +729,18 @@
     if (box) box.textContent = text; else toast(text);
   }
 
+  // Sprint đang xem ở khung Sprint và bảng Task: null = sprint hiện tại, 'all' = mọi sprint, hoặc id sprint.
+  let sprintPick = null;
+  function sprintPicker(sprints) {
+    if (sprints.length < 2) return '';
+    const cur = window.PROGRESS.pickedSprint(sprints, sprintPick);
+    const items = [...sprints.map(sp => [String(sp.id), sp.title, sprintPick !== 'all' && cur === sp]), ['all', 'Tất cả', sprintPick === 'all']];
+    return `<div class="seg sprint-seg" role="group" aria-label="Xem task của sprint">${items.map(([id, name, on]) => `<button type="button" data-act="sprint-pick" data-id="${esc(id)}" class="${on ? 'on' : ''}" aria-pressed="${on}">${esc(name)}</button>`).join('')}</div>`;
+  }
   function taskBoard() {
-    const tasks = liveTasks(), edit = canEdit();
-    if (!(live.sprints || []).length) return `<div class="panel">${panelHead('Task')}<p class="col-empty">Đợi tạo sprint</p></div>`;
+    const sprints = live.sprints || [], edit = canEdit();
+    if (!sprints.length) return `<div class="panel">${panelHead('Task')}<p class="col-empty">Đợi tạo sprint</p></div>`;
+    const tasks = window.PROGRESS.boardTasks(sprints, sprintPick);
     const columns = Object.entries(COLUMNS).map(([key, [tone, about]]) => {
       const list = tasks.filter(t => columnOf(t.progress) === key);
       const label = STATUS[key][0];
@@ -704,12 +749,14 @@
     }).join('');
     const hint = '';
     const rule = 'Trạng thái tự đổi khi có sự kiện pull request nhắc mã task' + (edit ? '. Bạn cũng có thể kéo thẻ sang cột khác' : '');
-    return `<div class="panel">${panelHead('Task', `<span class="muted">${rule}</span>`)}${hint}<div class="board">${columns}</div>${edit ? `<p class="muted" id="boardStatus" role="status">${esc(boardStatus)}</p>` : ''}</div>`;
+    const picker = sprintPicker(sprints);
+    return `<div class="panel">${panelHead('Task', `<span class="muted">${rule}</span>`)}${hint}${picker ? `<div style="margin-bottom:12px">${picker}</div>` : ''}<div class="board">${columns}</div>${edit ? `<p class="muted" id="boardStatus" role="status">${esc(boardStatus)}</p>` : ''}</div>`;
   }
 
   function saveTask(id, change) {
     const task = liveTasks().find(t => t.id === id);
     if (!task) return;
+    sprintPick = window.PROGRESS.pinSprintPick(live.sprints, sprintPick);
     const move = Boolean(change.status);
     Object.assign(task, change, move ? { progress: change.status } : {});
     const round = boardRound;
@@ -1305,7 +1352,9 @@
   const CELL_STATE = { evidence: ['Có bằng chứng', 'var(--green)'], assumption: ['Giả định', 'var(--orange)'], empty: ['Trống', 'var(--mute)'] };
   const VERDICT = { GO: 'var(--green)', 'NOT YET': 'var(--orange)', NO: 'var(--red)' };
   async function api(path, opts) {
-    const res = await fetch(API + path, Object.assign({ headers: { 'Content-Type': 'application/json' } }, opts));
+    // Phiên Thinking của đội: server chỉ nhận lệnh ghi có header này (chặn trang lạ gửi thay).
+    const headers = { 'Content-Type': 'application/json', 'X-Planning-Request': '1', ...(opts && opts.headers) };
+    const res = await fetch(API + path, { ...opts, headers });
     if (!res.ok) throw Object.assign(new Error('HTTP ' + res.status), { status: res.status });
     return res.json();
   }
@@ -1626,11 +1675,7 @@
   const DAY_MS = 864e5;
   const dayOf = v => Date.parse(String(v).slice(0, 10));
   const dayFormat = t => dueFormat.format(new Date(t));
-  function currentSprint(sprints) {
-    const now = Date.now();
-    return sprints.find(sp => dayOf(sp.starts_on) <= now && now < dayOf(sp.ends_on) + DAY_MS)
-      || sprints.find(sp => sp.tasks.some(t => t.progress !== 'done')) || sprints[sprints.length - 1];
-  }
+  const currentSprint = sprints => window.PROGRESS.currentSprint(sprints);
   function ganttChart(sprints) {
     const start = Math.min(...sprints.map(sp => dayOf(sp.starts_on)));
     const end = Math.max(...sprints.map(sp => dayOf(sp.ends_on))) + DAY_MS;
@@ -1664,13 +1709,15 @@
         'Sprint là một chặng làm việc ngắn, thường 1 đến 2 tuần, có mục tiêu rõ ràng. Agent chia Canvas thành các task nhỏ, nhóm giao người và đặt hạn, hết chặng thì xem task nào đã xong.',
         btn('planning-live', 'Tạo sprint tự động', 'primary big', `aria-haspopup="dialog"`))}</div>`;
     }
-    const cur = currentSprint(sprints), total = cur.tasks.length, done = cur.tasks.filter(t => t.progress === 'done').length;
+    // Khung Sprint hiện đúng sprint đang xem ở bảng Task; chọn "Tất cả" thì vẫn hiện sprint hiện tại.
+    const now_ = currentSprint(sprints), cur = window.PROGRESS.pickedSprint(sprints, sprintPick) || now_;
+    const total = cur.tasks.length, done = cur.tasks.filter(t => t.progress === 'done').length;
     const ratio = total ? Math.round((done / total) * 100) : 0;
-    const toggle = btn('sprint-gantt', ganttOpen ? 'Thu gọn' : 'Xem Gantt', 'soft small', `aria-expanded="${ganttOpen}" aria-controls="ganttBox"`);
+    const toggle = btn('sprint-gantt', ganttOpen ? 'Thu gọn' : 'Xem biểu đồ Gantt', 'soft small', `aria-expanded="${ganttOpen}" aria-controls="ganttBox"`);
     return `<div class="panel">${panelHead('Sprint', `<div class="row" style="gap:6px">${toggle}${btn('planning-live', 'Quản lý sprint', 'ghost small', 'aria-haspopup="dialog"')}</div>`)}
       <div class="sprint-now" style="--sp:${SPRINT_TONES[sprints.indexOf(cur) % SPRINT_TONES.length]}">
-        <div><span class="task-tag task-sprint">Sprint hiện tại</span><h3>${esc(cur.title)}</h3><p class="muted">${dayFormat(dayOf(cur.starts_on))} đến ${dayFormat(dayOf(cur.ends_on))}${cur.goal ? ' · ' + esc(cur.goal) : ''}</p></div>
-        <div class="sprint-prog"><b>${done}/${total}</b><span class="muted">task xong</span><div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${ratio}" aria-label="Tiến độ sprint hiện tại"><i style="width:${ratio}%"></i></div></div>
+        <div><span class="task-tag task-sprint">${cur === now_ ? 'Sprint hiện tại' : 'Đang xem'}</span><h3>${esc(cur.title)}</h3><p class="muted">${dayFormat(dayOf(cur.starts_on))} đến ${dayFormat(dayOf(cur.ends_on))}${cur.goal ? ' · ' + esc(cur.goal) : ''}</p></div>
+        <div class="sprint-prog"><b>${done}/${total}</b><span class="muted">task xong</span><div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${ratio}" aria-label="Tiến độ sprint ${cur === now_ ? 'hiện tại' : 'đang xem'}"><i style="width:${ratio}%"></i></div></div>
       </div>
       <div id="ganttBox" ${ganttOpen ? '' : 'hidden'}>${ganttOpen ? ganttChart(sprints) : ''}</div></div>`;
   }
@@ -3090,6 +3137,13 @@ nature là bản chất problem: "behavior" nếu là problem hành vi (duy trì
     enter: () => enter(),
     home,
     'sprint-gantt'() { ganttOpen = !ganttOpen; drawPlanning(); },
+    'sprint-pick'(b) {
+      const id = b.dataset.id;
+      sprintPick = id;
+      drawPlanning();
+      const again = $(`[data-act="sprint-pick"][data-id="${CSS.escape(id)}"]`, view);
+      again?.focus({ preventScroll: true });
+    },
     'ob-model'(b) {
       local.model = b.dataset.pick; persist();
       if (site) site.mode(local.model);
@@ -3102,12 +3156,22 @@ nature là bản chất problem: "behavior" nếu là problem hành vi (duy trì
       const code = ($('#obInvite') ? $('#obInvite').value : '').trim().toUpperCase();
       obInvite = code;
       // Planning đọc mã này sau khi đăng nhập xong để mở sẵn form vào đội.
-      try { if (code) localStorage.setItem('tang.invite', code); else localStorage.removeItem('tang.invite'); } catch (e) { /* không có localStorage */ }
+      if (!mockMode) {
+        try { if (code) localStorage.setItem('tang.invite', code); else localStorage.removeItem('tang.invite'); } catch (e) { /* không có localStorage */ }
+      }
       if (live && live.setup && live.setup.needed) go('planning'); else location.href = PLANNING_API + '/auth/github'; },
     tab: b => go(b.dataset.id),
     async logout(b) {
       b.disabled = true;
-      try { await fetch(PLANNING_API + '/auth/logout', { method: 'POST', headers: { 'X-Planning-Request': '1' } }); } catch (e) { toast('Chưa đăng xuất được. Bạn thử lại nhé.'); }
+      let done = false;
+      try { done = (await fetch(PLANNING_API + '/auth/logout', { method: 'POST', headers: { 'X-Planning-Request': '1' } })).ok; } catch (e) { /* báo bên dưới */ }
+      if (done) {
+        if (!mockMode && (joined() || hasLocalTeam())) wipeLocalTeam();
+        else location.reload();
+        return;
+      }
+      toast('Chưa đăng xuất được. Bạn thử lại nhé.');
+      b.disabled = false;
       await loadPlanning(true);
       showWorkspace();
     },
@@ -3562,7 +3626,9 @@ nature là bản chất problem: "behavior" nếu là problem hành vi (duy trì
     if (kind === 'invite') {
       const code = $('input', f).value.trim().toUpperCase();
       if (!code) return;
-      try { localStorage.setItem('tang.invite', code); } catch (err) { /* không có localStorage */ }
+      if (!mockMode) {
+        try { localStorage.setItem('tang.invite', code); } catch (err) { /* không có localStorage */ }
+      }
       // Chưa có GitHub App thì không đăng nhập được: vào Workstation để làm bước kết nối trước.
       fetch(PLANNING_API + '/state', { cache: 'no-store' }).then(r => r.json()).then(s => {
         location.href = s && s.setup && s.setup.needed ? '/workstation#planning' : PLANNING_API + '/auth/github';

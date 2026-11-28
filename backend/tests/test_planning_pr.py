@@ -8,7 +8,7 @@ from sqlalchemy import text
 from app.db import session_scope
 from app.main import create_app
 from app.planning import github
-from tests.test_planning import BASE, _apply, _choose, _demo, _draft, _login, _state, _tasks, _team, _write
+from tests.test_planning import BASE, _apply, _choose, _demo, _draft, _login, _real_team, _state, _tasks, _write
 
 GITHUB_ENV = {
     "GITHUB_CLIENT_ID": "test-client",
@@ -100,7 +100,7 @@ def team(set_env, monkeypatch):
     app = create_app()
     with TestClient(app) as leader, TestClient(app) as member:
         _login(leader, "lead")
-        _team(leader, "lead", "lan")
+        _real_team(leader, "lead", "lan")
         _login(leader, "lead", "repos")
         _choose(leader, "11")
         draft = _draft(leader)

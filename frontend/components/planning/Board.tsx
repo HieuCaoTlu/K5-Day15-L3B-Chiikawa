@@ -105,11 +105,14 @@ export function PlanForm({ initial, sprints, repoVersion, busy, mutate, onCancel
   );
 }
 
-export function DraftEditor({ draft, members, repoVersion, busy, mutate, showRegenerate }: {
+export function DraftEditor({ draft, members, repoVersion, busy, mutate, showRegenerate, onDiscarded }: {
   draft: Draft; members: Member[]; repoVersion: number; busy: boolean; mutate: Mutate; showRegenerate: () => void;
+  onDiscarded?: () => void;
 }) {
   const [plan, setPlan] = useState<Plan>(draft.plan);
   const [formError, setFormError] = useState<string | null>(null);
+  const [discarding, setDiscarding] = useState(false);
+  const [confirm, ask] = useConfirm();
   const update = (index: number, sprint: Plan['sprints'][number]) =>
     setPlan((old) => ({ sprints: old.sprints.map((item, position) => position === index ? sprint : item) }));
 
@@ -126,6 +129,22 @@ export function DraftEditor({ draft, members, repoVersion, busy, mutate, showReg
     }
     setFormError(null);
     await mutate(() => planning.apply(draft.id, payload, repoVersion), 'Đã giao task cho đội.');
+  }
+
+  async function discard() {
+    if (!await ask({
+      title: 'Bỏ bản nháp?',
+      body: 'Kế hoạch đang chờ duyệt và các chỉnh sửa trong bản nháp sẽ bị xóa.',
+      confirmLabel: 'Bỏ bản nháp',
+      danger: true,
+    })) return;
+    setFormError(null);
+    setDiscarding(true);
+    try {
+      if (await mutate(() => planning.discardDraft(draft.id, repoVersion), 'Đã bỏ bản nháp.')) onDiscarded?.();
+    } finally {
+      setDiscarding(false);
+    }
   }
 
   return (
@@ -180,7 +199,11 @@ export function DraftEditor({ draft, members, repoVersion, busy, mutate, showReg
       <div className="pl-row">
         <button type="submit" className="d-btn d-b1" disabled={busy}>Áp dụng kế hoạch</button>
         <button type="button" className="d-btn d-b2" onClick={showRegenerate} disabled={busy}>Sửa đầu vào</button>
+        <button type="button" className="d-btn d-b2 text-danger" onClick={() => void discard()} disabled={busy || discarding}>
+          {discarding ? 'Đang bỏ bản nháp…' : 'Bỏ bản nháp'}
+        </button>
       </div>
+      {confirm}
     </form>
   );
 }

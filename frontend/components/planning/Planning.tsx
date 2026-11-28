@@ -301,7 +301,7 @@ export function Planning() {
                       </p>}
                       {state.repo && leader && state.draft && (
                         <DraftEditor key={state.draft.id} draft={state.draft} members={state.members} repoVersion={state.repo_version}
-                          busy={busy} mutate={mutate} showRegenerate={() => setCompose(!compose)} />
+                          busy={busy} mutate={mutate} showRegenerate={() => setCompose(!compose)} onDiscarded={() => setCompose(false)} />
                       )}
                       {state.repo && leader && (compose || (!state.draft && !state.sprints.length && !state.auto_plan)) && (
                         <PlanForm key={state.repo_version + ':' + (state.draft?.id ?? '')} initial={state.draft?.brief}
