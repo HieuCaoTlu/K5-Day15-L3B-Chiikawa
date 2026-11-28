@@ -13,6 +13,7 @@ from app.planning.github import AUTH_CALLBACK, SETUP_CALLBACK
 from app.planning.push import reminder_loop
 from app.planning.push import vapid as push_keys
 from app.planning.sync import poll_loop
+from app.planning.workspace import backfill_thinking_sessions
 from app.seed import seed
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
@@ -36,8 +37,9 @@ logging.getLogger("uvicorn.access").addFilter(_PlanningOAuthLogFilter())
 async def lifespan(_: FastAPI):
     settings = get_settings()
     init_db()
-    if settings.seed_on_start:
-        with session_scope() as session:
+    with session_scope() as session:
+        backfill_thinking_sessions(session)
+        if settings.seed_on_start:
             if added := seed(session):
                 logger.info("Seeded %d items", added)
     from app.agent.graph import get_graph

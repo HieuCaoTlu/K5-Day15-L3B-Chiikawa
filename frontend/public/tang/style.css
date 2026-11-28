@@ -62,6 +62,8 @@ button.av{cursor:pointer}
 .seg{display:flex;background:var(--soft);border-radius:99px;padding:3px;gap:2px}
 .seg button{border:0;background:transparent;border-radius:99px;padding:4px 12px;font-size:12px;cursor:pointer}
 .seg button.on{background:var(--ink);color:#fff}
+.seg.sprint-seg{display:inline-flex;max-width:100%;flex-wrap:wrap;border-radius:14px}
+.sprint-seg button{min-width:0;max-width:100%;min-height:34px;border-radius:11px;overflow-wrap:anywhere}
 #pins{position:absolute;inset:0;pointer-events:none;opacity:0}
 .pin{--c:var(--blue);position:absolute;left:0;top:0;display:flex;align-items:center;gap:8px;border:1px solid var(--line);background:rgba(255,255,255,.94);border-radius:99px;padding:6px 14px 6px 10px;font-size:13px;cursor:pointer;white-space:nowrap;pointer-events:auto}
 .pin i{width:10px;height:10px;border-radius:50%;background:var(--c)}

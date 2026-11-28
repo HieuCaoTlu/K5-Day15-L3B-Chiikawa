@@ -19,28 +19,39 @@ from app.planning.models import PlanningMember, PlanningSession, PlanningSubscri
 from app.planning.schemas import now, utc
 
 router = APIRouter(prefix="/auth")
-COOKIE = "tang_planning_session"
+COOKIE = "tang_session"
+LEGACY_COOKIE = "tang_planning_session"
 OAUTH_COOKIE = "tang_planning_oauth"
-COOKIE_PATH = "/api/v1/planning"
+# Cả /api/v1/planning lẫn /api/v1/agent (Thinking của đội) cần đọc phiên đăng nhập.
+COOKIE_PATH = "/api/v1"
+LEGACY_COOKIE_PATH = (
+    "/api/v1/planning"  # cookie cũ trước khi đổi tên/path; xóa khi đăng nhập, đăng xuất hoặc chuyển sang cookie mới
+)
 SESSION_SECONDS = 60 * 60 * 24 * 14
 NO_STORE = {"Cache-Control": "no-store", "Referrer-Policy": "no-referrer"}
 TOKEN = re.compile(r"[A-Za-z0-9_-]{43}")
 
 
-def secure_cookie() -> bool:
+def secure_cookie(db: Session | None = None) -> bool:
     settings = get_settings()
-    config = github_app.current()
+    config = github_app.current(db)
     site_url = config.site_url if config else settings.site_origin
     return settings.app_env == "production" or site_url.startswith("https://")
 
 
-def session_for(request: Request, db: Session) -> PlanningSession | None:
-    value = request.cookies.get(COOKIE, "")
+def _session_by_token(value: str, db: Session) -> PlanningSession | None:
     if not TOKEN.fullmatch(value):
         return None
     session = db.get(PlanningSession, hashlib.sha256(value.encode()).hexdigest())
     if session and utc(session.expires_at) > now() and (not session.demo or get_settings().planning_demo_enabled):
         return session
+    return None
+
+
+def session_for(request: Request, db: Session) -> PlanningSession | None:
+    for name in (COOKIE, LEGACY_COOKIE):
+        if session := _session_by_token(request.cookies.get(name, ""), db):
+            return session
     return None
 
 
@@ -82,12 +93,20 @@ def _start_session(request: Request, response: Response, db: Session, profile: d
     )
     db.add(session)
     db.commit()
+    secure = secure_cookie(db)
     response.set_cookie(
         COOKIE,
         token,
         max_age=SESSION_SECONDS,
         path=COOKIE_PATH,
-        secure=secure_cookie(),
+        secure=secure,
+        httponly=True,
+        samesite="lax",
+    )
+    response.delete_cookie(
+        LEGACY_COOKIE,
+        path=LEGACY_COOKIE_PATH,
+        secure=secure,
         httponly=True,
         samesite="lax",
     )
@@ -108,7 +127,7 @@ def _back(status: str = "", task: str = "") -> RedirectResponse:
 
 @router.get("/github")
 def start_github(request: Request, intent: Literal["login", "repos"] = "login", db: Session = Depends(get_session)):
-    config = github_app.current()
+    config = github_app.current(db)
     if intent == "repos":
         session = require_session(request, db)
         member = db.get(PlanningMember, session.github_id)
@@ -153,7 +172,7 @@ def finish_github(
     expected, verifier, intent = cookie
     if not compare_digest(expected.encode(), state.encode()) or not TOKEN.fullmatch(verifier):
         return _back("state")
-    config = github_app.current()
+    config = github_app.current(db)
     if not config or (intent == "repos" and not config.repos_enabled):
         return _back("config")
     from app.planning import start_pr  # nạp muộn: start_pr dùng lại các hàm của module này
@@ -224,6 +243,33 @@ def logout(request: Request, db: Session = Depends(get_session)):
     if session := session_for(request, db):
         _clear_session(db, session)
         db.commit()
+    secure = secure_cookie(db)
     response = Response(status_code=204, headers=NO_STORE)
-    response.delete_cookie(COOKIE, path=COOKIE_PATH, secure=secure_cookie(), httponly=True, samesite="lax")
+    response.delete_cookie(COOKIE, path=COOKIE_PATH, secure=secure, httponly=True, samesite="lax")
+    response.delete_cookie(LEGACY_COOKIE, path=LEGACY_COOKIE_PATH, secure=secure, httponly=True, samesite="lax")
     return response
+
+
+def carry_session_cookie(request: Request, response: Response, db: Session) -> None:
+    """Chuyển cookie cũ (tang_planning_session ở /api/v1/planning) sang cookie mới ở /api/v1 một lần duy nhất."""
+    if request.cookies.get(COOKIE):
+        return
+    legacy = request.cookies.get(LEGACY_COOKIE, "")
+    if legacy and _session_by_token(legacy, db):
+        secure = secure_cookie(db)
+        response.set_cookie(
+            COOKIE,
+            legacy,
+            max_age=SESSION_SECONDS,
+            path=COOKIE_PATH,
+            secure=secure,
+            httponly=True,
+            samesite="lax",
+        )
+        response.delete_cookie(
+            LEGACY_COOKIE,
+            path=LEGACY_COOKIE_PATH,
+            secure=secure,
+            httponly=True,
+            samesite="lax",
+        )

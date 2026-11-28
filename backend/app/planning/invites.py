@@ -9,6 +9,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.db import get_session
+from app.planning import live
 from app.planning.access import leader_for, team_for
 from app.planning.auth import require_same_origin, require_session
 from app.planning.models import (
@@ -130,3 +131,5 @@ def remove_member(github_id: str, request: Request, db: Session = Depends(get_se
     db.execute(delete(PlanningSubscription).where(PlanningSubscription.github_id == github_id))
     db.delete(member)
     db.commit()
+    # Người bị xóa không được nhận tín hiệu của đội nữa: đóng ngay các WebSocket họ đang mở.
+    live.revoke(team.id, github_id)

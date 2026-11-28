@@ -10,8 +10,15 @@ from app.agent.guardrails import check_input
 from app.agent.service import with_canvas
 from app.config import get_settings
 from app.models import AgentRun
-from app.planning.models import PlanningSprint, PlanningTeam, PlanningWorkspace
+from app.planning.models import PlanningSprint, PlanningTeam, PlanningThinkingSession, PlanningWorkspace
 from app.planning.schemas import Brief
+
+
+def thinking_owner_team_id(db: Session, session_id: str) -> str | None:
+    # Đọc thẳng bảng sở hữu: import từ workspace.py sẽ tạo vòng import (workspace → work → handoff).
+    claim = db.get(PlanningThinkingSession, session_id)
+    return claim.team_id if claim else None
+
 
 # Một dòng trong planning_workspaces: Canvas (mã lượt chạy) đã được xử lý. Không nằm trong dữ liệu trả cho trình duyệt.
 SECTION = "autoplan"
@@ -22,7 +29,7 @@ def approved_run(db: Session, team: PlanningTeam) -> AgentRun | None:
     """Lượt Thinking mới nhất của đội, chỉ khi trưởng nhóm đã duyệt cho sang Planning."""
     thinking = db.get(PlanningWorkspace, (team.id, "thinking"))
     session_id = thinking.data.get("session") if thinking else None
-    if not session_id:
+    if not session_id or thinking_owner_team_id(db, session_id) != team.id:
         return None
     query = with_canvas(select(AgentRun).where(AgentRun.session_id == session_id))
     run = db.scalar(query.order_by(AgentRun.created_at.desc(), AgentRun.id.desc()).limit(1))

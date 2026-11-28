@@ -65,6 +65,7 @@ export const planning = {
     write('/repo', 'PUT', { repo_id, repo_version, reset_confirmed }),
   refreshRepo: (repo_version: number) => write<{ count: number }>('/repo/refresh', 'POST', { repo_version }),
   draft: (brief: Brief, repo_version: number) => write<Draft>('/draft', 'POST', { brief, repo_version }),
+  discardDraft: (draft_id: string, repo_version: number) => write('/draft', 'DELETE', { draft_id, repo_version }),
   apply: (draft_id: string, plan: Plan, repo_version: number) => write('/apply', 'POST', { draft_id, plan, repo_version }),
   task: (id: number, task: TaskInput, repo_version: number) => write('/tasks/' + id, 'PATCH', { task, repo_version }),
   startTask: (id: number, repo_version: number) => write<{ url: string }>('/tasks/' + id + '/pr', 'POST', { repo_version }),

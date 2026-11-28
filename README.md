@@ -94,10 +94,10 @@ Chốt trước khi code, sửa ở đây khi đổi (FE đọc chi tiết ở `
 | GET | `/api/v1/items` | — | `Item[]` |
 | POST | `/api/v1/items` | `{title, description?, status?}` | `Item` (201) |
 | GET / DELETE | `/api/v1/items/{id}` | — | `Item` / 204 |
-| POST | `/api/v1/agent/runs` | `{request, session_id?}` | `Run` — `status`: `waiting_review` \| `blocked` \| `error` |
-| GET | `/api/v1/agent/runs?status=` | — | `Run[]` (50 mới nhất) |
-| GET | `/api/v1/agent/runs/{id}` | — | `Run` |
-| POST | `/api/v1/agent/runs/{id}/review` | `{approved, note?}` | `Run` — `approved` \| `rejected`; không chờ duyệt → 409 |
+| POST | `/api/v1/agent/runs` | `{request, session_id?}` (thêm header `X-Planning-Request: 1` với phiên thuộc đội hoặc khi trưởng nhóm mở phiên mới) | `Run` — `status`: `waiting_review` \| `blocked` \| `error`. Phiên chưa thuộc đội và chưa có lượt nào: trưởng nhóm tự nhận quyền sở hữu trước khi chạy; phiên đã thuộc đội chỉ thành viên đội tạo được; phiên công khai giữ nguyên công khai |
+| GET | `/api/v1/agent/runs?status=&session_id=&has_canvas=` | Cookie phiên nếu xem phiên của đội | `Run[]` (50 mới nhất). Có `session_id` (rỗng → 422): phiên thuộc đội chỉ thành viên đội xem (401/403), chưa thuộc đội thì công khai. Không `session_id`: mặc định lọc theo các phiên của đội (nếu đã vào đội) hoặc chỉ các phiên công khai |
+| GET | `/api/v1/agent/runs/{id}` | Cookie phiên nếu thuộc đội | `Run` (phiên thuộc đội chỉ thành viên đội xem; chưa thuộc đội thì công khai) |
+| POST | `/api/v1/agent/runs/{id}/review` | `{approved, note?}` (thêm header `X-Planning-Request: 1` nếu thuộc đội) | `Run` — `approved` \| `rejected`; không chờ duyệt → 409. Phiên thuộc đội chỉ trưởng nhóm của đội duyệt được (403) |
 | GET | `/api/v1/admin/stats` | — | số lượt chạy theo trạng thái/nguồn, tỉ lệ duyệt, số phiên |
 | GET | `/api/v1/admin/usage?days=7` | — | token, chi phí theo ngày/model/node, lượt gọi gần nhất, ngân sách hôm nay |
 | GET | `/api/v1/admin/sessions` | — | phiên chat (số lượt, token, chi phí) |
@@ -107,12 +107,12 @@ Chốt trước khi code, sửa ở đây khi đổi (FE đọc chi tiết ở `
 | GET | `/api/v1/planning/setup/callback` | `code`, `state` từ GitHub + cookie | 303 về `/planning?github=ready\|setup_failed\|state\|configured` |
 | GET | `/api/v1/planning/auth/github[?intent=repos]` · `/api/v1/planning/auth/github/callback` | OAuth state + PKCE | Chuyển hướng OAuth hoặc về Planning |
 | POST | `/api/v1/planning/auth/demo` · `/api/v1/planning/auth/logout` | — | Tạo phiên demo hoặc kết thúc phiên (204) |
-| PUT | `/api/v1/planning/members` | `{members:[{github_id?,login,name,experience,tags,avatar}]}` | Lưu đội (204) |
+| PUT | `/api/v1/planning/members` | `{members:[{github_id?,login,name,experience,tags,avatar}]}` | Lưu đội (204). Đội thật tạo hồ sơ trưởng nhóm lần đầu và cập nhật hồ sơ thành viên hiện có. Yêu cầu thêm người mới trả 409 và hướng dẫn chia sẻ mã mời. Đội demo vẫn thêm được hồ sơ mẫu |
 | PUT | `/api/v1/planning/board` | `{version,overview,stories,roles,links,stack,cost,revenue}` | Lưu nội dung tab (204); trưởng nhóm; 409 nếu `version` cũ. `GET /state` trả `board` và `invite_code` (chỉ trưởng nhóm) |
 | PUT | `/api/v1/planning/quality` | `{version,metrics,runs,source,nature,revenueModel,cost,tips?}` (`tips`: tối đa 8 `{id,title,how,why}`) | Lưu tab Quality (204); mọi thành viên; 409 nếu `version` cũ. `GET /state` trả `quality` (`null` khi chưa vào đội; đội mới thì trống) |
 | PUT | `/api/v1/planning/maintain` | `{version,schedule,suggest}` | Lưu tab Maintaining (204); mọi thành viên; 409 nếu `version` cũ; người làm không thuộc đội thành chưa giao. `GET /state` trả `maintain` |
 | PUT | `/api/v1/planning/project` | `{version,name,done}` | Lưu tên dự án và tiến độ năm bước (204); mọi thành viên, riêng `done.product` chỉ trưởng nhóm đổi (403); 409 nếu `version` cũ. `GET /state` trả `project` |
-| PUT | `/api/v1/planning/thinking` | `{version,session,msgs}` | Lưu mã phiên và tin nhắn Thinking (204); chỉ trưởng nhóm, thành viên chỉ đọc qua `thinking` trong `GET /state`; 409 nếu `version` cũ |
+| PUT | `/api/v1/planning/thinking` | `{version,session,msgs}` | Lưu mã phiên và tin nhắn Thinking (204); chỉ trưởng nhóm, thành viên chỉ đọc qua `thinking` trong `GET /state`; 409 nếu `version` cũ, phiên đã thuộc đội khác hoặc phiên công khai đã có lịch sử |
 | PUT | `/api/v1/planning/pitching` | `{version,pitch,score,chat}` | Lưu bản nháp Pitching, scorecard và chat với agent (204); mọi thành viên; `pitch` tối đa 500 KB; 409 nếu `version` cũ. `GET /state` trả `pitching` |
 | WS | `/api/v1/planning/ws` | cookie phiên Planning | Gửi `{"type":"changed"}` khi dữ liệu của đội đổi, client đọc lại `GET /state`; gửi chữ `ping` nhận `{"type":"pong"}`. Chưa vào đội hoặc sai Origin (production) thì đóng với mã 1008. Cần backend chạy một tiến trình |
 | POST / DELETE | `/api/v1/planning/invite` | — | Tạo hoặc đổi mã, tắt mã (204); trưởng nhóm |
@@ -120,8 +120,9 @@ Chốt trước khi code, sửa ở đây khi đổi (FE đọc chi tiết ở `
 | DELETE | `/api/v1/planning/members/{github_id}` | — | Xóa thành viên (204); 409 nếu là trưởng nhóm hoặc còn task |
 | PUT | `/api/v1/planning/repo` | `{repo_id,repo_version,reset_confirmed?}` | Kết nối hoặc đổi repo (204) |
 | POST | `/api/v1/planning/repo/refresh` | `{repo_version}` | `{count}` PR vừa đọc |
-| POST | `/api/v1/planning/auto` | `{repo_version}`; trưởng nhóm | Tự lập sprint từ Canvas Thinking đã duyệt của đội và giao task ngay, không qua bản nháp. Người có quyền ghi vào repo mà chưa có đội được thêm vào đội (tối đa 16 người). Trả `{created:false}` khi không có gì để làm, hoặc `{created:true,source,sprints,tasks,members,added,skipped,collaborators:"ok"\|"unavailable"\|"demo"}`. Gọi lại không tạo trùng. `GET /state` trả `auto_plan:true` khi đang chờ lập (repo đã kết nối, chưa có sprint hay bản nháp, Canvas mới duyệt chưa dùng) |
+| POST | `/api/v1/planning/auto` | `{repo_version}`, trưởng nhóm | Tự lập sprint từ Canvas Thinking đã duyệt và giao task cho thành viên hiện có. Trả `{created:false}` khi chưa đủ điều kiện hoặc đã lập xong. Khi tạo thành công, trả `{created:true,source,sprints,tasks,members,added:[],skipped:[],collaborators:"ok"\|"unavailable"\|"demo"}`. Đội thật nhận thêm `invite_suggestions`, danh sách tên GitHub có quyền ghi vào repo và chưa vào đội. `GET /state` trả `auto_plan:true` khi repo đã kết nối, đội chưa có sprint hay bản nháp và Canvas đã duyệt còn chờ xử lý |
 | POST | `/api/v1/planning/draft` · `/api/v1/planning/apply` | Lần lượt `{repo_version,brief}` · `{repo_version,draft_id,plan}` | Bản nháp `{id,source,brief,plan}` hoặc áp dụng (204) |
+| DELETE | `/api/v1/planning/draft` | `{repo_version,draft_id}`, trưởng nhóm, cùng origin | Bỏ bản nháp (204). Trả 409 nếu mã bản nháp hoặc phiên bản repo đã đổi, hoặc bản nháp đã được xử lý. Đội có Canvas chờ xử lý có thể tự lập kế hoạch khi đủ điều kiện |
 | PATCH | `/api/v1/planning/tasks/{id}` | `{repo_version,task}` | Cập nhật task (204) |
 | POST | `/api/v1/planning/tasks/{id}/pr` | `{repo_version}` | `{url}` trang xác nhận GitHub; chỉ người được giao; callback tạo nhánh + PR nháp rồi về `/planning?github=pr_created\|pr_exists\|pr_permission\|pr_empty\|pr_draft\|pr_failed\|pr_stale&task=…`. `/state` trả `can_start` cho từng task |
 | GET | `/api/v1/planning/repo/access` | Trưởng nhóm | `{available,app_can_write,members:[{login,write}],settings_url,invitations_url,app_url}`; `null` = chưa rõ |
@@ -172,6 +173,7 @@ Các yêu cầu ghi Planning từ trình duyệt gửi header `X-Planning-Reques
 | `planning_subscriptions` | Đăng ký Web Push của trình duyệt theo phiên |
 | `planning_boards` | Nội dung tab Planning (JSON) và phiên bản của từng đội |
 | `planning_workspaces` | Dữ liệu chung của từng đội: Quality, Maintaining, tên dự án và tiến độ, Thinking, Pitching (mỗi phần một dòng JSON và phiên bản) |
+| `planning_thinking_sessions` | Quyền sở hữu `session_id` Thinking theo đội (`session_id`, `team_id`, `created_at`), giữ nguyên khi đội đổi phiên |
 | `planning_logs` | Nhật ký task đổi tiến độ do pull request; `GET /state` trả `log` |
 | `planning_invites`, `planning_join_attempts` | Mã mời của đội, số lần nhập sai theo tài khoản |
 | `planning_github_app`, `planning_setup_states` | GitHub App tạo từ manifest (bí mật đã mã hóa), lượt tạo kết nối đang chờ |

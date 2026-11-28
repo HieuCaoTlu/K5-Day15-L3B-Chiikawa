@@ -170,12 +170,16 @@ export function TeamForm({ profile, members, busy, mutate, onComplete }: {
       </div>
       <div className="pl-row">
         <button className="d-btn d-b1" type="submit" disabled={busy}>{busy ? 'Đang lưu…' : 'Lưu đội'}</button>
-        <button className="d-btn d-b2" type="button" disabled={busy || rows.length >= 16}
+        {profile.demo ? <button className="d-btn d-b2" type="button" disabled={busy || rows.length >= 16}
           onClick={() => {
             sequence.current += 1;
             const key = 'new-' + sequence.current;
             setRows((items) => [...items, draftRow({ login: '', name: '', experience: '', tags: [], avatar: items.length % 8 }, key)]);
-          }}><Icon name="plus" /> Thêm thành viên</button>
+          }}><Icon name="plus" /> Thêm thành viên</button> : (
+          <p className="d-muted text-sm">{members.length
+            ? 'Đóng chỉnh sửa để lấy mã mời cho thành viên tự vào đội.'
+            : 'Lưu đội xong, mở mục Thành viên để chia sẻ mã mời.'}</p>
+        )}
       </div>
     </form>
   );
