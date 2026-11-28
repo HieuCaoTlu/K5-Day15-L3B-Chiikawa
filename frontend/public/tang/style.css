@@ -660,7 +660,7 @@ details ul{margin:8px 0 0;padding-left:18px;display:grid;gap:4px}
 .live-close:hover{background:var(--soft)}
 .live-close:focus-visible{outline:2px solid var(--indigo);outline-offset:2px}
 
-/* Quality và Maintaining: icon động thêm, thẻ chọn cách thu tiền */
+/* Quality và Maintaining: icon động thêm, thẻ gợi ý kiếm tiền */
 @media (prefers-reduced-motion:no-preference){
   .es-needle{transform-origin:48px 66px;animation:es-needle 3.2s ease-in-out infinite}
   .es-hand{transform-origin:48px 46px;animation:es-spin 6s linear infinite}
@@ -668,15 +668,10 @@ details ul{margin:8px 0 0;padding-left:18px;display:grid;gap:4px}
 }
 @keyframes es-needle{0%,100%{transform:rotate(-24deg)}50%{transform:rotate(20deg)}}
 @keyframes es-spin{to{transform:rotate(360deg)}}
-.rev-cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
-.rev-card{display:grid;gap:4px;align-content:start;text-align:left;padding:14px 16px;border:0;border-radius:14px;background:var(--soft);font:inherit;cursor:pointer;transition:background .2s,color .2s}
-.rev-card b{font-weight:500}
-.rev-card span{font-size:13px;line-height:1.5;color:var(--mute)}
-.rev-card:hover{background:#eaeefa}
-.rev-card.on{background:var(--ink);color:#fff}
-.rev-card.on span{color:rgba(255,255,255,.72)}
-.rev-card:focus-visible{outline:2px solid var(--indigo);outline-offset:2px}
-@media (max-width:700px){.rev-cards{grid-template-columns:minmax(0,1fr)}}
+.money-tip{padding:14px 16px}
+.money-tip .suggest-info{gap:6px;line-height:1.55}
+.money-tip b{font-size:15px;font-weight:500}
+.money-tip .muted{font-size:13px}
 
 /* Nhóm nút chuyển khu vực to, cùng cỡ với nút trong khung Đội, sprint và PR */
 .seg.tabs-big{background:none;padding:0;gap:8px}

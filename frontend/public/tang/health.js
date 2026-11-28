@@ -11,15 +11,11 @@
     passRate: { label: 'Tỉ lệ test pass ở lần chạy gần nhất', dir: 'below', fmt: 'pct', warn: 0.8, rescue: 0.6, collapse: 0.4 },
     passDrop: { label: 'Tỉ lệ pass giảm so với lần chạy trước', dir: 'above', fmt: 'pct', warn: 0.05, rescue: 0.15, collapse: 0.3 },
     metricMiss: { label: 'Số chỉ số chưa đạt mục tiêu ở lần chạy gần nhất', dir: 'above', fmt: 'int', warn: 1, rescue: 2, collapse: 3 },
-    margin: { label: 'Biên lãi gộp mỗi khách trả phí', dir: 'below', fmt: 'pct', warn: 0.5, rescue: 0.2, collapse: 0 },
     overdueDays: { label: 'Việc bảo trì trễ hạn lâu nhất', dir: 'above', fmt: 'days', warn: 1, rescue: 14, collapse: 30 },
     staleDays: { label: 'Số ngày chưa chạy kiểm thử', dir: 'above', fmt: 'days', warn: 7, rescue: 21, collapse: 45 }
   };
 
-  // Biên lãi mục tiêu dùng cho gợi ý giá và gợi ý cắt token ở tab Quality.
-  const PROFIT = { targetMargin: 0.7 };
-
-  /* signals: { passRate, passDrop, metricMiss, margin, overdueDays, staleDays }, giá trị null nghĩa là chưa đủ dữ liệu. */
+  /* signals: { passRate, passDrop, metricMiss, overdueDays, staleDays }, giá trị null nghĩa là chưa đủ dữ liệu. */
   function evaluate(signals) {
     const reasons = [];
     let top = 0;
@@ -37,5 +33,5 @@
     return { level: LEVELS[top], reasons, missing };
   }
 
-  window.HEALTH = { LEVELS, NAMES, RULES, PROFIT, evaluate };
+  window.HEALTH = { LEVELS, NAMES, RULES, evaluate };
 })();

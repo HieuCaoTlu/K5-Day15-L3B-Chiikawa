@@ -1,7 +1,7 @@
 /* Ứng dụng: điều hướng, bốn bước, agent, dữ liệu dùng chung và chuyển động. */
 (function () {
   const { STEPS, FLOORS, CANVAS, CANVAS_TO_SCORE, SCORE, ROLES, STATUS, SAMPLE_SCORE, EMPTY, SEED, AGENT, inDays, iso } = window.DATA;
-  const { RULES, PROFIT, NAMES: HNAMES, LEVELS } = window.HEALTH;
+  const { RULES, NAMES: HNAMES, LEVELS } = window.HEALTH;
   const $ = (s, p = document) => p.querySelector(s);
   const $$ = (s, p = document) => [...p.querySelectorAll(s)];
   const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -59,7 +59,8 @@
     S.meta.members = Array.isArray(S.meta.members) ? S.meta.members : [];
     if (!S.quality.cost || typeof S.quality.cost !== 'object') S.quality.cost = {};
     if (!['sub', 'usage', 'setup'].includes(S.quality.revenueModel)) S.quality.revenueModel = 'sub';
-    ['metrics', 'runs'].forEach(k => { if (!Array.isArray(S.quality[k])) S.quality[k] = []; });
+    ['metrics', 'runs', 'tips'].forEach(k => { if (!Array.isArray(S.quality[k])) S.quality[k] = []; });
+    S.quality.tips = S.quality.tips.filter(x => x && typeof x === 'object' && String(x.title || '').trim() && String(x.how || '').trim());
     S.quality.runs = S.quality.runs.filter(r => r && typeof r === 'object');
     S.quality.runs.forEach(r => { if (!r.values || typeof r.values !== 'object') r.values = {}; });
     ['schedule', 'suggest'].forEach(k => { if (!Array.isArray(S.maintain[k])) S.maintain[k] = []; });
@@ -814,15 +815,6 @@
   const nowLocal = () => { const d = new Date(); return `${iso(d)}T${two(d.getHours())}:${two(d.getMinutes())}`; };
   const shortDate = at => { const [d, t] = String(at).split('T'); const [, m, dd] = (d || '').split('-'); return `${dd}/${m}${t ? ' ' + t : ''}`; };
   const usd = v => (!isFinite(v) ? '?' : (Math.abs(v) < 1 && v !== 0 ? String(+v.toPrecision(2)) : Math.abs(v) < 10 ? v.toFixed(2) : Math.round(v).toLocaleString('vi-VN')) + ' USD');
-  /* Làm tròn lên theo đúng độ chính xác hiển thị, để giá mục tiêu không bị hụt biên lãi. */
-  const usdUp = v => {
-    if (!isFinite(v)) return '?';
-    if (v >= 10) return usd(Math.ceil(v));
-    if (v >= 1) return usd(Math.ceil(v * 100) / 100);
-    if (v <= 0) return usd(v);
-    const f = 10 ** (1 - Math.floor(Math.log10(v)));
-    return usd(Math.ceil(v * f) / f);
-  };
   const usdShort = v => (!isFinite(v) ? '' : String(+(+v).toPrecision(2)).replace('.', ','));
   function fmtK(n) {
     if (n === null || n === undefined || !isFinite(+n)) return '';
@@ -837,8 +829,8 @@
     return Number.isInteger(r) ? String(r) : r.toFixed(1).replace('.', ',');
   }
   const runCost = (r, c) => ((+r.actTok || 0) * (+c.pricePerM || 0)) / 1e6;
-  const COST_KEYS = ['pricePerM', 'apiCalls', 'infra', 'price', 'teams', 'pricePerCall', 'setupFee', 'newCustomers'];
-  /* Chi phí và doanh thu tính bằng code từ token thực tế và giả định do đội nhập; không dùng bảng giá của nhà cung cấp nào. */
+  const COST_KEYS = ['pricePerM', 'apiCalls', 'infra'];
+  /* Chi phí tính bằng code từ token thực tế và giả định do đội nhập; không dùng bảng giá của nhà cung cấp nào. */
   function money() {
     const c = Object.fromEntries(COST_KEYS.map(k => [k, +S.quality.cost[k] || 0]));
     const runs = sortedRuns(), priced = c.pricePerM > 0;
@@ -849,22 +841,10 @@
     const lastRun = priced && lastKnown ? runCost(lastKnown, c) : null;
     const aiMonthly = c.apiCalls === 0 && priced ? 0 : perCase === null ? null : perCase * c.apiCalls;
     const totalCost = aiMonthly === null ? null : aiMonthly + c.infra;
-    const model = ['sub', 'usage', 'setup'].includes(S.quality.revenueModel) ? S.quality.revenueModel : 'sub';
-    const revenue = model === 'usage' ? c.apiCalls * c.pricePerCall : model === 'setup' ? c.setupFee * c.newCustomers : c.teams * c.price;
-    const known = totalCost !== null;
-    const profit = known ? revenue - totalCost : null;
-    const margin = known && revenue > 0 ? profit / revenue : null;
-    const breakEven = !known ? null : model === 'usage' ? (c.apiCalls > 0 ? totalCost / c.apiCalls : null)
-      : model === 'setup' ? (c.setupFee > 0 ? Math.ceil(totalCost / c.setupFee) : null)
-      : (c.price > 0 ? Math.ceil(totalCost / c.price) : null);
-    const targetRev = known ? totalCost / (1 - PROFIT.targetMargin) : null;
-    const targetPrice = !known ? null : model === 'usage' ? (c.apiCalls > 0 ? targetRev / c.apiCalls : null)
-      : model === 'setup' ? (c.newCustomers > 0 ? targetRev / c.newCustomers : null)
-      : (c.teams > 0 ? targetRev / c.teams : null);
-    return { c, model, priced, perCase, lastRun, aiMonthly, totalCost, revenue, profit, margin, breakEven, targetPrice, known };
+    return { c, priced, perCase, lastRun, aiMonthly, totalCost, known: totalCost !== null };
   }
   function signals() {
-    const runs = sortedRuns(), last = runs[runs.length - 1], prev = runs[runs.length - 2], m = money();
+    const runs = sortedRuns(), last = runs[runs.length - 1], prev = runs[runs.length - 2];
     const today = new Date(iso(new Date()) + 'T00:00');
     const late = S.maintain.schedule.filter(x => x.next < iso(new Date())).map(x => Math.round((today - new Date(x.next + 'T00:00')) / 864e5));
     const a = rate(last), b = rate(prev);
@@ -872,7 +852,6 @@
       passRate: a,
       passDrop: a !== null && b !== null ? Math.max(0, b - a) : null,
       metricMiss: last ? S.quality.metrics.filter(k => num(last.values[k.id]) !== null && !meets(k, +last.values[k.id])).length : null,
-      margin: m ? m.margin : null,
       overdueDays: late.length ? Math.max(...late) : S.maintain.schedule.length ? 0 : null,
       staleDays: last ? Math.max(0, Math.floor((Date.now() - new Date(last.at)) / 864e5)) : null
     };
@@ -1002,7 +981,7 @@
     const low = (s.passRate !== null && s.passRate < RULES.passRate.warn) || (s.passDrop !== null && s.passDrop >= RULES.passDrop.warn);
     add('Chạy bộ kiểm thử và ghi vào Quality', low ? 3 : 7, low ? 'Chất lượng đang giảm, cần đo dày hơn cho tới khi ổn định.' : 'Giữ nhịp đo hằng tuần để thấy xu hướng.');
     if (new Set(S.quality.runs.map(r => r.model)).size > 1) add('Chạy đối chứng mỗi khi đổi model hoặc prompt', 14, 'Đội đã thử nhiều phiên bản. Mỗi lần đổi cần một lần chạy so với bản trước.');
-    if (m.known) add('Rà chi phí token và giá bán', m.margin !== null && m.margin < PROFIT.targetMargin ? 7 : 30, m.margin !== null && m.margin < PROFIT.targetMargin ? `Biên lãi ${pct(m.margin)} dưới mục tiêu, cần theo dõi hằng tuần.` : 'Đơn giá token và lượng dùng thay đổi theo thời gian.');
+    if (m.known) add('Rà chi phí token', 30, 'Đơn giá token và lượng dùng thay đổi theo thời gian.');
     if (s.overdueDays >= RULES.overdueDays.warn) add('Dọn các việc bảo trì trễ hạn', 7, `Có việc trễ ${s.overdueDays} ngày.`);
     add('Kiểm tra bản cập nhật thư viện và model', 30, 'Đọc ghi chú phát hành trước khi nâng cấp. Phiên bản cụ thể cần đội kiểm tra lại.');
     return { items: out };
@@ -1192,7 +1171,7 @@
     const status = run && run.status;
     let actions = '<span class="muted">Trả lời câu hỏi của agent để tiếp tục</span>';
     if (status === 'waiting_review') actions = `${btn('think-approve', 'Duyệt Canvas', 'tone small', 'style="--c:var(--green)"')}${btn('think-reject', 'Chưa duyệt', 'soft small')}`;
-    if (status === 'approved') actions = '<span class="tag" style="--c:var(--green)">Đã duyệt</span>';
+    if (status === 'approved') actions = '<span class="tag" style="--c:var(--green)">Đã duyệt</span>' + (run.result && run.result.handoff === 'planning' ? btn('tab', 'Sang bước Planning', 'primary small', 'data-id="planning"') : '');
     if (status === 'rejected') actions = '<span class="tag" style="--c:var(--orange)">Chưa duyệt, cần bổ sung</span>';
     const sources = {
       fallback: '<span class="tag" style="--c:var(--orange)">Luật dự phòng</span>',
@@ -1314,7 +1293,7 @@
 
   const finishBtn = i => (i === 0 ? '' : stepState(i) === 'doing' ? btn('finish', 'Hoàn thành bước này', 'tone small', `data-id="${STEPS[i].id}"`) : stepState(i) === 'done' ? btn('reopen', 'Mở lại', 'soft small', `data-id="${STEPS[i].id}"`) : '');
   const lockNote = () => '';
-  const head = (i, sub, extra = '') => `<div class="view-head"><div><h2>${STEPS[i].name}${stateTag(i)}</h2>${sub ? `<p>${sub}</p>` : ''}</div><div class="head-tools">${finishBtn(i)}${extra}</div></div>${lockNote(i)}`;
+  const head = (i, sub, extra = '') => `<div class="view-head"><div><h2>${STEPS[i].name}${stateTag(i, `data-state="${i}"`)}</h2>${sub ? `<p>${sub}</p>` : ''}</div><div class="head-tools">${finishBtn(i)}${extra}</div></div>${lockNote(i)}`;
   const panelHead = (t, extra = '') => `<div class="panel-head"><h3>${t}</h3>${extra}</div>`;
   const btn = (act, label, cls = 'tone', data = '') => `<button class="btn ${cls}" data-act="${act}" ${data}>${label}</button>`;
 
@@ -1548,10 +1527,16 @@
     metrics: '<g class="es-float"><path d="M16 66a32 32 0 0 1 64 0" fill="none" stroke="#dfe4ff" stroke-width="10" stroke-linecap="round"/><path d="M16 66a32 32 0 0 1 36-31.7" fill="none" stroke="#4d5bf0" stroke-width="10" stroke-linecap="round"/><g class="es-needle"><path d="M48 66L64 42" stroke="#121a33" stroke-width="4" stroke-linecap="round"/></g><circle cx="48" cy="66" r="6" fill="#121a33"/></g><circle class="es-star s1" cx="12" cy="24" r="3" fill="#14b86a"/><circle class="es-star s2" cx="86" cy="30" r="2.5" fill="#ff8a1f"/>',
     history: '<g class="es-float"><circle cx="48" cy="46" r="30" fill="#fff" stroke="#4d5bf0" stroke-width="3"/><path d="M48 46V28" stroke="#121a33" stroke-width="4" stroke-linecap="round"/><g class="es-hand"><path d="M48 46h14" stroke="#4d5bf0" stroke-width="4" stroke-linecap="round"/></g><circle cx="48" cy="46" r="4" fill="#121a33"/><path d="M48 20v4M74 46h-4M48 72v-4M22 46h4" stroke="#c9ceff" stroke-width="3" stroke-linecap="round"/></g><circle class="es-star s2" cx="84" cy="22" r="3" fill="#14b86a"/>',
     calendar: '<g class="es-float"><rect x="16" y="20" width="64" height="58" rx="10" fill="#fff" stroke="#a24ce8" stroke-width="3"/><path d="M16 36h64" stroke="#a24ce8" stroke-width="3"/><path d="M32 14v12M64 14v12" stroke="#a24ce8" stroke-width="4" stroke-linecap="round"/><path class="es-check c1" d="M30 56l7 7 13-15" fill="none" stroke="#14b86a" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M58 50h12M58 62h12" stroke="#e6d3fa" stroke-width="4" stroke-linecap="round"/></g><circle class="es-star s1" cx="10" cy="30" r="3" fill="#ff8a1f"/>',
+    money: '<g class="es-float"><circle cx="48" cy="50" r="28" fill="#fff" stroke="#4d5bf0" stroke-width="4"/><circle cx="48" cy="50" r="19" fill="#eef0ff"/><path d="M54 41c-2-3-11-4-12 1-1 6 13 3 12 10-1 5-10 5-13 1M48 35v4M48 61v4" fill="none" stroke="#121a33" stroke-width="3.5" stroke-linecap="round"/></g><circle class="es-star s1" cx="14" cy="26" r="3" fill="#14b86a"/><circle class="es-star s2" cx="84" cy="72" r="2.5" fill="#ff8a1f"/>',
     update: '<g class="es-float"><g class="es-spin"><path d="M70 40A24 24 0 0 0 26 38" fill="none" stroke="#a24ce8" stroke-width="6" stroke-linecap="round"/><path d="M26 56a24 24 0 0 0 44 2" fill="none" stroke="#c68af0" stroke-width="6" stroke-linecap="round"/><path d="M60 38l12 4 2-12z" fill="#a24ce8"/><path d="M36 60l-12-4-2 12z" fill="#c68af0"/></g><circle cx="48" cy="48" r="7" fill="#121a33"/></g><circle class="es-star s3" cx="84" cy="70" r="3" fill="#14b86a"/>'
   });
   let qtab = 'metrics', runFormOpen = false, maintFormOpen = false;
-  const REV_MODELS = [['sub', 'Thuê bao theo khách', 'Khách trả phí cố định mỗi tháng.'], ['usage', 'Theo lượt dùng', 'Tính tiền mỗi lượt gọi AI.'], ['setup', 'Gói triển khai', 'Thu một lần khi triển khai cho khách mới.']];
+  // Gợi ý dự phòng khi chưa gọi được agent: cách thu tiền phổ biến cho sản phẩm AI của đội nhỏ.
+  const RULE_TIPS = [
+    { title: 'Thuê bao theo đội mỗi tháng', how: 'Cho dùng thử miễn phí 14 ngày, sau đó thu phí cố định mỗi đội. Bắt đầu với vài khách quen để chốt mức giá.', why: 'Dễ dự đoán doanh thu và hợp với sản phẩm được dùng hằng ngày.' },
+    { title: 'Tính tiền theo lượt dùng AI', how: 'Tặng một hạn mức miễn phí mỗi tháng, vượt mức thì tính theo gói lượt. Hiện số lượt đã dùng ngay trong sản phẩm.', why: 'Chi phí AI tăng theo lượt gọi, nên thu theo lượt giúp không lỗ khi khách dùng nhiều.' },
+    { title: 'Gói triển khai và tùy chỉnh', how: 'Thu phí một lần để nối sản phẩm vào dữ liệu và quy trình riêng của khách, kèm phí duy trì nhỏ hằng tháng.', why: 'Khách doanh nghiệp sẵn sàng trả cho phần tích hợp mà họ không tự làm được.' }
+  ];
 
   function qualityMetrics(runs, src) {
     const q = S.quality, editing = q.runs.find(r => r.id === runEdit), samples = q.runs.filter(r => r.sample).length;
@@ -1589,28 +1574,19 @@
   }
 
   function qualityCost(runs) {
-    const q = S.quality, c = q.cost, m = money(), revModel = m.model;
+    const q = S.quality, c = q.cost, m = money(), tips = q.tips || [];
     const numField = (k, l, step = 'any') => `<label>${l}<input type="number" min="0" step="${step}" data-bind="cost" data-id="${k}" value="${+c[k] || 0}"></label>`;
-    const NEED = 'Cần chi phí AI';
-    const revInputs = revModel === 'usage' ? numField('pricePerCall', 'Giá mỗi lượt gọi USD')
-      : revModel === 'setup' ? numField('setupFee', 'Phí triển khai mỗi khách USD') + numField('newCustomers', 'Số khách mới mỗi tháng', '1')
-        : numField('price', 'Giá mỗi khách USD/tháng') + numField('teams', 'Số khách trả phí', '1');
-    const beText = !m.known ? NEED : revModel === 'usage' ? (m.breakEven !== null ? `${usd(m.breakEven)} / lượt` : 'Cần số lượt gọi')
-      : revModel === 'setup' ? (m.breakEven !== null ? `${m.breakEven.toLocaleString('vi-VN')} khách/tháng` : 'Cần phí triển khai')
-        : (m.breakEven !== null ? `${m.breakEven.toLocaleString('vi-VN')} khách` : 'Cần giá bán');
-    const tpText = !m.known ? NEED : m.targetPrice === null ? 'Cần số khách hoặc lượt gọi' : `${usdUp(m.targetPrice)} / ${revModel === 'usage' ? 'lượt' : 'khách'}`;
     const tokens = runs.map(r => num(r.actTok));
     const tokenChart = tokens.some(v => v !== null)
       ? `<div style="margin-top:12px">${lineChart(runs.map(r => shortDate(r.at)), [{ name: 'Token thực tế', color: 'var(--blue)', values: tokens }], 'Token thực tế mỗi lần chạy')}</div>` : '';
+    const tipsBody = tips.length
+      ? `<div class="suggest-list">${tips.map((x, i) => `<div class="suggest-row money-tip"><div class="suggest-info"><b>${i + 1}. ${esc(x.title)}</b><span>${esc(x.how)}</span>${x.why ? `<span class="muted">${esc(x.why)}</span>` : ''}</div></div>`).join('')}</div>`
+      : emptyState('money', 'Chưa có gợi ý kiếm tiền', 'Agent dựa trên scorecard ở Thinking và chi phí AI của đội để gợi ý vài cách thu tiền phù hợp với sản phẩm.', btn('moneytips', 'Ấn để gợi ý cách kiếm tiền', 'primary big'));
     return `<div class="panel">${panelHead('Chi phí AI', '<span class="muted">Đơn giá và hạ tầng là giả định của đội</span>')}
         <div class="cost">${numField('pricePerM', 'Đơn giá USD / 1 triệu token')}${numField('apiCalls', 'Số lượt gọi API mỗi tháng', '1')}${numField('infra', 'Hạ tầng USD mỗi tháng')}</div>
         <div class="kpis">${[['Chi phí mỗi lượt gọi', m.perCase], ['Chi phí AI mỗi tháng', m.aiMonthly], ['Tổng chi mỗi tháng', m.totalCost]].map(([l, v]) => `<div class="kpi"><b>${v === null ? '—' : usd(v)}</b><span>${l}</span></div>`).join('')}</div>
         ${m.known ? '' : `<p class="muted" style="margin-top:8px">${m.priced ? 'Cần ít nhất một lần chạy có tổng số test và token thực tế. Ghi ở tab Số đo.' : 'Nhập đơn giá token để tính chi phí.'}</p>`}${tokenChart}</div>
-      <div class="panel">${panelHead('Cách thu lợi nhuận', '<span class="muted">Chọn một cách để thử số</span>')}
-        <div class="rev-cards" role="group" aria-label="Cách thu tiền">${REV_MODELS.map(([id, name, text]) => `<button type="button" class="rev-card ${revModel === id ? 'on' : ''}" data-act="revpick" data-id="${id}" aria-pressed="${revModel === id}"><b>${name}</b><span>${text}</span></button>`).join('')}</div>
-        <div class="cost" style="margin-top:12px">${revInputs}</div>
-        <div class="kpis">${[['Doanh thu mỗi tháng', usd(m.revenue), false], ['Lãi hoặc lỗ mỗi tháng', m.known ? usd(m.profit) : NEED, m.known && m.profit < 0], ['Hòa vốn', beText, false], [`Giá để đạt biên ${pct(PROFIT.targetMargin)}`, tpText, false]]
-          .map(([l, v, warn]) => `<div class="kpi${warn ? ' is-warn' : ''}"><b>${v}</b><span>${l}</span></div>`).join('')}</div></div>`;
+      <div class="panel">${panelHead('Gợi ý cách kiếm tiền', tips.length ? btn('moneytips', 'Gợi ý lại', 'soft small') : '')}${tipsBody}</div>`;
   }
 
   const views = {
@@ -2217,6 +2193,7 @@
       form: JSON.parse(JSON.stringify(survey.questions || []))
     };
   }
+  const jobsRunning = new Set();
   const jobs = {
     async fill() {
       const out = await generate('Đọc cuộc trò chuyện và điền AI MVP Scorecard. Mỗi mục có "text" (tối đa 45 từ) và "score" từ 1 đến 5 (0 nếu chưa có thông tin). Giữ ý đội đã ghi nếu vẫn đúng. Mục prior nói đã ai làm chưa và mình cải thiện được gì.',
@@ -2448,6 +2425,37 @@
       if (!fresh.length) toast('Lịch hiện tại đã bao gồm các gợi ý.');
       S.maintain.suggest = fresh; save('maintain');
       return ['maintain', () => rise($$('#view .suggest-row'))];
+    },
+    async moneytips() {
+      // Cắt theo ký tự Unicode để không tách đôi emoji (backend sẽ từ chối chuỗi lỗi).
+      const clip = (v, n) => Array.from(String(v || '').trim()).slice(0, n).join('').trim();
+      const m = money(), cut = (k, n) => (S.score[k] ? S.score[k].text.trim().slice(0, n) : '');
+      // Ưu tiên agent ở backend (Gemini qua llm.py); backend không trả lời thì thử Claude trong Artifact, cuối cùng là gợi ý mẫu.
+      let out = null;
+      try {
+        const res = await fetch('/api/v1/quality/money-tips', {
+          method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Planning-Request': '1' },
+          body: JSON.stringify({
+            context: { project_name: (S.meta.name || '').trim().slice(0, 200) || 'Sản phẩm AI', persona: cut('persona', 500), problem: cut('problem', 1000), leverage: cut('leverage', 1000), scope: cut('scope', 1000), metric: cut('metric', 500), overview: String(S.plan.overview || '').trim().slice(0, 1500) },
+            monthly_cost_usd: m.known ? m.totalCost : null
+          })
+        });
+        if (res.ok) { const j = await res.json(); if (j && Array.isArray(j.tips) && j.tips.length) out = { tips: j.tips, rule: j.source !== 'llm' }; }
+      } catch (e) { /* backend không chạy, ví dụ khi mở trang tĩnh */ }
+      await ready;
+      if (!out || (out.rule && sample)) out = await generate(`Đóng vai cố vấn kinh doanh cho đội làm sản phẩm AI nhỏ. Dựa trên scorecard, Canvas, công việc và chi phí AI trong dữ liệu dự án, gợi ý 3 đến 5 cách kiếm tiền cụ thể, khả thi trong 1–3 tháng.
+Chi phí AI mỗi tháng do đội ước tính: ${m.known ? usd(m.totalCost) : 'chưa đủ dữ liệu'}.
+Mỗi cách trả về: title (tối đa 10 từ, nói rõ thu tiền từ ai và theo cách nào); how (tối đa 2 câu, bước làm cụ thể để thử ngay); why (1 câu, nêu dựa trên điểm nào của dự án: người dùng, nỗi đau, chi phí). Không bịa số liệu doanh thu hay số khách. Không lặp ý giữa các cách.`,
+        '{"tips":[{"title":"","how":"","why":""}]}',
+        o => o && Array.isArray(o.tips) && o.tips.length && o.tips.every(t => str(t.title) && str(t.how)),
+        () => ({ tips: RULE_TIPS, rule: true }));
+      S.quality.tips = out.tips.slice(0, 5).map((t, i) => ({
+        id: 't' + Date.now().toString(36) + i,
+        title: clip(t.title, 120), how: clip(t.how, 400), why: clip(t.why, 240)
+      })).filter(t => t.title && t.how);
+      save('quality');
+      toast(out.rule ? 'Đã đưa ra gợi ý mẫu vì chưa gọi được agent.' : `Agent đã gợi ý ${S.quality.tips.length} cách kiếm tiền.`);
+      return ['quality', () => rise($$('#view .money-tip'))];
     },
     async metrics() {
       const src = S.score.metric.text.trim();
@@ -3267,7 +3275,6 @@ nature là bản chất problem: "behavior" nếu là problem hành vi (duy trì
     qtab(b) { qtab = b.dataset.id === 'cost' ? 'cost' : 'metrics'; rerender(); },
     runform() { runFormOpen = !runFormOpen; runEdit = null; rerender(); const f = $('[data-form="run"]', view); if (f) f.elements.model.focus(); },
     maintform() { maintFormOpen = !maintFormOpen; rerender(); const f = $('[data-form="maint"]', view); if (f) f.elements.title.focus(); },
-    revpick(b) { S.quality.revenueModel = ['sub', 'usage', 'setup'].includes(b.dataset.id) ? b.dataset.id : 'sub'; save('quality'); rerender(); },
     editrun(b) { runEdit = b.dataset.id; runFormOpen = true; rerender(); const f = $('[data-form="run"]', view); if (f) { f.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'center' }); f.elements.model.focus(); } },
     cancelrun() { runEdit = null; runFormOpen = false; rerender(); },
     delrun(b) {
@@ -3338,13 +3345,16 @@ nature là bản chất problem: "behavior" nếu là problem hành vi (duy trì
     const act = b.dataset.act;
     if (jobs[act]) {
       if (b.disabled) return;
+      // Vẽ lại giao diện tạo nút mới còn bật, nên chặn theo tên việc để không chạy hai lượt cùng lúc.
+      if (jobsRunning.has(act)) { toast('Agent đang làm việc này, chờ chút nhé.'); return; }
+      jobsRunning.add(act);
       const label = b.textContent, from = tab;
       b.disabled = true; b.textContent = 'Agent đang làm...';
       const pulse = anim(b, { opacity: [1, 0.55, 1] }, { duration: 1.2, repeat: Infinity });
       try {
         const [, play] = await jobs[act]();
         if (tab === from) { rerender(); play(); } else syncProgress();
-      } finally { if (pulse) pulse.stop(); b.disabled = false; b.style.opacity = ''; if (b.isConnected) b.textContent = label; }
+      } finally { jobsRunning.delete(act); if (pulse) pulse.stop(); b.disabled = false; b.style.opacity = ''; if (b.isConnected) b.textContent = label; }
       return;
     }
     if (actions[act]) actions[act](b);
@@ -3476,10 +3486,6 @@ nature là bản chất problem: "behavior" nếu là problem hành vi (duy trì
     if (k === 'score') { S.score[id].text = v; if (!v.trim()) S.score[id].score = 0; save('score'); }
     if (k === 'cost') {
       S.quality.cost[id] = Math.max(0, +v || 0); save('quality'); rerender();
-    }
-    if (k === 'revmodel') {
-      S.quality.revenueModel = ['sub', 'usage', 'setup'].includes(v) ? v : 'sub';
-      save('quality'); rerender();
     }
     if (k === 'qmetric') {
       const x = S.quality.metrics.find(x => x.id === id), fl = t.dataset.field;
