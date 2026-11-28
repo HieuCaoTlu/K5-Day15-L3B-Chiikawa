@@ -853,12 +853,27 @@
   const stepLabel = i => {
     const k = stepKey(i);
     if (k === 'done') return ['Đã xong', 'var(--green)'];
+    if (progress()[i] > 0) return ['Đang làm', 'var(--blue)']; // tầng đã sáng thì không ghi "Chưa làm"
     if (k === 'now') return started(i) ? ['Đang làm', 'var(--blue)'] : ['Chưa làm', 'var(--orange)'];
     return ['Chưa làm', 'var(--mute)'];
   };
   const stateTag = (i, attr = '') => { const [t, c] = stepLabel(i); return `<span class="tag" style="--c:${c}" ${attr}>${t}</span>`; };
-  const progress = () => STEPS.map(x => (S.done[x.id] ? 1 : 0));
-  const doneCount = () => progress().reduce((a, b) => a + b, 0);
+  /* Số bước đã chốt xong (nhãn, mở bước sau). Khác với progress(): mức sáng của từng tầng theo dữ liệu thật. */
+  const doneCount = () => STEPS.filter(x => S.done[x.id]).length;
+  function progress() {
+    const { pitch: p, quality: q, maintain: m } = S;
+    const P = window.PROGRESS;
+    return [
+      P.thinking(tk.run && tk.run.proposal && tk.run.proposal.canvas, CANVAS.map(([k]) => k)),
+      P.planning(teamTasks()),
+      // Danh sách khảo sát trên server dùng chung mọi đội, nên chỉ tính khảo sát do đội này phát hành.
+      P.cards([p.publishedSlug || (p.responses && p.responses.length), (p.deck && p.deck.length) || p.deckSlug, (p.adPosts && p.adPosts.length) || p.ads]),
+      // Chỉ số cần đạt, Lịch sử AI, Chi phí AI, Gợi ý cách kiếm tiền
+      P.cards([q.metrics.length, q.runs.length, money().known, (q.tips || []).length]),
+      // Lịch bảo trì, Gợi ý cập nhật
+      P.cards([m.schedule.length, (m.suggest || []).length])
+    ];
+  }
   function pitchHasResponses() {
     return (S.pitch.responses && S.pitch.responses.length > 0) || (dashStats && dashStats.total_responses > 0);
   }
@@ -1615,7 +1630,7 @@
 
   /* ---------- Thiết lập đầu tiên: chọn mô hình, đặt tên nhóm, kết nối GitHub, rồi mới tới bước Thinking ---------- */
   const MODEL_CHOICES = [
-    ['house', 'Nhà tầng', 'Công trình đang xây: mỗi task xong thắp sáng thêm một khối.'],
+    ['house', 'Nhà tầng', 'Công trình đang xây: bước nào làm tới đâu, tầng đó sáng tới đó.'],
     ['rubik', 'Khối Rubik', 'Các mặt ứng với từng bước, mặt trên tổng hợp tiến độ.'],
     ['uni', 'University', 'Khuôn viên nhiều công trình, mỗi công trình một bước.'],
     ['tree', 'Cây thông', 'Các tầng tán sáng dần theo tiến độ.']
@@ -1728,7 +1743,7 @@
           <span class="muted" data-next="${i}">${esc(nextAction(i))}</span>
           ${k === 'now' ? `<span class="ms-cta">${i === 0 && !started(0) ? 'Bắt đầu tại đây' : 'Bấm để làm tiếp'}</span>` : k === 'locked' ? `<span class="ms-wait">Sau khi xong ${STEPS[i - 1].name}</span>` : ''}</button>`;
       }).join('');
-      const curIdx = progress().findIndex(x => !x), cur = Math.max(0, curIdx);
+      const curIdx = STEPS.findIndex(x => !S.done[x.id]), cur = Math.max(0, curIdx);
       const goLabel = curIdx < 0 ? 'Xem lại: Thinking' : cur === 0 && !started(0) ? 'Bắt đầu: Thinking' : `Làm tiếp: ${STEPS[cur].name}`;
       const roleMap = mockMode ? S.plan.roles : (joined() && live.board.roles) || {};
       const team = S.meta.members.map(m => {
@@ -2877,6 +2892,8 @@ nature là bản chất problem: "behavior" nếu là problem hành vi (duy trì
     layout(false);
     initSite();
     syncProgress();
+    // Tầng Thinking cần Canvas ngay từ trang đầu, không đợi mở tab Thinking.
+    if (!tk.loaded && local.think.msgs.length) { tk.loaded = true; thinkLoad(); }
     if (site) site.focus(id === 'overview' ? 'overview' : STEPS.findIndex(x => x.id === id));
     anim($('#app'), { opacity: [0, 1] }, { duration: 0.5 });
     rise($$('.nav-item'), 0.15);

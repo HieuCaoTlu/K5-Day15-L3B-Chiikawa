@@ -265,7 +265,8 @@
     // Mỗi tầng gồm 12 khối; khối chưa làm chỉ là khung
     const floors = colors.map((c, i) => {
       const g = new T.Group(), w = Math.max(1.4, 5 - i * 0.45), depth = w * 0.7, blocks = [], cols = 4, rows = 3;
-      for (let z = 0; z < rows; z++) for (let x = 0; x < cols; x++) {
+      // Thắp theo cột từ trái sang, để nhìn mặt trước là thấy đúng phần đã làm
+      for (let x = 0; x < cols; x++) for (let z = 0; z < rows; z++) {
         const bw = w / cols, bd = depth / rows;
         const b = box(bw * 0.92, 1.1, bd * 0.92, mat(0xeef1fa, { transparent: true, opacity: 0.3 }),
           -w / 2 + bw * (x + 0.5), 0, depth / 2 - bd * (z + 0.5), g);
@@ -356,7 +357,7 @@
     const dark = flat(0x4a5664), orange = mat(HEX.orange);
     floors.forEach(f => {
       const bw = f.w / 4, z = f.depth / 3 * 0.47 + 0.025;
-      f.cracks = f.blocks.slice(0, 2).map(b => {
+      f.cracks = f.blocks.filter((_, k) => k % 3 === 0).slice(0, 2).map(b => { // khối hàng trước
         const crack = new T.Group(), x = bw * 0.28;
         b.add(crack);
         box(0.025, 0.19, 0.015, dark, x - 0.025, 0.12, z, crack).rotation.z = 0.35;
@@ -549,6 +550,27 @@
       box(size * 0.18, size * 0.82, size * 1.02, mat(0xffffff), x, size * 0.4, z, treeModel).rotation.y = x;
     });
     const treeParts = rp;
+    /* Mỗi khối của một phần có thêm một lớp màu, bị cắt ngang ở độ cao ứng với tiến độ.
+       Đo chân và đỉnh ngay lúc dựng, trước mọi hiệu ứng phóng to hay nghiêng. */
+    r.localClippingEnabled = true;
+    [uniModel, treeModel].forEach(model => model.updateMatrixWorld(true));
+    [...uniParts, ...treeParts].forEach(p => {
+      const bounds = new T.Box3();
+      p.items.forEach(m => bounds.expandByObject(m));
+      p.bottom = bounds.min.y;
+      p.top = bounds.max.y;
+    });
+    // Tầng tán trên che phần ngọn của tầng dưới, nên màu chỉ dâng trong phần còn nhìn thấy
+    treeParts.slice(0, -1).forEach((p, i) => { p.top = treeParts[i + 1].bottom; });
+    [...uniParts, ...treeParts].forEach(p => {
+      p.cut = new T.Plane(new T.Vector3(0, -1, 0), p.bottom);
+      p.fills = p.items.map(m => {
+        const fill = mesh(m.geometry, mat(m.userData.doneColor ?? p.color, { clippingPlanes: [p.cut] }), 0, 0, 0, m);
+        fill.scale.setScalar(1.004);
+        fill.visible = false;
+        return fill;
+      });
+    });
     // Điểm gắn nhãn từng bước trên mỗi mô hình (toạ độ cục bộ của mô hình)
     const ANCHORS = {
       uni: [[1.0, 2.9, 1.0], [-3.4, 1.9, 0.1], [3.4, 2.0, 0.3], [0.5, 3.9, -1.9], [3.3, 2.5, -1.9]],
@@ -574,7 +596,7 @@
     function set(next) {
       values = next.slice();
       floors.forEach((f, i) => {
-        const n = Math.round(values[i] * f.blocks.length);
+        const n = window.PROGRESS.lit(values[i], f.blocks.length);
         f.blocks.forEach((b, k) => {
           const on = k < n, was = k < f.filled;
           b.userData.wins.visible = on;
@@ -598,19 +620,23 @@
     }
     function paintModels() {
       [uniParts, treeParts].forEach(parts => parts.forEach((p, i) => {
-        const done = (values[i] ?? 0) >= 0.999;
+        const v = values[i] ?? 0, done = v >= 0.999;
+        // Đang dở: lớp màu dâng từ chân lên đúng tỉ lệ trên khung mờ
+        p.cut.constant = p.bottom + (p.top - p.bottom) * v;
+        p.fills.forEach(f => { f.visible = v > 0 && !done; });
         p.items.forEach(m => {
           m.material.color.setHex(done ? (m.userData.doneColor ?? p.color) : 0xeef1fa);
           m.material.opacity = done ? 1 : 0.3;
           m.userData.edge.material.color.setHex(done ? 0xffffff : p.color);
         });
-        (p.glow || []).forEach(m => m.material.color.setHex(done ? (p.glowColor ?? 0x8ff3ff) : 0xd5dbee));
+        const glow = p.glow || [], on = window.PROGRESS.lit(v, glow.length);
+        glow.forEach((m, k) => m.material.color.setHex(k < on ? (p.glowColor ?? 0x8ff3ff) : 0xd5dbee));
       }));
     }
     function paintStickers(animate = false) {
       stickers.forEach((list, f) => {
         const v = f < 4 ? values[f] ?? 0 : f === 4 && floors.length > 4 ? values[4] ?? 0 : total;
-        const n = Math.round(v * list.length);
+        const n = window.PROGRESS.lit(v, list.length);
         list.forEach((s, k) => {
           const hex = f === 4 && level === 'collapse' ? 0x5f6b79 : k < n ? faceColor[f] : 0xe9edf8;
           if (s.material.color.getHex() === hex) return;
