@@ -46,7 +46,7 @@ Data BTC cấp đã dùng (nếu có — không commit nguyên file): không dù
   ![Kiến trúc nền tảng: Thinking là bước chính, bốn module còn lại là mở rộng](docs/agent-architecture.png)
 
 - **Hình dạng:** [x] workflow cố định · [ ] một agent · [ ] nhiều agent — Các bước biết trước (trích tin nhắn → đánh dấu bằng chứng → quyết định → hỏi tiếp hoặc chờ duyệt), chỉ rẽ nhánh theo luật bằng code; mỗi tin nhắn chỉ gọi LLM đúng 1 lần nên rẻ, test được và tái lập được. **Không** chọn agent vì agent không cần tự chọn công cụ hay bước tiếp theo, và không chọn nhiều agent vì chưa có vai nào thật sự khác nhau.
-- **AI dựa vào đâu** — mỗi công cụ (code ở `backend/app/agent/`; `codebase/` là khung `python run.py`, chưa nối với agent, xem mục "phần còn giả"):
+- **AI dựa vào đâu** — mỗi công cụ (code ở `backend/app/agent/`; `codebase/` là khung `python run.py`, đã nối với agent qua `codebase/agent.py`):
 
   | Công cụ | Input | Output | Tác động ra ngoài? |
   |---|---|---|---|
@@ -66,7 +66,7 @@ Data BTC cấp đã dùng (nếu có — không commit nguyên file): không dù
   | G11 — giải thích vì sao | Danh sách `reasons` trong khung "Đánh giá của agent" nêu ô nào còn thiếu và cần làm gì tiếp |
   | G8 — dễ bỏ qua | Nút "Chưa duyệt" và "Làm lại"; gửi tin nhắn mới là sửa lại Canvas |
 
-- Phần nào còn giả (công cụ trả dữ liệu giả, model chế độ giả…) — ghi rõ, không giả làm thật: (1) `codebase/` (khung `python run.py`) vẫn là workflow ví dụ của khung mẫu với model giả, chưa nối với agent Thinking ở `backend/`; sẽ nối trước CP3; (2) **Pitching** có luồng sinh nội dung thật ở backend (khảo sát, slide, bài quảng cáo qua LLM kèm luật dự phòng) nhưng là sinh một bước, chưa phải agent nhiều bước; (3) **Planning** chưa có luồng agent: sự kiện pull request đang mô phỏng, chưa nhận webhook GitHub thật; **Quality** và **Maintaining** là luật bằng code và dữ liệu mẫu (bài toán "Đáp Nhanh"); (4) chế độ `MOCK_NODES=all` trả Canvas mẫu của "chị Lan" và luôn ra GO; (5) khi không có `GOOGLE_API_KEY` agent chạy luật dự phòng (nhãn "Chế độ dự phòng").
+- Phần nào còn giả (công cụ trả dữ liệu giả, model chế độ giả…) — ghi rõ, không giả làm thật: (1) `codebase/` (khung `python run.py`) đã nối với agent Thinking ở `backend/` qua `codebase/agent.py`; `python run.py eval` và `simulate` đo trên agent thật; (2) **Pitching** có luồng sinh nội dung thật ở backend (khảo sát, slide, bài quảng cáo qua LLM kèm luật dự phòng) nhưng là sinh một bước, chưa phải agent nhiều bước; (3) **Planning** chưa có luồng agent: sự kiện pull request đang mô phỏng, chưa nhận webhook GitHub thật; **Quality** và **Maintaining** là luật bằng code và dữ liệu mẫu (bài toán "Đáp Nhanh"); (4) chế độ `MOCK_NODES=all` trả Canvas mẫu của "chị Lan" và luôn ra GO; (5) khi không có `GOOGLE_API_KEY` agent chạy luật dự phòng (nhãn "Chế độ dự phòng").
 
 ## §5. Chỗ khó — 4 lớp + ≥6 kịch bản + 2 tấn công *(guide 2.3)*
 
