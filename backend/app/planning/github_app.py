@@ -11,6 +11,7 @@ from urllib.parse import urlsplit
 
 from cryptography.fernet import Fernet, InvalidToken
 from sqlalchemy import delete
+from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.db import session_scope
@@ -66,7 +67,7 @@ def _fernet(*, create: bool = False) -> Fernet | None:
     return Fernet(key)
 
 
-def current() -> GitHubConfig | None:
+def current(db: Session | None = None) -> GitHubConfig | None:
     settings = get_settings()
     if settings.github_client_id and settings.github_client_secret:
         return GitHubConfig(
@@ -78,8 +79,11 @@ def current() -> GitHubConfig | None:
             webhook_secret=settings.github_webhook_secret,
             site_url=settings.site_origin,
         )
-    with session_scope() as db:
+    if db is not None:
         row = db.get(PlanningGithubApp, 1)
+    else:
+        with session_scope() as session:
+            row = session.get(PlanningGithubApp, 1)
     if row is None:
         return None
     if fernet := _fernet():

@@ -214,10 +214,25 @@ export const api = {
   sessions: () => request<ChatSession[]>('/api/v1/admin/sessions'),
   session: (id: string) => request<Run[]>(`/api/v1/admin/sessions/${encodeURIComponent(id)}`),
   startRun: (text: string, sessionId: string, signal?: AbortSignal) =>
-    request<Run>('/api/v1/agent/runs', { method: 'POST', body: JSON.stringify({ request: text, session_id: sessionId }), signal }),
-  runs: (status?: RunStatus) => request<Run[]>(`/api/v1/agent/runs${status ? `?status=${status}` : ''}`),
+    request<Run>('/api/v1/agent/runs', {
+      method: 'POST',
+      headers: { 'X-Planning-Request': '1' },
+      body: JSON.stringify({ request: text, session_id: sessionId }),
+      signal,
+    }),
+  runs: (status?: RunStatus, sessionId?: string) => {
+    const params = new URLSearchParams();
+    if (status) params.set('status', status);
+    if (sessionId) params.set('session_id', sessionId);
+    const query = params.toString();
+    return request<Run[]>(`/api/v1/agent/runs${query ? `?${query}` : ''}`);
+  },
   review: (id: string, approved: boolean, note = '') =>
-    request<Run>(`/api/v1/agent/runs/${id}/review`, { method: 'POST', body: JSON.stringify({ approved, note }) }),
+    request<Run>(`/api/v1/agent/runs/${id}/review`, {
+      method: 'POST',
+      headers: { 'X-Planning-Request': '1' },
+      body: JSON.stringify({ approved, note }),
+    }),
   generateSurvey: (ctx: ProblemContext) =>
     request<SurveyDraft>('/api/v1/pitching/surveys/generate', { method: 'POST', body: JSON.stringify(ctx) }),
   publishSurvey: (body: {

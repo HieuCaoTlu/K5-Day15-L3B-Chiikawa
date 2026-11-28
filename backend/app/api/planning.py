@@ -80,26 +80,36 @@ def _pull_row(pr: PlanningPullRequest, team: PlanningTeam) -> dict:
     }
 
 
-def _board(db: Session, team: PlanningTeam, is_leader: bool, session) -> tuple[list[dict], list[dict]]:
-    sprints = db.scalars(
-        select(PlanningSprint)
-        .where(PlanningSprint.team_id == team.id)
-        .order_by(
-            PlanningSprint.starts_on,
-            PlanningSprint.id,
+def _board(
+    db: Session,
+    team: PlanningTeam,
+    is_leader: bool,
+    session,
+    config: github_app.GitHubConfig | None = None,
+) -> tuple[list[dict], list[dict]]:
+    sprints = list(
+        db.scalars(
+            select(PlanningSprint)
+            .where(PlanningSprint.team_id == team.id)
+            .order_by(
+                PlanningSprint.starts_on,
+                PlanningSprint.id,
+            )
         )
     )
-    tasks = db.scalars(select(PlanningTask).where(PlanningTask.team_id == team.id).order_by(PlanningTask.id))
+    tasks = list(db.scalars(select(PlanningTask).where(PlanningTask.team_id == team.id).order_by(PlanningTask.id)))
     task_pulls: dict[int, list[dict]] = {}
     inbox = []
     if team.repo_access:
-        pulls = db.scalars(
-            select(PlanningPullRequest)
-            .where(
-                PlanningPullRequest.team_id == team.id,
-                PlanningPullRequest.linkage != "ignored",
+        pulls = list(
+            db.scalars(
+                select(PlanningPullRequest)
+                .where(
+                    PlanningPullRequest.team_id == team.id,
+                    PlanningPullRequest.linkage != "ignored",
+                )
+                .order_by(PlanningPullRequest.updated_at.desc(), PlanningPullRequest.number.desc())
             )
-            .order_by(PlanningPullRequest.updated_at.desc(), PlanningPullRequest.number.desc())
         )
         for pr in pulls:
             data = _pull_row(pr, team)
@@ -121,7 +131,7 @@ def _board(db: Session, team: PlanningTeam, is_leader: bool, session) -> tuple[l
                 "status": task.status,
                 "progress": task.progress,
                 "pulls": task_pulls.get(task.id, []),
-                "can_start": start_pr.can_start(team, session, task, task_pulls.get(task.id, [])),
+                "can_start": start_pr.can_start(team, session, task, task_pulls.get(task.id, []), config=config),
             }
         )
     return [
@@ -138,8 +148,8 @@ def _board(db: Session, team: PlanningTeam, is_leader: bool, session) -> tuple[l
 
 
 def _log(db: Session, team_id: str) -> list[dict]:
-    rows = db.scalars(
-        select(PlanningLog).where(PlanningLog.team_id == team_id).order_by(PlanningLog.id.desc()).limit(30)
+    rows = list(
+        db.scalars(select(PlanningLog).where(PlanningLog.team_id == team_id).order_by(PlanningLog.id.desc()).limit(30))
     )
     return [{"id": row.id, "at": utc(row.at), "message": row.message} for row in rows]
 
@@ -147,8 +157,9 @@ def _log(db: Session, team_id: str) -> list[dict]:
 @router.get("/state")
 def read_state(request: Request, response: Response, db: Session = Depends(get_session)):
     response.headers["Cache-Control"] = "no-store"
+    auth.carry_session_cookie(request, response, db)
     settings = get_settings()
-    config = github_app.current()
+    config = github_app.current(db)
     state = {
         "github_enabled": config is not None,
         "setup": {"needed": config is None, "code_required": setup.code_required()},
@@ -210,7 +221,7 @@ def read_state(request: Request, response: Response, db: Session = Depends(get_s
         state["install_url"] = None if team.demo else github.install_url()
         state["draft"] = team.draft
         state["auto_plan"] = handoff.pending(db, team) is not None
-    state["sprints"], state["inbox"] = _board(db, team, member.leader, session)
+    state["sprints"], state["inbox"] = _board(db, team, member.leader, session, config)
     if keys := push.vapid():
         state["push_key"] = keys.public
         state["push_registered"] = (
@@ -233,37 +244,36 @@ def save_members(data: Roster, request: Request, db: Session = Depends(get_sessi
     if actor and not actor.leader:
         raise HTTPException(403, "Cần trưởng nhóm cập nhật danh sách thành viên.")
     team_id = actor.team_id if actor else uuid4().hex
-    known = {person.github_id: person for person in work.members_in(db, team_for(db, team_id))} if actor else {}
+    team = team_for(db, team_id, lock=True) if actor else None
+    demo = team.demo if team else session.demo
+    known = {person.github_id: person for person in work.members_in(db, team)} if team else {}
+    invite_hint = "Chia sẻ mã mời để thành viên tự vào đội."
     resolved = {}
     for item in data.members:
-        if item.login.casefold() == session.login.casefold():
+        own_profile = item.github_id in (None, session.github_id)
+        if not demo and not own_profile and item.github_id not in known:
+            raise HTTPException(409, invite_hint)
+        if item.login.casefold() == session.login.casefold() and (demo or own_profile):
             info = {"github_id": session.github_id, "login": session.login}
         elif current := known.get(item.github_id):
             if current.login.casefold() != item.login.casefold():
                 raise HTTPException(422, "Dùng tên GitHub đã xác thực của thành viên.")
             info = {"github_id": current.github_id, "login": current.login}
+        elif not demo:
+            raise HTTPException(409, invite_hint)
         elif item.github_id:
             raise HTTPException(422, "Thành viên chưa có trong đội hiện tại.")
-        elif session.demo:
+        else:
             demo_id = sha256(f"{team_id}:{item.login.casefold()}".encode()).hexdigest()[:32]
             info = {"github_id": "demo-" + demo_id, "login": item.login}
-        else:
-            try:
-                info = github.find_user(item.login)
-            except github.GitHubError as exc:
-                if exc.status == 404:
-                    raise HTTPException(422, f"Kiểm tra lại tên GitHub @{item.login}.") from exc
-                raise HTTPException(502, "GitHub chưa xác nhận được thành viên. Thử lại sau ít phút.") from exc
         user_id = info["github_id"]
         if user_id in resolved:
             raise HTTPException(422, "Mỗi tài khoản GitHub chỉ có một hồ sơ trong đội.")
         resolved[user_id] = (item, info["login"])
     if session.github_id not in resolved:
         raise HTTPException(422, "Thêm hồ sơ trưởng nhóm trước khi tiếp tục.")
-    if actor:
-        team_for(db, team_id, lock=True)
-    else:
-        db.add(PlanningTeam(id=team_id, demo=session.demo))
+    if team is None:
+        db.add(PlanningTeam(id=team_id, demo=demo))
         db.flush()
     for user_id, (item, login) in resolved.items():
         row = db.get(PlanningMember, user_id)

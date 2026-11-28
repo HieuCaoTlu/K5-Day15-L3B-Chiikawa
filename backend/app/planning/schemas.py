@@ -272,8 +272,11 @@ class DraftInput(RepoVersion):
     brief: Brief
 
 
-class ApplyInput(RepoVersion):
+class DraftVersion(RepoVersion):
     draft_id: str = Field(min_length=32, max_length=32)
+
+
+class ApplyInput(DraftVersion):
     plan: Plan
 
 

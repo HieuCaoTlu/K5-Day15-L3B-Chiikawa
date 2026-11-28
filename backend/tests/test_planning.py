@@ -50,7 +50,19 @@ def _member(login, name):
 
 
 def _team(client, leader, member):
+    """Đội demo: trưởng nhóm thêm thẳng thành viên mẫu."""
     _write(client, "PUT", "/members", {"members": [_member(leader, "Đạt"), _member(member, "Lan")]})
+
+
+def _real_team(client, leader, member):
+    """Đội thật: trưởng nhóm lập đội, thành viên tự vào bằng mã mời. Cùng một client nên đổi phiên đăng nhập qua lại."""
+    _write(client, "PUT", "/members", {"members": [_member(leader, "Đạt")]})
+    _write(client, "POST", "/invite")
+    code = _state(client)["invite_code"]
+    _login(client, member)
+    profile = {k: v for k, v in _member(member, "Lan").items() if k != "login"}
+    _write(client, "POST", "/join", {**profile, "code": code})
+    _login(client, leader)
 
 
 def _demo(client):
@@ -233,7 +245,7 @@ def test_github_login_roles_and_signed_pull_sync(set_env, monkeypatch):
         assert bad.headers["location"] == "/planning?github=state"
         assert _state(client)["profile"] is None
         assert _login(client, "lead").headers["location"] == "/planning"
-        _team(client, "lead", "lan")
+        _real_team(client, "lead", "lan")
         _choose(client, "11", expected=403)
         assert _login(client, "lan", "repos").headers["location"] == "/planning?github=account"
         assert _login(client, "lead", "repos").headers["location"] == "/planning?github=discovered"

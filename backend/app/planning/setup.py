@@ -81,7 +81,7 @@ def _manifest(origin: str) -> dict:
 
 @router.post("/start", dependencies=[Depends(require_same_origin)])
 def start_setup(data: SetupStart, request: Request, response: Response, db: Session = Depends(get_session)):
-    if github_app.current():
+    if github_app.current(db):
         raise HTTPException(409, "Máy chủ đã kết nối GitHub. Tải lại Planning để đăng nhập.")
     origin = _web_origin(request.headers.get("Origin", ""))
     if not origin:
@@ -123,7 +123,7 @@ def _back(status: str) -> RedirectResponse:
 
 @router.get("/callback")
 def finish_setup(request: Request, code: str = "", state: str = "", db: Session = Depends(get_session)):
-    if github_app.current():
+    if github_app.current(db):
         return _back("configured")
     expected = request.cookies.get(COOKIE, "")
     if not TOKEN.fullmatch(state) or not compare_digest(expected.encode(), state.encode()):

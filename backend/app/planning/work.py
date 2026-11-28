@@ -19,6 +19,7 @@ from app.planning.schemas import (
     Brief,
     DemoPR,
     DraftInput,
+    DraftVersion,
     Plan,
     PRLink,
     RepoVersion,
@@ -116,13 +117,25 @@ def create_draft(data: DraftInput, request: Request, db: Session = Depends(get_s
     return team.draft
 
 
-@router.post("/apply", status_code=204)
-def apply_draft(data: ApplyInput, request: Request, db: Session = Depends(get_session)):
+def _draft_for_write(data: DraftVersion, request: Request, db: Session) -> PlanningTeam:
     _, member = leader_for(db, request)
     team = team_for(db, member.team_id, lock=True)
     require_repo(team, data.repo_version)
     if not team.draft or team.draft["id"] != data.draft_id:
         raise HTTPException(409, "Bản nháp đã thay đổi. Tải lại Planning để xem bản đang chờ.")
+    return team
+
+
+@router.delete("/draft", status_code=204)
+def discard_draft(data: DraftVersion, request: Request, db: Session = Depends(get_session)):
+    team = _draft_for_write(data, request, db)
+    team.draft = None
+    db.commit()
+
+
+@router.post("/apply", status_code=204)
+def apply_draft(data: ApplyInput, request: Request, db: Session = Depends(get_session)):
+    team = _draft_for_write(data, request, db)
     brief = Brief.model_validate(team.draft["brief"])
     _check_dates(db, team, brief)
     try:

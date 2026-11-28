@@ -19,14 +19,23 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 INTENT = re.compile(r"pr-([1-9][0-9]{0,8})-([0-9]{1,9})")
 OPEN_STATES = ("draft", "open")
+_UNSET = object()
 
 
-def can_start(team: PlanningTeam, session: PlanningSession, task: PlanningTask, pulls: list[dict]) -> bool:
-    config = github_app.current()
+def can_start(
+    team: PlanningTeam,
+    session: PlanningSession,
+    task: PlanningTask,
+    pulls: list[dict],
+    *,
+    config: github_app.GitHubConfig | None | object = _UNSET,
+    db: Session | None = None,
+) -> bool:
+    resolved = github_app.current(db) if config is _UNSET else config
     return bool(
         not session.demo
-        and config
-        and config.repos_enabled
+        and resolved
+        and resolved.repos_enabled
         and team.repo_access
         and team.installation_id
         and task.assignee_id == session.github_id
@@ -49,7 +58,7 @@ def _startable(db: Session, session: PlanningSession, task_id: int, version: int
         {"state": state}
         for state in db.scalars(select(PlanningPullRequest.state).where(PlanningPullRequest.task_id == task.id))
     ]
-    if not can_start(team, session, task, pulls):
+    if not can_start(team, session, task, pulls, db=db):
         raise HTTPException(409, "Task này đã xong, đã có PR đang mở hoặc repo chưa sẵn sàng.")
     return team, task
 
@@ -107,7 +116,7 @@ def repo_access(request: Request, response: Response, db: Session = Depends(get_
     response.headers["Cache-Control"] = "no-store"
     session, member = leader_for(db, request)
     team = team_for(db, member.team_id)
-    config = github_app.current()
+    config = github_app.current(db)
     if session.demo or not config or not team.repo_access or not team.installation_id:
         return {"available": False}
     people = [(person.github_id, person.login) for person in members_in(db, team)]

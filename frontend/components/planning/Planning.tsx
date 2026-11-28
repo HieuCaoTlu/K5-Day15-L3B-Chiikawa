@@ -25,14 +25,6 @@ const RETURN_MESSAGES: Record<string, string> = {
   discovered: 'Đã tải các repo được cấp quyền.',
 };
 const INVITE_KEY = 'tang.invite';
-
-// Xoá dữ liệu Workstation khi đăng xuất, cùng quy tắc khoá với public/tang/session.js.
-// Khi Planning nằm trong khung của Workstation, trang ngoài nhận sự kiện storage và tự tải lại.
-function forgetWorkstation() {
-  try {
-    Object.keys(window.localStorage).filter((key) => /^tang[-.]/.test(key)).forEach((key) => window.localStorage.removeItem(key));
-  } catch { /* không có localStorage */ }
-}
 const SUCCESS_RETURNS = new Set(['discovered', 'ready', 'configured']);
 
 function message(error: unknown) {
@@ -209,8 +201,7 @@ export function Planning() {
   };
 
   async function signOut() {
-    const logout = async () => { await planning.logout(); forgetWorkstation(); };
-    if (await mutate(logout)) {
+    if (await mutate(planning.logout)) {
       setView('board');
       setShowRepo(false);
       setEditTeam(false);
@@ -310,7 +301,7 @@ export function Planning() {
                       </p>}
                       {state.repo && leader && state.draft && (
                         <DraftEditor key={state.draft.id} draft={state.draft} members={state.members} repoVersion={state.repo_version}
-                          busy={busy} mutate={mutate} showRegenerate={() => setCompose(!compose)} />
+                          busy={busy} mutate={mutate} showRegenerate={() => setCompose(!compose)} onDiscarded={() => setCompose(false)} />
                       )}
                       {state.repo && leader && (compose || (!state.draft && !state.sprints.length && !state.auto_plan)) && (
                         <PlanForm key={state.repo_version + ':' + (state.draft?.id ?? '')} initial={state.draft?.brief}
