@@ -4,11 +4,11 @@
   "input": {
     "proposal": {
       "verdict": "GO",
-      "reply": "GO. Cả 4 ô lõi đều có chuyện thật. Bạn xem Canvas rồi duyệt để sang Planning.",
+      "reply": "GO. Canvas đã đủ 9 ô và 4 ô lõi đều có chuyện thật. Bạn xem Canvas rồi duyệt để sang Planning.",
       "next_cell": null,
       "reasons": [
-        "Cả 4 ô lõi đều có chuyện thật: một người cụ thể, một lần cụ thể.",
-        "Còn cần làm rõ ở Planning: Solution, AI Leverage, MVP Scope, Metrics, Prior Art & Edge.",
+        "Đã đủ 9 ô. Cả 4 ô lõi đều có chuyện thật: một người cụ thể, một lần cụ thể.",
+        "Cần kiểm chứng với người dùng thật ở Planning: Solution, AI Leverage, MVP Scope, Metrics, Prior Art & Edge.",
         "Trước khi làm: chốt ai là người trả tiền và sản phẩm kiếm hay tiết kiệm tiền cho họ bằng cách nào."
       ],
       "canvas": {
@@ -45,7 +45,7 @@
           "status": "evidence"
         },
         "solution": {
-          "content": "Bot tự trả lời câu hỏi giá và tồn kho",
+          "content": "Bot đọc tin nhắn Zalo và tự trả lời khách về giá và tồn kho",
           "who": "",
           "when": "",
           "quote": "",
@@ -53,36 +53,36 @@
           "status": "assumption"
         },
         "ai_leverage": {
-          "content": "",
+          "content": "AI hiểu câu hỏi tự do của khách thay vì khớp từ khoá cố định",
           "who": "",
           "when": "",
           "quote": "",
           "grounded": false,
-          "status": "empty"
+          "status": "assumption"
         },
         "mvp_scope": {
-          "content": "",
+          "content": "Bản đầu chỉ trả lời giá và tồn kho trên Zalo, chưa chốt đơn",
           "who": "",
           "when": "",
           "quote": "",
           "grounded": false,
-          "status": "empty"
+          "status": "assumption"
         },
         "metrics": {
-          "content": "",
+          "content": "Mỗi tuần mất không quá 1 đơn vì trả lời trễ",
           "who": "",
           "when": "",
           "quote": "",
           "grounded": false,
-          "status": "empty"
+          "status": "assumption"
         },
         "prior_art": {
-          "content": "",
-          "who": "",
+          "content": "Agent chưa tra cứu được đối thủ ở chế độ dự phòng. Nhóm tự rà các sản phẩm làm việc tương tự và ghi điểm khác biệt trước khi làm.",
+          "who": "Agent",
           "when": "",
           "quote": "",
           "grounded": false,
-          "status": "empty"
+          "status": "assumption"
         }
       },
       "flags": {
@@ -90,10 +90,10 @@
         "solved_elsewhere": false
       },
       "title": "GO: đủ bằng chứng ở 4 ô lõi",
-      "summary": "GO. Cả 4 ô lõi đều có chuyện thật. Bạn xem Canvas rồi duyệt để sang Planning.",
+      "summary": "GO. Canvas đã đủ 9 ô và 4 ô lõi đều có chuyện thật. Bạn xem Canvas rồi duyệt để sang Planning.",
       "steps": [
-        "Cả 4 ô lõi đều có chuyện thật: một người cụ thể, một lần cụ thể.",
-        "Còn cần làm rõ ở Planning: Solution, AI Leverage, MVP Scope, Metrics, Prior Art & Edge.",
+        "Đã đủ 9 ô. Cả 4 ô lõi đều có chuyện thật: một người cụ thể, một lần cụ thể.",
+        "Cần kiểm chứng với người dùng thật ở Planning: Solution, AI Leverage, MVP Scope, Metrics, Prior Art & Edge.",
         "Trước khi làm: chốt ai là người trả tiền và sản phẩm kiếm hay tiết kiệm tiền cho họ bằng cách nào."
       ],
       "confidence": 1.0

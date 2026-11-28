@@ -38,6 +38,7 @@ Dataset nào, xử lý gì (từ `data/DATA_CARD.md`): (1) khảo sát Google Fo
 |---|---|---|---|---|---|---|
 | 1 | run-1@20261128-010324 | gemini-3.5-flash-lite | prompt `update_canvas` có thêm phần tư duy sản phẩm; chấm bằng `eval/grade.py` | 18/23 | 78% | Chưa (thuong+kho 14/19 = 73,7% < 75%; 3 câu GO sai) |
 | 2 | run-2@20261128-021100 | gemini-3.5-flash-lite | thêm luật code: trích dẫn của ô JTBD phải nêu điều chính người dùng muốn đạt (không phải nỗi đau, lời đoán, nghe kể lại), ô Workaround phải mô tả cách đang làm; thêm quy tắc `no_ai_needed` cho nguyên nhân là thói quen | 20/23 | 87% | Đạt (thuong+kho 16/19 = 84,2%; tu_choi 4/4; 0 câu GO sai) |
+| 3 | run-3@20261128-112110 | gemini-3.5-flash-lite | bổ sung nghiệp vụ: chỉ đánh giá khi đủ 9 ô, ô Prior Art do agent tự điền; sửa prompt `update_canvas` (người không cần tên, sự việc là đủ, persona là lớp vai) | 17/23 | 74% | Chưa (thuong+kho 13/19 = 68,4% < 75%; 0 câu GO sai, cả lượt không có câu nào trả GO) |
 
 Lượt chạy lại vì lỗi kỹ thuật, lượt sau CP4: ghi thêm dòng, không sửa dòng cũ.
 

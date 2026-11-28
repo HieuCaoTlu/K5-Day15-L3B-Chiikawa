@@ -1,6 +1,8 @@
 """Nối API ↔ graph ↔ bảng agent_runs. thread_id của LangGraph = AgentRun.id."""
 
 import logging
+import threading
+import time
 from uuid import uuid4
 
 from langgraph.types import Command
@@ -12,6 +14,22 @@ from app.models import AgentRun
 from app.schemas import ReviewIn
 
 logger = logging.getLogger("app.agent")
+
+
+_id_lock = threading.Lock()
+_last_ns = 0
+
+
+def new_run_id() -> str:
+    """id 32 ký tự luôn tăng dần theo thời gian (20 chữ số ns + 12 hex ngẫu nhiên).
+
+    Sắp xếp theo (created_at, id) cần id tăng dần: đồng hồ Windows thô nên hai lượt chạy có thể trùng created_at,
+    mà uuid4 ngẫu nhiên thì không giữ thứ tự tạo. Bộ đếm bảo đảm id sau luôn lớn hơn id trước trong cùng tiến trình.
+    """
+    global _last_ns
+    with _id_lock:
+        _last_ns = max(time.time_ns(), _last_ns + 1)
+        return f"{_last_ns:020d}{uuid4().hex[:12]}"
 
 
 def _config(run_id: str) -> dict:
@@ -108,7 +126,7 @@ def _previous_canvas(session: Session, session_id: str | None, request: str) -> 
 
 def start_run(session: Session, request: str, session_id: str | None = None) -> AgentRun:
     carried = _previous_canvas(session, session_id, request)
-    run = AgentRun(id=uuid4().hex, session_id=session_id, request=request, status="running")
+    run = AgentRun(id=new_run_id(), session_id=session_id, request=request, status="running")
     session.add(run)
     session.commit()
     return _invoke(session, run, {"request": request, **carried}, new_run=True)

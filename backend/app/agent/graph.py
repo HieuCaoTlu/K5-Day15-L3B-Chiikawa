@@ -1,8 +1,8 @@
 """LangGraph dạng Workflow: các bước biết trước, chỉ rẽ nhánh khi bị chặn. Không loop trừ khi thật cần.
 
     START → guard_input ─blocked→ END
-                        └→ update_canvas → mark_evidence ─còn ô lõi thiếu→ ask_next → END (chờ tin nhắn tiếp)
-                                                         └─đủ 4 ô lõi / NO→ verdict → human_review (interrupt) → finalize → END
+                        └→ update_canvas → mark_evidence ─chưa đủ 9 ô hoặc thiếu ô lõi→ ask_next → END (chờ tin nhắn tiếp)
+                                                         └─đủ 9 ô + 4 ô lõi có bằng chứng / NO→ verdict → human_review (interrupt) → finalize → END
 
 Checkpointer: Postgres (PostgresSaver) khi DATABASE_URL là Postgres → bước chờ duyệt sống qua restart;
 còn lại InMemorySaver (dev/test — restart là mất lượt đang chờ).
@@ -45,7 +45,7 @@ def _after_guard(state: AgentState) -> str:
 
 
 def _after_evidence(state: AgentState) -> str:
-    """Còn ô lõi thiếu → hỏi tiếp. Đủ 4 ô lõi, hoặc kết luận NO → ra phán quyết để trưởng nhóm duyệt."""
+    """Chưa đủ 9 ô hoặc ô lõi chưa có chuyện thật → hỏi tiếp. Đủ cả hai, hoặc kết luận NO → ra phán quyết để trưởng nhóm duyệt."""
     verdict, _, _ = decide(state["canvas"], state.get("flags") or {})
     return "ask_next" if verdict == "NOT YET" else "verdict"
 
