@@ -1859,7 +1859,7 @@
         : emptyState('deck', 'Chưa có Pitching HTML', 'Bộ slide dựng từ Canvas và kết quả khảo sát. Bạn chỉnh từng trang, xem toàn màn hình hoặc xuất ra HTML.', btn('deck', 'Tạo slide', 'primary big'));
       const mainAd = Array.isArray(p.adPosts) && p.adPosts.length ? p.adPosts[0] : null;
       const linkSurveySlug = activeTileSlug();
-      const adsCard = `<div class="panel">${panelHead('Bài quảng cáo', mainAd || p.ads ? btn('ads', 'Tạo lại', 'primary small') : '')}${mainAd
+      const adsCard = `<div class="panel">${panelHead('Bài quảng cáo', mainAd || p.ads ? `<div class="row" style="gap:6px">${btn('clearAds', 'Xóa', 'danger small')}${btn('ads', 'Tạo lại', 'primary small')}</div>` : '')}${mainAd
         ? `<div class="stack" style="gap:10px">
             ${Array.isArray(mainAd.placeholders) && mainAd.placeholders.length ? `<div class="ph-row">${mainAd.placeholders.map(ph => `<span class="tag">${esc(ph)}</span>`).join('')}</div>` : ''}
             <textarea class="script-edit" data-bind="adFull" data-id="0" aria-label="Nội dung bài quảng cáo">${esc(adFullText(mainAd))}</textarea>
@@ -1923,6 +1923,11 @@
     if (deckSurveySlug === '__none__') return '__none__';
     if (deckSurveySlug && list.some(x => x.slug === deckSurveySlug)) return deckSurveySlug;
     return activeTileSlug() || '__none__';
+  }
+  /* Bản nháp form tạo mới: chỉ có câu hỏi khi người dùng bấm tạo; lưu xong hoặc mở lần mới thì về trống. */
+  function clearSurveyDraft() {
+    Object.assign(S.pitch, { sections: [], form: [], formTitle: '', formDesc: '', draftSource: '', targetRole: '' });
+    save('pitch');
   }
   function activeEditorTarget() {
     return sideMode === 'survey' && sideSlug && editSurveyTarget ? editSurveyTarget : S.pitch;
@@ -2455,7 +2460,7 @@
       sideTab = 'edit';
       lastSavedSlug = created.slug;
       editSurveyTarget = toEditTarget(created);
-      save('pitch');
+      clearSurveyDraft();
       if (Array.isArray(surveysCache)) surveysCache = [created, ...surveysCache];
       refreshDashStats(true);
       await copyTextWithFeedback(location.origin + '/survey?slug=' + created.slug, null, 'Đã lưu và copy link khảo sát', 'Đã lưu. Trình duyệt chặn copy, hãy sao chép link ở ô bên dưới.');
@@ -3145,6 +3150,7 @@ nature là bản chất problem: "behavior" nếu là problem hành vi (duy trì
     reopen(b) { const i = STEPS.findIndex(x => x.id === b.dataset.id); STEPS.slice(i).forEach(x => { S.done[x.id] = false; }); save('done'); rerender(); renderNav(); },
     openCreateSurvey() {
       const wasClosed = !sideMode;
+      if (sideMode !== 'create') clearSurveyDraft();
       sideMode = 'create';
       sideSlug = '';
       editSurveyTarget = null;
@@ -3184,6 +3190,15 @@ nature là bản chất problem: "behavior" nếu là problem hành vi (duy trì
       syncProgress();
       rerender();
       toast('Đã xóa bộ slide');
+    },
+    clearAds(b) {
+      if (!twice(b, 'clearAds', 'Bấm lần nữa để xóa')) return;
+      S.pitch.adPosts = [];
+      S.pitch.ads = '';
+      save('pitch');
+      syncProgress();
+      rerender();
+      toast('Đã xóa bài quảng cáo');
     },
     async setSideTab(b) {
       const next = b.dataset.id;
