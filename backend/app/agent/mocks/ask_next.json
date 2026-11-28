@@ -88,7 +88,11 @@
         "Persona còn trống",
         "Pain Point còn trống",
         "Current Workaround còn trống",
-        "Job-to-be-done còn trống"
+        "Job-to-be-done còn trống",
+        "AI Leverage còn trống",
+        "MVP Scope còn trống",
+        "Metrics còn trống",
+        "Prior Art & Edge còn trống"
       ],
       "canvas": {
         "persona": {
@@ -171,7 +175,11 @@
         "Persona còn trống",
         "Pain Point còn trống",
         "Current Workaround còn trống",
-        "Job-to-be-done còn trống"
+        "Job-to-be-done còn trống",
+        "AI Leverage còn trống",
+        "MVP Scope còn trống",
+        "Metrics còn trống",
+        "Prior Art & Edge còn trống"
       ],
       "confidence": 0.0
     },

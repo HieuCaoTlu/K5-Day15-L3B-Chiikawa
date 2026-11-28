@@ -101,6 +101,28 @@ def test_update_canvas_prefers_llm_even_in_demo_mode(set_env, monkeypatch):
     assert out["canvas"] == empty_canvas()
 
 
+def test_agent_prior_art_is_dropped_until_solution_and_ai_leverage_exist(monkeypatch):
+    early = CanvasUpdate.model_validate(
+        {"solution": {"content": "tool nhắc"}, "prior_art": {"content": "HubSpot có nhắc lịch", "who": "Agent"}}
+    )
+    monkeypatch.setattr(nodes.llm, "structured", lambda *_a, **_k: early)
+    out = nodes.update_canvas({"request": "mình định làm tool nhắc", "canvas": empty_canvas()})
+    assert out["canvas"]["solution"]["status"] == "assumption"
+    assert out["canvas"]["prior_art"]["status"] == "empty"
+
+    both = CanvasUpdate.model_validate(
+        {
+            "solution": {"content": "tool nhắc"},
+            "ai_leverage": {"content": "AI soạn tin follow-up"},
+            "prior_art": {"content": "HubSpot có nhắc lịch", "who": "Agent"},
+        }
+    )
+    monkeypatch.setattr(nodes.llm, "structured", lambda *_a, **_k: both)
+    out = nodes.update_canvas({"request": "AI soạn tin follow-up", "canvas": empty_canvas()})
+    assert out["canvas"]["prior_art"]["content"] == "HubSpot có nhắc lịch"
+    assert out["canvas"]["prior_art"]["status"] == "assumption"
+
+
 def test_update_canvas_llm_error_does_not_crash(monkeypatch):
     def boom(*_args, **_kwargs):
         raise TimeoutError

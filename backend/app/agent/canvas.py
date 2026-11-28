@@ -1,6 +1,8 @@
 """Luật của bước Thinking, viết bằng code thuần (không LLM) để test được và không bị lời người dùng ép.
 
 - Một ô chỉ là "evidence" khi có người cụ thể + lần cụ thể + đoạn trích nguyên văn có thật trong tin nhắn.
+- Agent chỉ đánh giá (GO / NO) khi cả 9 ô đã có nội dung. 4 ô lõi vẫn phải có chuyện thật; 5 ô còn lại chỉ cần có nội dung.
+- Ô Prior Art & Edge (đối thủ xung quanh) agent tự điền từ Solution + AI Leverage, người dùng không cần nhập; ô này luôn là giả định.
 - GO / NOT YET / NO do `decide` quyết. LLM chỉ trích thông tin vào ô (node update_canvas).
 """
 
@@ -12,6 +14,9 @@ from app.agent.state import CELL_LABELS, CELLS, CORE, CanvasUpdate, CellUpdate, 
 
 # Thứ tự hỏi: người dùng → vấn đề → cách làm hiện tại → việc họ cố hoàn thành
 ASK_ORDER: tuple[str, ...] = ("persona", "pain_point", "current_workaround", "jtbd")
+# Thứ tự điền đủ 9 ô: 4 ô lõi trước, rồi giải pháp, vai trò của AI, phạm vi MVP, số đo; đối thủ do agent tự điền
+FILL_ORDER: tuple[str, ...] = (*ASK_ORDER, "solution", "ai_leverage", "mvp_scope", "metrics", "prior_art")
+AGENT_FILLED = "prior_art"
 DEPENDS_ON_PERSONA: tuple[str, ...] = ("jtbd", "pain_point", "current_workaround")
 
 QUESTIONS: dict[str, str] = {
@@ -19,6 +24,11 @@ QUESTIONS: dict[str, str] = {
     "pain_point": "Lần gần nhất người đó gặp vấn đề này là khi nào? Chuyện gì đã xảy ra và họ mất gì?",
     "current_workaround": "Hôm nay họ xử lý bằng cách nào, và vì sao họ chưa bỏ cách đó?",
     "jtbd": "Trong lần đó, họ nói muốn đạt được kết quả gì? Chép lại lời của họ, không có chữ AI.",
+    "solution": "Nhóm định giải quyết nỗi đau đó bằng sản phẩm như thế nào? Mô tả ngắn cách người dùng sẽ dùng nó.",
+    "ai_leverage": "AI đóng vai trò gì trong giải pháp đó, ở bước nào? Vì sao cách thông thường không làm được?",
+    "mvp_scope": "Bản đầu tiên làm những gì và chưa làm gì? Chỉ nêu những việc đủ để người đó dùng thử.",
+    "metrics": "Con số nào cho biết sản phẩm có giá trị với người đó, và ai là người sẽ trả tiền hay tiết kiệm được tiền?",
+    "prior_art": "Bạn đã biết sản phẩm hay cách làm nào tương tự chưa, và mình khác ở điểm nào?",
 }
 REFUSALS: dict[str, str] = {
     "force_verdict": "Mình không đánh dấu ô nào là có bằng chứng khi chưa có chuyện thật của một người cụ thể.",
@@ -47,6 +57,11 @@ CELL_CUES = {
         r"\b(trả lời tay|thủ công|ghi .{0,20} vào|(?:dùng|qua|bằng) (?:zalo|excel|google sheets|sổ|giấy))\b"
     ),
     "jtbd": re.compile(r"\b(muốn|cần|cố gắng|mục tiêu là|phải)\s+(?!có\b|dùng\b|làm\s+bot\b|bot\b|ai\b|chatbot\b)\w+"),
+    "solution": re.compile(r"\b(giải pháp|bot|app|ứng dụng|công cụ|sản phẩm|làm một|xây|tự động trả lời)\b"),
+    "ai_leverage": re.compile(r"\b(ai|mô hình|model|học máy|hiểu|tự động|phân loại|tóm tắt)\b"),
+    "mvp_scope": re.compile(r"\b(bản đầu|mvp|trước mắt|chưa cần|chỉ cần|giai đoạn đầu)\b"),
+    "metrics": re.compile(r"\b(\d+|chỉ số|tỷ lệ|giảm|tăng|trả tiền|doanh thu|tiết kiệm)\b"),
+    "prior_art": re.compile(r"\b(đối thủ|đã có|tương tự|hiện có|khác ở|khác biệt)\b"),
 }
 
 
@@ -168,8 +183,24 @@ def question_for(canvas: dict, cell: str | None) -> str:
     )
 
 
+def cell_done(canvas: dict, cell: str) -> bool:
+    """Ô lõi phải có bằng chứng; ô còn lại chỉ cần có nội dung (kể cả khi mới là giả định)."""
+    if cell in CORE:
+        return canvas[cell]["status"] == "evidence"
+    return canvas[cell]["status"] != "empty"
+
+
 def next_missing(canvas: dict) -> str | None:
-    return next((c for c in ASK_ORDER if canvas[c]["status"] != "evidence"), None)
+    return next((c for c in FILL_ORDER if not cell_done(canvas, c)), None)
+
+
+def can_self_fill_prior_art(canvas: dict) -> bool:
+    """Agent tự điền đối thủ khi đã có Solution và AI Leverage mà ô Prior Art còn trống."""
+    return (
+        canvas[AGENT_FILLED]["status"] == "empty"
+        and canvas["solution"]["status"] != "empty"
+        and canvas["ai_leverage"]["status"] != "empty"
+    )
 
 
 def decide(canvas: dict, flags: dict) -> tuple[str, list[str], str | None]:
@@ -178,16 +209,16 @@ def decide(canvas: dict, flags: dict) -> tuple[str, list[str], str | None]:
         return "NO", ["Bài toán có vẻ giải được mà không cần AI. Cân nhắc hướng không dùng AI trước."], None
     if flags.get("solved_elsewhere"):
         return "NO", ["Đã có sản phẩm giải quyết việc này và chưa nêu được mình khác ở đâu."], None
-    missing = [c for c in ASK_ORDER if canvas[c]["status"] != "evidence"]
+    missing = [c for c in FILL_ORDER if not cell_done(canvas, c)]
     if missing:
         reasons = [
             f"{CELL_LABELS[c]} {'còn trống' if canvas[c]['status'] == 'empty' else 'mới là giả định'}" for c in missing
         ]
         return "NOT YET", reasons, missing[0]
     todo = [CELL_LABELS[c] for c in CELLS if c not in CORE and canvas[c]["status"] != "evidence"]
-    reasons = ["Cả 4 ô lõi đều có chuyện thật: một người cụ thể, một lần cụ thể."]
+    reasons = ["Đã đủ 9 ô. Cả 4 ô lõi đều có chuyện thật: một người cụ thể, một lần cụ thể."]
     if todo:
-        reasons.append("Còn cần làm rõ ở Planning: " + ", ".join(todo) + ".")
+        reasons.append("Cần kiểm chứng với người dùng thật ở Planning: " + ", ".join(todo) + ".")
     reasons.append("Trước khi làm: chốt ai là người trả tiền và sản phẩm kiếm hay tiết kiệm tiền cho họ bằng cách nào.")
     return "GO", reasons, None
 

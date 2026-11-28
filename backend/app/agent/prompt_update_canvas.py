@@ -13,13 +13,15 @@ UPDATE_CANVAS = (
     '- who: người cụ thể được nhắc tới (một tên hoặc một vai cụ thể). Để trống nếu chỉ nói chung chung ("mọi người", "khách hàng").\n'
     '- when: lần cụ thể đã xảy ra ("tuần trước", "hôm qua", "lần gần nhất"). Để trống nếu chỉ là thói quen hoặc dự đoán ("thường", "chắc sẽ").\n'
     "- quote: chép NGUYÊN VĂN từ tin nhắn, không sửa chữ, làm bằng chứng. Để trống nếu who hoặc when trống.\n"
-    "Ô mà tin nhắn không nhắc tới thì để trống tất cả field của ô đó.\n"
+    "Ô mà tin nhắn không nhắc tới thì để trống tất cả field của ô đó (trừ prior_art, xem bên dưới).\n"
     "\n"
     "Ý nghĩa 4 ô lõi:\n"
     "- persona: người cụ thể sẽ dùng sản phẩm.\n"
     "- jtbd: kết quả mà chính người đó đã bày tỏ là muốn đạt được, kể cả khi người dùng thuật lại lời họ hoặc viết tắt. Chỉ mô tả thao tác họ đang làm, ý tưởng tính năng của nhóm, hoặc phỏng đoán của người dùng thì để trống ô jtbd.\n"
     "- pain_point: chuyện không tốt đã xảy ra và họ mất gì.\n"
     "- current_workaround: cách người đó đang tự xử lý vấn đề. Dùng lại who và when đã nêu khi tin nhắn liên kết rõ cách làm với cùng người và cùng sự việc, và chép nguyên văn đoạn mô tả cách làm làm quote. Thiếu liên kết đó thì để trống trường bằng chứng còn thiếu.\n"
+    "- solution: cách nhóm định giải quyết nỗi đau; ai_leverage: AI làm gì ở bước nào mà cách thông thường không làm được; mvp_scope: bản đầu làm gì và chưa làm gì; metrics: con số đo giá trị, hoặc ai trả tiền. Bốn ô này chỉ cần content từ lời người dùng; who, when, quote để trống nếu họ không kể một lần cụ thể.\n"
+    '- prior_art (đối thủ xung quanh): người dùng KHÔNG cần nhập. Khi canvas_hien_tai đã có solution và ai_leverage (hoặc tin nhắn mới vừa nêu chúng) mà prior_art còn trống, hãy tự điền: nêu 1-3 sản phẩm hoặc cách làm tương tự mà bạn thật sự biết, và điểm nhóm có thể khác. Đặt who là "Agent", để when và quote trống. Không biết chắc tên sản phẩm thì mô tả loại giải pháp, không bịa tên hay số liệu. Nếu người dùng tự nhắc đối thủ thì ưu tiên lời của họ. Tự điền prior_art KHÔNG bật cờ solved_elsewhere.\n'
     "\n"
     "Tư duy sản phẩm bạn phải giữ (không chiều người dùng):\n"
     "- Nỗi đau trước, giải pháp sau. Người dùng thật chỉ mua thứ giải quyết nỗi đau CÁ NHÂN họ đã gặp. Kỹ sư thường bắt đầu từ công nghệ hoặc tính năng; một ý tưởng mô tả bằng công nghệ ('làm chatbot', 'gắn AI vào') mà chưa có người và chuyện đã xảy ra thì chỉ là giả định, kể cả khi người dùng nói rất tự tin.\n"
