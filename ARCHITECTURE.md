@@ -40,19 +40,17 @@ START → guard_input ──blocked──→ END
 | Node | Loại | Vào | Ra | Mock |
 |---|---|---|---|---|
 | `guard_input` | code | `request` | `blocked`, `block_reason` | `mocks/guard_input.json` |
-| `update_canvas` | LLM (Flash, structured output) → demo_cache → heuristic dự phòng | `request`, `canvas`, `flags` | `canvas`, `flags`, `intent`, `source` | `mocks/update_canvas.json` |
+| `update_canvas` | LLM (Flash, structured output) → demo_cache → heuristic dự phòng | `request`, `canvas`, `flags`, `asked_cell`, `last_question` | `canvas`, `flags`, `intent`, `source`, `changed_cells` | `mocks/update_canvas.json` |
 | `mark_evidence` | code | `canvas` | `canvas` (gán lại `status` từng ô) | `mocks/mark_evidence.json` |
-| `ask_next` | code | `canvas`, `flags`, `intent` | `proposal` (NOT YET + 1 câu hỏi), `result.status=needs_info` | `mocks/ask_next.json` |
-| `verdict` | code | `canvas`, `flags`, `intent` | `proposal` (GO hoặc NO) | `mocks/verdict.json` |
+| `ask_next` | code | `canvas`, `flags`, `intent`, `asked_cell`, `last_question`, `changed_cells` | `proposal` (NOT YET + ghi nhận ô mới + 1 câu hỏi), `result.status=needs_info` | `mocks/ask_next.json` |
+| `verdict` | code | `canvas`, `flags`, `intent`, `changed_cells` | `proposal` (GO hoặc NO) | `mocks/verdict.json` |
 | `human_review` | HITL `interrupt()` | `proposal` | `review` | `mocks/human_review.json` (= tự duyệt) |
 | `finalize` | code | `proposal`, `review` | `result` (`handoff=planning` khi GO được duyệt) | `mocks/finalize.json` |
 
-- **Một lượt = một tin nhắn.** Canvas nối tiếp giữa các lượt trong cùng `session_id` (`service._previous_canvas`), nên agent
-  hỏi từng câu một. Hỏi tiếp kết thúc lượt ở `ask_next` (status `needs_info`); chỉ khi đủ bằng chứng mới tới `human_review`.
+- **Một lượt = một tin nhắn.** Canvas, cờ và ngữ cảnh câu hỏi vừa hỏi (`asked_cell`, `last_question`) được nối tiếp giữa các lượt trong cùng `session_id` (`service._previous_canvas`), nên agent hiểu câu trả lời ngắn cho đúng ô đang hỏi, tránh lặp nguyên văn câu hỏi cũ và ghi nhận các ô vừa cập nhật trong câu trả lời. Hỏi tiếp kết thúc lượt ở `ask_next` (status `needs_info`); chỉ khi đủ 9 ô và 4 ô lõi có bằng chứng mới tới `human_review`.
 - **Luật bằng code, không bằng LLM** (`app/agent/canvas.py`): một ô chỉ là `evidence` khi có người cụ thể + lần cụ thể + đoạn
-  trích **có thật trong tin nhắn**. LLM bịa trích dẫn → ô chỉ là `assumption`. `decide()` quyết GO / NOT YET / NO.
-- **4 ô lõi** (Persona, Pain Point, Current Workaround, JTBD) phải có chuyện thật mới được GO. Cờ `no_ai_needed` hoặc
-  `solved_elsewhere` → NO.
+  trích **có thật trong tin nhắn**. LLM bịa trích dẫn → ô chỉ là `assumption`. Có thể bổ sung `who`/`when`/`quote` cho ô đã có `content` ở lượt trước. `decide()` quyết GO / NOT YET / NO.
+- **Đủ 9 ô và 4 ô lõi** (Persona, Pain Point, Current Workaround, JTBD) phải có chuyện thật mới được GO; `prior_art` không dùng placeholder dự phòng (nếu trống thì hỏi người dùng). Cờ `no_ai_needed` và `solved_elsewhere` dùng 3 trạng thái (`null` giữ nguyên, `true` bật → NO, `false` gỡ để đánh giá lại canvas).
 - **HITL**: `POST /agent/runs` chạy tới `human_review` rồi dừng (`status=waiting_review`). `POST /agent/runs/{id}/review`
   gửi `Command(resume={approved, note})` → chạy tiếp. Checkpointer: Postgres (`PostgresSaver`) khi `DATABASE_URL` là
   Postgres, còn lại bộ nhớ (dev/test).

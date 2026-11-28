@@ -20,7 +20,6 @@ from app.agent.canvas import (
     REFUSALS,
     apply_update,
     build_proposal,
-    can_self_fill_prior_art,
     decide,
     empty_canvas,
     heuristic_update,
@@ -45,12 +44,6 @@ def demo_lookup(request: str) -> CanvasUpdate | None:
     return CanvasUpdate.model_validate(hit) if hit else None
 
 
-PRIOR_ART_PLACEHOLDER = (
-    "Agent chưa tra cứu được đối thủ ở chế độ dự phòng. Nhóm tự rà các sản phẩm làm việc tương tự "
-    "và ghi điểm khác biệt trước khi làm."
-)
-
-
 def _gate_agent_prior_art(canvas: dict) -> dict:
     """Agent chưa được tự điền đối thủ khi chưa có Solution và AI Leverage: bỏ phần LLM điền sớm."""
     cell = canvas[AGENT_FILLED]
@@ -61,29 +54,23 @@ def _gate_agent_prior_art(canvas: dict) -> dict:
     return canvas
 
 
-def _self_fill_prior_art(canvas: dict) -> dict:
-    """Đối thủ xung quanh do agent tự đánh giá, không đợi người dùng nhập. Luôn là giả định (không người, không lần cụ thể)."""
-    if not can_self_fill_prior_art(canvas):
-        return canvas
-    canvas[AGENT_FILLED] = {
-        "content": PRIOR_ART_PLACEHOLDER,
-        "who": "Agent",
-        "when": "",
-        "quote": "",
-        "grounded": False,
-        "status": "assumption",
-    }
-    return canvas
-
-
 def _canvas_summary(canvas: dict) -> str:
     lines = []
     for cell in CELLS:
         data = canvas.get(cell, {})
         status = data.get("status", "empty")
         label = {"evidence": "có bằng chứng", "assumption": "giả định", "empty": "trống"}[status]
-        lines.append(f"- {cell} [{label}]: {data.get('content', '') or '(trống)'}")
+        meta = [f"{k}={str(data[k]).strip()}" for k in ("who", "when") if str(data.get(k, "")).strip()]
+        suffix = f" ({', '.join(meta)})" if meta else ""
+        lines.append(f"- {cell} [{label}]: {data.get('content', '') or '(trống)'}{suffix}")
     return "\n".join(lines)
+
+
+def _flags_summary(flags: dict) -> str:
+    return "\n".join(
+        f"- {flag}: {'true (đang bật)' if flags.get(flag) else 'false'}"
+        for flag in ("no_ai_needed", "solved_elsewhere")
+    )
 
 
 @mockable("guard_input")
@@ -98,11 +85,29 @@ def update_canvas(state: AgentState) -> dict:
     prev = recompute(state.get("canvas") or empty_canvas())
     flags = state.get("flags") or {}
     if state.get("repeated_request"):
-        return {"canvas": prev, "flags": flags, "intent": "answer", "source": state.get("source", "fallback")}
+        return {
+            "canvas": prev,
+            "flags": flags,
+            "intent": "answer",
+            "source": state.get("source", "fallback"),
+            "changed_cells": [],
+        }
+    asked_cell = state.get("asked_cell")
+    asked_cell_text = (
+        f"{asked_cell} ({CELL_LABELS[asked_cell]})" if asked_cell in CELL_LABELS else (asked_cell or "(chưa hỏi ô nào)")
+    )
+    last_question_text = (state.get("last_question") or "").strip() or "(chưa có câu hỏi trước đó)"
     try:
         upd = llm.structured(
             CanvasUpdate,
-            render("update_canvas", request=request, canvas=_canvas_summary(prev)),
+            render(
+                "update_canvas",
+                request=request,
+                canvas=_canvas_summary(prev),
+                flags=_flags_summary(flags),
+                asked_cell=asked_cell_text,
+                last_question=last_question_text,
+            ),
             node="update_canvas",
         )
         source = "llm"
@@ -117,8 +122,15 @@ def update_canvas(state: AgentState) -> dict:
         if upd is None:
             upd, source = heuristic_update(request, prev), "fallback"
     canvas, new_flags = apply_update(prev, upd, request, flags)
-    canvas = _self_fill_prior_art(_gate_agent_prior_art(canvas))
-    return {"canvas": canvas, "flags": new_flags, "intent": upd.intent, "source": source}
+    canvas = recompute(_gate_agent_prior_art(canvas))
+    changed_cells = [cell for cell in CELLS if canvas[cell] != prev[cell]]
+    return {
+        "canvas": canvas,
+        "flags": new_flags,
+        "intent": upd.intent,
+        "source": source,
+        "changed_cells": changed_cells,
+    }
 
 
 @mockable("mark_evidence")
@@ -131,11 +143,30 @@ def _refusal(intent: str) -> str:
     return REFUSALS.get(intent, "")
 
 
+def _ack_updated(changed_cells: list[str], *, skip_cell: str | None = None) -> str:
+    cells = [c for c in changed_cells if c in CELL_LABELS and c != skip_cell]
+    if not cells:
+        return ""
+    return f"Mình đã cập nhật {', '.join(CELL_LABELS[c] for c in cells)}."
+
+
 @mockable("ask_next")
 def ask_next(state: AgentState) -> dict:
     canvas, flags = state["canvas"], state.get("flags") or {}
     verdict, reasons, next_cell = decide(canvas, flags)
-    parts = [p for p in (_refusal(state.get("intent", "answer")), question_for(canvas, next_cell)) if p]
+    question = question_for(canvas, next_cell)
+    last_question = (state.get("last_question") or "").strip()
+    if (
+        next_cell
+        and state.get("asked_cell") == next_cell
+        and last_question
+        and question
+        and (normalize(question) == normalize(last_question) or normalize(last_question).endswith(normalize(question)))
+    ):
+        question = question_for(canvas, next_cell, repeated=True)
+    skip_cell = next_cell if question.startswith("Mình ghi nhận") else None
+    ack = _ack_updated(state.get("changed_cells") or [], skip_cell=skip_cell)
+    parts = [p for p in (_refusal(state.get("intent", "answer")), ack, question) if p]
     reply = " ".join(parts) or "Bạn kể thêm về người dùng và vấn đề của họ nhé."
     proposal = clean_proposal(build_proposal(canvas, flags, verdict, reasons, next_cell, reply))
     return {
@@ -154,7 +185,8 @@ def verdict(state: AgentState) -> dict:
         body = f"NO. {reasons[0]} Bạn quyết định có đồng ý kết luận này không."
     else:  # NOT YET chỉ tới đây khi graph bị ép rẽ nhánh; vẫn trả đúng schema
         body = "NOT YET. Canvas chưa đủ 9 ô hoặc còn ô lõi chưa có chuyện thật."
-    reply = " ".join(p for p in (_refusal(state.get("intent", "answer")), body) if p)
+    ack = _ack_updated(state.get("changed_cells") or [])
+    reply = " ".join(p for p in (_refusal(state.get("intent", "answer")), ack, body) if p)
     proposal = clean_proposal(build_proposal(canvas, flags, result, reasons, next_cell, reply))
     return {"proposal": proposal.model_dump()}
 

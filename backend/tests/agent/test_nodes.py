@@ -159,3 +159,133 @@ def test_finalize_approved_go_hands_off_to_planning():
     assert result["status"] == "approved"
     assert result["verdict"] == "GO"
     assert result["handoff"] == "planning"
+
+
+def test_update_canvas_passes_context_and_tracks_changed_cells(monkeypatch):
+    captured = {}
+
+    def fake_structured(_schema, prompt, **_kwargs):
+        captured["prompt"] = prompt
+        return CanvasUpdate.model_validate(
+            {
+                "current_workaround": {
+                    "content": "Lục tin nhắn nhóm lớp và hỏi ChatGPT",
+                    "who": "chị H",
+                    "when": "tuần trước",
+                    "quote": "tự lục tin nhắn nhóm lớp và hỏi ChatGPT",
+                }
+            }
+        )
+
+    monkeypatch.setattr(nodes.llm, "structured", fake_structured)
+    prev = empty_canvas()
+    prev["persona"] = {
+        "content": "Sinh viên năm 2",
+        "who": "chị H",
+        "when": "tuần trước",
+        "quote": "chị H gặp lỗi tuần trước",
+        "grounded": True,
+        "status": "evidence",
+    }
+    out = nodes.update_canvas(
+        {
+            "request": "Bạn ý đang tự lục tin nhắn nhóm lớp và hỏi ChatGPT.",
+            "canvas": prev,
+            "flags": {"solved_elsewhere": True},
+            "asked_cell": "current_workaround",
+            "last_question": "Hôm nay họ xử lý bằng cách nào, và vì sao họ chưa bỏ cách đó?",
+        }
+    )
+    assert "current_workaround (Current Workaround)" in captured["prompt"]
+    assert "Hôm nay họ xử lý bằng cách nào" in captured["prompt"]
+    assert "who=chị H, when=tuần trước" in captured["prompt"]
+    assert "solved_elsewhere: true (đang bật)" in captured["prompt"]
+    assert out["changed_cells"] == ["current_workaround"]
+
+
+def test_update_canvas_never_inserts_prior_art_placeholder(monkeypatch):
+    upd = CanvasUpdate.model_validate(
+        {
+            "solution": {"content": "Bot trả lời Zalo"},
+            "ai_leverage": {"content": "Hiểu câu hỏi tự do"},
+        }
+    )
+    monkeypatch.setattr(nodes.llm, "structured", lambda *_a, **_k: upd)
+    out = nodes.update_canvas({"request": "Bot Zalo hiểu câu hỏi tự do", "canvas": empty_canvas()})
+    assert out["source"] == "llm"
+    assert out["canvas"]["prior_art"]["status"] == "empty"
+    assert "chế độ dự phòng" not in out["canvas"]["prior_art"]["content"].lower()
+
+    # Nhánh fallback cũng không chèn placeholder
+    def unavailable(*_a, **_k):
+        raise nodes.llm.LLMUnavailableError
+
+    monkeypatch.setattr(nodes.llm, "structured", unavailable)
+    canvas = empty_canvas()
+    canvas["solution"] = {
+        "content": "Bot Zalo",
+        "who": "",
+        "when": "",
+        "quote": "",
+        "grounded": False,
+        "status": "assumption",
+    }
+    out_fb = nodes.update_canvas({"request": "AI hiểu câu hỏi tự do", "canvas": canvas})
+    assert out_fb["source"] == "fallback"
+    assert out_fb["canvas"]["prior_art"]["status"] == "empty"
+
+
+def test_ask_next_rephrases_when_same_cell_repeats_and_avoids_duplicate_ack():
+    canvas = empty_canvas()
+    last_q = "Ai sẽ dùng thứ này? Mô tả vai hoặc nghề của họ, và kể về lần gần nhất một người thuộc vai đó gặp vấn đề."
+    out = nodes.ask_next(
+        {
+            "canvas": canvas,
+            "flags": {},
+            "intent": "answer",
+            "asked_cell": "persona",
+            "last_question": last_q,
+            "changed_cells": [],
+        }
+    )
+    reply = out["proposal"]["reply"]
+    assert reply != last_q
+    assert "chưa thấy thông tin" in reply.lower()
+    assert out["proposal"]["next_cell"] == "persona"
+
+    # Khi question_for đã mở đầu bằng "Mình ghi nhận" cho ô hiện tại, không lặp thêm "Mình đã cập nhật <ô đó>"
+    canvas["persona"] = {
+        "content": "Chủ shop online",
+        "who": "",
+        "when": "",
+        "quote": "",
+        "grounded": False,
+        "status": "assumption",
+    }
+    canvas["solution"] = {
+        "content": "Chatbot Zalo",
+        "who": "",
+        "when": "",
+        "quote": "",
+        "grounded": False,
+        "status": "assumption",
+    }
+    ack_out = nodes.ask_next(
+        {
+            "canvas": canvas,
+            "flags": {},
+            "intent": "answer",
+            "changed_cells": ["persona", "solution"],
+        }
+    )
+    ack_reply = ack_out["proposal"]["reply"]
+    assert "Mình đã cập nhật Solution." in ack_reply
+    assert "Mình đã cập nhật Persona" not in ack_reply
+    assert "Mình ghi nhận: Chủ shop online." in ack_reply
+
+
+def test_verdict_acknowledges_changed_cells():
+    mock = load_mock("verdict")
+    out = nodes.verdict({**mock["input"], "changed_cells": ["metrics"]})
+    assert out["proposal"]["verdict"] == "GO"
+    assert out["proposal"]["reply"].startswith("Mình đã cập nhật Metrics. GO.")
