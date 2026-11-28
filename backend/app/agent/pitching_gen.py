@@ -2,6 +2,7 @@
 
 import logging
 import re
+import unicodedata
 
 from pydantic import BaseModel, Field
 
@@ -528,13 +529,35 @@ def _fill_ad_placeholders(text: str, project: str, role_label: str) -> str:
     )
 
 
+_DIACRITICS_REMINDER = (
+    "\n\nLần trả lời trước bị mất dấu tiếng Việt. Viết lại toàn bộ bằng tiếng Việt CÓ ĐẦY ĐỦ DẤU, "
+    "kể cả khi dữ liệu trong <bai_toan> được gõ không dấu."
+)
+
+
+def _lacks_diacritics(text: str) -> bool:
+    """Tiếng Việt viết đúng có dấu ở phần lớn từ. Bỏ qua phần [...] vì model chép nguyên từ prompt."""
+    words = re.findall(r"[^\W\d_]+", unicodedata.normalize("NFC", re.sub(r"\[[^\]]*\]", " ", text)))
+    return bool(words) and sum(not w.isascii() for w in words) / len(words) < 0.3
+
+
+def _generate_accented_assets(prompt: str) -> _GeneratedAssets:
+    """Gọi LLM, thử lại một lần nếu bài trả về không dấu; vẫn sai thì báo lỗi để dùng luật dự phòng."""
+    for attempt_prompt in (prompt, prompt + _DIACRITICS_REMINDER):
+        generated = llm.structured(_GeneratedAssets, attempt_prompt, node="pitch_assets")
+        ad = generated.ads[0]
+        if not _lacks_diacritics(f"{ad.hook} {ad.body} {ad.cta}"):
+            return generated
+    raise ValueError("LLM trả tiếng Việt không dấu")
+
+
 def generate_pitch_assets(ctx: ProblemContextIn, stats: SurveyStatsOut | None = None) -> PitchAssetsOut:
     """Sinh bài quảng cáo chung kèm placeholder qua LLM hoặc luật dự phòng."""
     project = _clip(ctx.project_name, 80, "Sản phẩm AI")
     role_label = _resolve_target_role(ctx)
     prompt = render("pitch_assets", **_prompt_ctx_fields(ctx, stats))
     try:
-        generated = llm.structured(_GeneratedAssets, prompt, node="pitch_assets")
+        generated = _generate_accented_assets(prompt)
         ads = [
             PitchAdPost(
                 id="ad0",
