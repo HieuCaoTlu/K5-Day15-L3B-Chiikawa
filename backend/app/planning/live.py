@@ -113,6 +113,19 @@ async def _receive(socket: WebSocket, listener: _Listener) -> None:
             listener.outbox.put_nowait(PONG)
 
 
+async def _stopped(tasks) -> None:
+    """Chờ các tác vụ dừng hẳn và đọc lỗi của chúng.
+
+    Không dùng asyncio.gather: khi bị hủy từ ngoài, Python 3.12 có thể làm mất thông điệp hủy,
+    cancel scope của anyio không nhận ra lệnh hủy của mình và CancelledError lọt ra ngoài.
+    """
+    if tasks:
+        await asyncio.wait(tasks)
+        for task in tasks:
+            if not task.cancelled():
+                task.exception()
+
+
 @router.websocket("/ws")
 async def watch_team(socket: WebSocket):
     await socket.accept()
@@ -138,7 +151,7 @@ async def watch_team(socket: WebSocket):
         done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
         for task in pending:
             task.cancel()
-        await asyncio.gather(*pending, return_exceptions=True)
+        await _stopped(pending)
         if revoke_task in done or listener.revoked.is_set():
             with suppress(WebSocketDisconnect, RuntimeError):
                 await socket.close(code=status.WS_1008_POLICY_VIOLATION)
@@ -148,12 +161,11 @@ async def watch_team(socket: WebSocket):
             if error and not isinstance(error, (WebSocketDisconnect, RuntimeError)):
                 raise error
     finally:
-        for task in tasks:
-            if not task.done():
-                task.cancel()
-        if tasks:
-            await asyncio.gather(*tasks, return_exceptions=True)
+        # Gỡ listener trước khi chờ: nếu server đang hủy kết nối thì lệnh await bên dưới bị hủy ngay.
         with _lock:
             _listeners[team].discard(listener)
             if not _listeners[team]:
                 del _listeners[team]
+        for task in tasks:
+            task.cancel()
+        await _stopped(tasks)
