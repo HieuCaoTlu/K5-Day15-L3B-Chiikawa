@@ -114,6 +114,7 @@ Chốt trước khi code, sửa ở đây khi đổi (FE đọc chi tiết ở `
 | PUT | `/api/v1/planning/project` | `{version,name,done}` | Lưu tên dự án và tiến độ năm bước (204); mọi thành viên, riêng `done.product` chỉ trưởng nhóm đổi (403); 409 nếu `version` cũ. `GET /state` trả `project` |
 | PUT | `/api/v1/planning/thinking` | `{version,session,msgs}` | Lưu mã phiên và tin nhắn Thinking (204); chỉ trưởng nhóm, thành viên chỉ đọc qua `thinking` trong `GET /state`; 409 nếu `version` cũ |
 | PUT | `/api/v1/planning/pitching` | `{version,pitch,score,chat}` | Lưu bản nháp Pitching, scorecard và chat với agent (204); mọi thành viên; `pitch` tối đa 500 KB; 409 nếu `version` cũ. `GET /state` trả `pitching` |
+| WS | `/api/v1/planning/ws` | cookie phiên Planning | Gửi `{"type":"changed"}` khi dữ liệu của đội đổi, client đọc lại `GET /state`; gửi chữ `ping` nhận `{"type":"pong"}`. Chưa vào đội hoặc sai Origin (production) thì đóng với mã 1008. Cần backend chạy một tiến trình |
 | POST / DELETE | `/api/v1/planning/invite` | — | Tạo hoặc đổi mã, tắt mã (204); trưởng nhóm |
 | POST | `/api/v1/planning/join` | `{code,name,experience,tags,avatar}` | Vào đội (204); 404 sai mã, 409 đã có đội hoặc đội đủ 16 người, 429 sai 10 lần/10 phút |
 | DELETE | `/api/v1/planning/members/{github_id}` | — | Xóa thành viên (204); 409 nếu là trưởng nhóm hoặc còn task |

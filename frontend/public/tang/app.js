@@ -210,9 +210,11 @@
     const same = live && next && live.profile && next.profile && live.profile.github_id === next.profile.github_id;
     const view_ = value => JSON.stringify(value && [value.profile, value.role, value.members, value.repo, value.sprints, value.webhook, value.push_key, value.push_registered]);
     const changed = force || live === undefined || view_(live) !== view_(next);
-    if (!same) { boardStatus = ''; boardRound++; }
+    // Đổi tài khoản thì nối lại để server đăng ký đúng đội.
+    if (!same) { boardStatus = ''; boardRound++; closeTeamSocket(); }
     const wasJoined = joined(), hadState = Boolean(live);
     live = next;
+    watchTeam();
     // Vừa lập hoặc vào đội ngay trên trang thì giữ phần thiết lập đang mở để làm tiếp bước chọn repo.
     if (hadState && !wasJoined && joined()) planningOpen = true;
     if (!joined()) planningOpen = false;
@@ -224,6 +226,39 @@
     if (!changed) return;
     drawPlanning();
     syncProgress();
+  }
+
+  /* ---------- Báo thay đổi của đội qua WebSocket: server chỉ báo "đã đổi", dữ liệu vẫn đọc từ GET /state ---------- */
+  let teamSocket = null, socketRetry = 0, socketTimer, pulling = false, pullAgain = false;
+  /* Nhiều tín hiệu liên tiếp gộp thành một lượt tải; tín hiệu đến lúc đang tải thì tải thêm một lượt. */
+  async function pullTeam() {
+    if (pulling) { pullAgain = true; return; }
+    pulling = true;
+    try {
+      do { pullAgain = false; await loadPlanning(); } while (pullAgain);
+    } finally { pulling = false; }
+  }
+  function watchTeam() {
+    clearTimeout(socketTimer);
+    if (mockMode || !joined()) { closeTeamSocket(); return; }
+    if (teamSocket) return;
+    let socket;
+    try { socket = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}${PLANNING_API}/ws`); }
+    catch (e) { return; }
+    teamSocket = socket;
+    // Vừa nối (lại) thì tải một lượt để bù thay đổi trong lúc mất kết nối.
+    socket.onopen = () => { socketRetry = 0; pullTeam(); };
+    socket.onmessage = () => pullTeam();
+    socket.onclose = () => {
+      if (teamSocket !== socket) return;
+      teamSocket = null;
+      socketTimer = setTimeout(watchTeam, Math.min(30000, 1000 * 2 ** socketRetry++));
+    };
+  }
+  function closeTeamSocket() {
+    const socket = teamSocket;
+    teamSocket = null;
+    if (socket) socket.close();
   }
 
   /* ---------- Thành viên và dữ liệu chung của đội trên server ---------- */
@@ -285,7 +320,8 @@
       if (wsTimers[k]) return; // còn thay đổi chưa gửi
       const remote = state && state.role ? state[k] : null;
       const version = remote ? remote.version : null;
-      if (version === wsVersion[k]) return;
+      // Lượt tải cũ về muộn thì bỏ qua, không đè bản mới hơn.
+      if (version === wsVersion[k] || (version !== null && wsVersion[k] !== null && version < wsVersion[k])) return;
       const keepsLocal = LOCAL_FIRST.includes(k);
       wsVersion[k] = version;
       // Ngoài đội thì giữ nguyên bản trên máy.
@@ -3602,12 +3638,12 @@ nature là bản chất problem: "behavior" nếu là problem hành vi (duy trì
   document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeDrawer(); setPlanningOpen(false); closeSurveySide(); } });
   document.addEventListener('focusout', () => setTimeout(() => { if (boardStale && !boardPending && !editingBoard()) loadPlanning(); }));
   addEventListener('focus', () => { if (inApp) loadPlanning(); });
-  // Thay đổi của người khác trong đội hiện ra mà không cần tải lại trang.
-  setInterval(() => { if (inApp && !mockMode && !document.hidden && joined() && !tk.busy) loadPlanning(); }, 10000);
+  // WebSocket đứt thì tải lại định kỳ cho tới khi nối lại được.
+  setInterval(() => { if (inApp && !mockMode && !document.hidden && joined() && !(teamSocket && teamSocket.readyState === WebSocket.OPEN)) pullTeam(); }, 10000);
   // Rời tab thì gửi ngay phần đang chờ; quay lại thì tải bản mới.
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) Object.keys(wsTimers).forEach(flushWorkspace);
-    else if (inApp && !mockMode) loadPlanning();
+    else if (inApp && !mockMode) pullTeam();
   });
   mobile.addEventListener('change', () => { if (inApp) { render(); layout(false); syncProgress(); } });
   let rt, lastW = innerWidth;
