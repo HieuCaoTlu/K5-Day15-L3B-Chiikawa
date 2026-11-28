@@ -218,6 +218,24 @@ def repo_pulls(repo_id: str, installation_id: str) -> tuple[dict, list[dict]]:
     return {"name": name, "branch": repo["default_branch"]}, pulls
 
 
+def repo_collaborators(repo_id: str, installation_id: str, repo: str) -> list[dict]:
+    """Người có quyền ghi vào repo (tối đa 300). Bỏ tài khoản bot và người chỉ được xem."""
+    if not REPO_RE.fullmatch(repo):
+        raise GitHubError(404)
+    token = _repo_token(repo_id, installation_id)
+    people = []
+    for page in range(1, 4):
+        rows = _api(f"/repos/{repo}/collaborators", token, params={"per_page": 100, "page": page})
+        if not isinstance(rows, list):
+            raise GitHubError()
+        for row in rows:
+            if (row.get("permissions") or {}).get("push") and row.get("type") == "User":
+                people.append(_person(row))
+        if len(rows) < 100:
+            break
+    return people
+
+
 def _branch_sha(repo: str, branch: str, token: str) -> str | None:
     try:
         return _api(f"/repos/{repo}/git/ref/heads/{quote(branch)}", token)["object"]["sha"]

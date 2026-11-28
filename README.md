@@ -120,6 +120,7 @@ Chốt trước khi code, sửa ở đây khi đổi (FE đọc chi tiết ở `
 | DELETE | `/api/v1/planning/members/{github_id}` | — | Xóa thành viên (204); 409 nếu là trưởng nhóm hoặc còn task |
 | PUT | `/api/v1/planning/repo` | `{repo_id,repo_version,reset_confirmed?}` | Kết nối hoặc đổi repo (204) |
 | POST | `/api/v1/planning/repo/refresh` | `{repo_version}` | `{count}` PR vừa đọc |
+| POST | `/api/v1/planning/auto` | `{repo_version}`; trưởng nhóm | Tự lập sprint từ Canvas Thinking đã duyệt của đội và giao task ngay, không qua bản nháp. Người có quyền ghi vào repo mà chưa có đội được thêm vào đội (tối đa 16 người). Trả `{created:false}` khi không có gì để làm, hoặc `{created:true,source,sprints,tasks,members,added,skipped,collaborators:"ok"\|"unavailable"\|"demo"}`. Gọi lại không tạo trùng. `GET /state` trả `auto_plan:true` khi đang chờ lập (repo đã kết nối, chưa có sprint hay bản nháp, Canvas mới duyệt chưa dùng) |
 | POST | `/api/v1/planning/draft` · `/api/v1/planning/apply` | Lần lượt `{repo_version,brief}` · `{repo_version,draft_id,plan}` | Bản nháp `{id,source,brief,plan}` hoặc áp dụng (204) |
 | PATCH | `/api/v1/planning/tasks/{id}` | `{repo_version,task}` | Cập nhật task (204) |
 | POST | `/api/v1/planning/tasks/{id}/pr` | `{repo_version}` | `{url}` trang xác nhận GitHub; chỉ người được giao; callback tạo nhánh + PR nháp rồi về `/planning?github=pr_created\|pr_exists\|pr_permission\|pr_empty\|pr_draft\|pr_failed\|pr_stale&task=…`. `/state` trả `can_start` cho từng task |

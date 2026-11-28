@@ -296,11 +296,14 @@ export function Planning() {
                 <div className="pl-board">
                   {view === 'pulls' ? <PullRequests state={state} tasks={tasks} busy={busy} mutate={mutate} /> : (
                     <>
+                      {state.auto_plan && <p className="d-alert info" role="status">
+                        Canvas đã duyệt. Sprint được tạo và giao tự động, bạn không cần nhập gì. Xem tiến trình ở tab Planning.
+                      </p>}
                       {state.repo && leader && state.draft && (
                         <DraftEditor key={state.draft.id} draft={state.draft} members={state.members} repoVersion={state.repo_version}
                           busy={busy} mutate={mutate} showRegenerate={() => setCompose(!compose)} />
                       )}
-                      {state.repo && leader && (compose || (!state.draft && !state.sprints.length)) && (
+                      {state.repo && leader && (compose || (!state.draft && !state.sprints.length && !state.auto_plan)) && (
                         <PlanForm key={state.repo_version + ':' + (state.draft?.id ?? '')} initial={state.draft?.brief}
                           sprints={state.sprints} repoVersion={state.repo_version} busy={busy} mutate={mutate}
                           draftExists={Boolean(state.draft)} onCancel={compose ? () => setCompose(false) : undefined} />

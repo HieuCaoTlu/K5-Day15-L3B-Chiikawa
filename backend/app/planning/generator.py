@@ -40,7 +40,28 @@ def _story_title(story: str) -> str:
     return title[0].upper() + title[1:] if title else "Triển khai yêu cầu"
 
 
-def _fallback(brief: Brief, skills: list[str]) -> Plan:
+EXTRA_WORK = [
+    ("Viết ca kiểm thử", "Có danh sách ca kiểm thử và kết quả chạy từng ca."),
+    ("Rà soát và góp ý", "Ghi lại góp ý, mỗi góp ý có hướng xử lý."),
+    ("Chuẩn bị dữ liệu mẫu", "Có dữ liệu mẫu đủ để chạy luồng từ đầu đến cuối."),
+    ("Viết hướng dẫn dùng", "Người chưa làm phần này đọc và chạy được."),
+    ("Cho người dùng thử", "Ghi lại phản hồi và việc cần sửa."),
+]
+
+
+def _extra_work(stories: list[str], count: int) -> list[tuple[str, str, list[str]]]:
+    """Việc phụ quanh từng yêu cầu, dùng khi đội đông hơn số việc chính."""
+    extra = []
+    for n in range(count):
+        name, criterion = EXTRA_WORK[n // len(stories) % len(EXTRA_WORK)]
+        turn = n // (len(stories) * len(EXTRA_WORK))
+        story = stories[n % len(stories)]
+        title = f"{name}: {_story_title(story).rstrip('.')}"[:150] + (f" (lượt {turn + 1})" if turn else "")
+        extra.append((title, f"{name} cho yêu cầu: {story[:1150]}", [criterion]))
+    return extra
+
+
+def _fallback(brief: Brief, skills: list[str], minimum: int = 0) -> Plan:
     stories = brief.stories or [brief.overview]
     work = [
         (
@@ -62,6 +83,7 @@ def _fallback(brief: Brief, skills: list[str]) -> Plan:
             ["Có hướng dẫn chạy và kết quả kiểm tra cho từng luồng đã triển khai."],
         ),
     ]
+    work[-1:-1] = _extra_work(stories, max(0, minimum - len(work)))
     days = (brief.ends_on - brief.starts_on).days + 1
     sprint_count = min(len(work), (days + 6) // 7)
     sprints = []
@@ -107,7 +129,8 @@ def _number_sprints(plan: Plan, previous: int) -> None:
         sprint.title = NUMBERED.sub(f"Sprint {position}", sprint.title)[:120]
 
 
-def _assign(plan: Plan, members: list[PlanningMember], open_tasks: Counter[str]) -> None:
+def _assign(plan: Plan, members: list[PlanningMember], open_tasks: Counter[str], everyone: bool = False) -> None:
+    given: Counter[str] = Counter()  # số task đã giao trong kế hoạch này
     member_tags = {m.github_id: {tag.casefold() for tag in m.tags} for m in members}
     for sprint in plan.sprints:
         for task in sprint.tasks:
@@ -115,6 +138,7 @@ def _assign(plan: Plan, members: list[PlanningMember], open_tasks: Counter[str])
             member = min(
                 members,
                 key=lambda m: (
+                    given[m.github_id] if everyone else 0,  # chia đều trước, kỹ năng chọn trong số ngang nhau
                     -len(tags & member_tags[m.github_id]),
                     open_tasks[m.github_id],
                     m.login.casefold(),
@@ -123,29 +147,45 @@ def _assign(plan: Plan, members: list[PlanningMember], open_tasks: Counter[str])
             task.assignee_id = member.github_id
             task.status = "todo"
             open_tasks[member.github_id] += 1
+            given[member.github_id] += 1
 
 
 def make_plan(
-    brief: Brief, members: list[PlanningMember], open_tasks: Counter[str], demo: bool, previous: int = 0
+    brief: Brief,
+    members: list[PlanningMember],
+    open_tasks: Counter[str],
+    demo: bool,
+    previous: int = 0,
+    *,
+    everyone: bool = False,
 ) -> tuple[Plan, str]:
+    """`everyone`: kế hoạch phải đủ việc để mỗi thành viên nhận ít nhất một task."""
     settings = get_settings()
     skills = sorted(
         {tag for member in members for tag in member.tags if not check_input(tag, 25)},
         key=str.casefold,
     )
     member_ids = {m.github_id for m in members}
+    minimum = len(members) if everyone else 0
     if not (demo or settings.demo_mode or settings.is_mocked("planning") or not settings.google_api_key):
         try:
-            prompt = render("planning", brief=brief.model_dump_json(), skills=json.dumps(skills, ensure_ascii=False))
+            prompt = render(
+                "planning",
+                brief=brief.model_dump_json(),
+                skills=json.dumps(skills, ensure_ascii=False),
+                team_size=str(len(members)),
+            )
             plan = llm.structured(Plan, prompt, node="planning")
-            _assign(plan, members, open_tasks.copy())
+            if sum(len(sprint.tasks) for sprint in plan.sprints) < minimum:
+                raise ValueError("Kế hoạch chưa đủ việc cho cả đội.")
+            _assign(plan, members, open_tasks.copy(), everyone)
             check_plan(plan, brief, member_ids)
             _number_sprints(plan, previous)
             return plan, "llm"
         except Exception as exc:  # noqa: BLE001 — dùng luật dự phòng nếu model lỗi hoặc trả sai ngày
             logger.info("Kế hoạch dùng luật dự phòng (%s)", type(exc).__name__)
-    plan = _fallback(brief, skills)
-    _assign(plan, members, open_tasks)
+    plan = _fallback(brief, skills, minimum)
+    _assign(plan, members, open_tasks, everyone)
     check_plan(plan, brief, member_ids)
     _number_sprints(plan, previous)
     return plan, "fallback"

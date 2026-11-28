@@ -220,6 +220,7 @@
     if (hadState && !wasJoined && joined()) planningOpen = true;
     if (!joined()) planningOpen = false;
     updatePlanningPanel(tab === 'planning');
+    autoPlan();
     if (updated.length || (changed && !mockMode)) showWorkspace();
     // Canvas nằm ở lượt chạy của agent: trưởng nhóm nhắn hay duyệt thì tải lại theo.
     if (updated.includes('thinking')) { tk.loaded = true; thinkLoad(true); }
@@ -227,6 +228,42 @@
     if (!changed) return;
     drawPlanning();
     syncProgress();
+  }
+
+  /* ---------- Canvas đã duyệt + repo đã kết nối: tự lập sprint và giao task ---------- */
+  // Server quyết định khi nào cần (live.auto_plan) và không tạo trùng; trang chỉ gọi, mỗi lần một lượt.
+  let autoRunning = false, autoError = '';
+
+  function autoSummary(result) {
+    const notes = [`Đã tạo ${result.sprints} sprint, giao ${result.tasks} task cho ${result.members} người.`];
+    if (result.added.length) notes.push(`Thêm vào đội: ${result.added.map(login => '@' + login).join(', ')}.`);
+    if (result.skipped.length) notes.push(`Chưa thêm được (ở đội khác hoặc đội đã đủ chỗ): ${result.skipped.map(login => '@' + login).join(', ')}.`);
+    if (result.collaborators === 'unavailable') notes.push('Chưa đọc được người trong repo nên chỉ giao cho người đã vào đội.');
+    return notes.join(' ');
+  }
+
+  async function autoPlan() {
+    if (mockMode || autoRunning || autoError || !live || !live.auto_plan) return;
+    autoRunning = true;
+    drawPlanning();
+    try {
+      const response = await fetch(PLANNING_API + '/auto', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Planning-Request': '1' },
+        body: JSON.stringify({ repo_version: live.repo_version })
+      });
+      const body = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(body && typeof body.detail === 'string' ? body.detail : 'Chưa tạo được sprint.');
+      if (body.created) toast(autoSummary(body), 9000);
+      planningFrame?.contentWindow?.postMessage({ type: 'tang:planning-reload' }, location.origin);
+    } catch (error) {
+      autoError = error instanceof TypeError ? 'Chưa kết nối được server.' : error.message;
+      toast('Chưa tự tạo được sprint. Mở tab Planning để thử lại.');
+    }
+    // Tải lại trước khi mở khóa, để bản cũ còn auto_plan không gọi thêm lượt nữa.
+    await loadPlanning(true);
+    autoRunning = false;
+    drawPlanning();
   }
 
   /* ---------- Báo thay đổi của đội qua WebSocket: server chỉ báo "đã đổi", dữ liệu vẫn đọc từ GET /state ---------- */
@@ -1125,13 +1162,13 @@
   }
   /* ---------- Thông báo ---------- */
   let toastTimer;
-  function toast(msg) {
+  function toast(msg, duration = 3200) {
     const t = $('#toast');
     t.textContent = msg;
     t.style.opacity = 1;
     anim(t, { y: [16, 0], opacity: [0, 1] }, { type: 'spring', stiffness: 320, damping: 24 });
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => { t.style.opacity = 0; }, 3200);
+    toastTimer = setTimeout(() => { t.style.opacity = 0; }, duration);
   }
   async function copyTextWithFeedback(text, b, okMsg = 'Đã copy link', failMsg = 'Trình duyệt chặn sao chép.') {
     let copied = false;
@@ -1397,7 +1434,11 @@
       if (run.status === 'approved' || run.status === 'rejected') {
         thinkApplyRun(run);
         const handoff = run.result && run.result.handoff === 'planning';
-        if (handoff) toast('Đã duyệt Canvas. Bước Planning đã mở.');
+        if (handoff) {
+          toast('Đã duyệt Canvas. Bước Planning đã mở.');
+          autoError = '';
+          loadPlanning();
+        }
         local.think.msgs.push({ who: 'agent', text: handoff ? 'Đã duyệt Canvas. Bạn có thể sang bước Planning.' : run.status === 'approved' ? 'Đã ghi nhận kết luận. Canvas chưa đủ điều kiện sang Planning.' : 'Đã ghi nhận chưa duyệt. Bạn kể thêm để mình hỏi tiếp nhé.' });
       } else {
         await thinkLoad(true);
@@ -1613,6 +1654,12 @@
   function sprintPanel() {
     const sprints = live.sprints || [];
     if (!sprints.length) {
+      if (autoRunning) {
+        return `<div class="panel">${panelHead('Sprint')}<p class="muted" role="status">Đang tự tạo sprint từ Canvas đã duyệt và giao task cho cả đội. Việc này có thể mất một phút.</p></div>`;
+      }
+      if (autoError && live.auto_plan) {
+        return `<div class="panel">${panelHead('Sprint')}<p class="muted" role="alert">Chưa tự tạo được sprint. ${esc(autoError)}</p><p style="margin-top:12px">${btn('auto-retry', 'Thử lại', 'primary')}</p></div>`;
+      }
       return `<div class="panel">${panelHead('Sprint')}${emptyState('sprint', 'Tạo sprint tự động',
         'Sprint là một chặng làm việc ngắn, thường 1 đến 2 tuần, có mục tiêu rõ ràng. Agent chia Canvas thành các task nhỏ, nhóm giao người và đặt hạn, hết chặng thì xem task nào đã xong.',
         btn('planning-live', 'Tạo sprint tự động', 'primary big', `aria-haspopup="dialog"`))}</div>`;
@@ -3311,6 +3358,7 @@ nature là bản chất problem: "behavior" nếu là problem hành vi (duy trì
       } catch (e) { toast('Không xóa được link khảo sát.'); }
     },
     'ws-retry': () => loadPlanning(true),
+    'auto-retry': () => { autoError = ''; autoPlan(); },
     dot(b) { const s = S.score[b.dataset.id], n = +b.dataset.n; s.score = s.score === n ? n - 1 : n; save('score'); rerender(); anim($$(`.score[data-key="${b.dataset.id}"] .dots .on`, view), { scaleY: [2.2, 1] }, { type: 'spring', delay: canAnim ? M.stagger(0.04) : 0 }); },
     async seed(b) {
       const slug = activeDashSlug();
