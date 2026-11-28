@@ -319,7 +319,8 @@ def _aggregate_question(q: SurveyQuestion, rows: list[PitchSurveyResponse]) -> S
     return SurveyQuestionStat(id=q.id, type=q.type, q=q.q, answered=answered, avg=avg, options=opts)
 
 
-def _build_survey_stats(survey: PitchSurvey, session: Session) -> SurveyStatsOut:
+def _build_survey_stats(survey: PitchSurvey, session: Session, real_texts_only: bool = False) -> SurveyStatsOut:
+    """real_texts_only=True khi đưa cho agent: câu tự luận của phản hồi mẫu không được thành "lời người dùng"."""
     rows = list(
         session.scalars(
             select(PitchSurveyResponse)
@@ -330,6 +331,7 @@ def _build_survey_stats(survey: PitchSurvey, session: Session) -> SurveyStatsOut
     questions = [SurveyQuestion.model_validate(q) for q in (survey.questions or [])]
     sample_count = sum(1 for r in rows if r.is_sample)
     total = len(rows)
+    real_rows = [r for r in rows if not r.is_sample]
     return SurveyStatsOut(
         survey_id=survey.id,
         slug=survey.slug,
@@ -339,7 +341,9 @@ def _build_survey_stats(survey: PitchSurvey, session: Session) -> SurveyStatsOut
         real_responses=total - sample_count,
         sample_responses=sample_count,
         last_response_at=rows[0].created_at if rows else None,
-        questions=[_aggregate_question(q, rows) for q in questions],
+        questions=[
+            _aggregate_question(q, real_rows if real_texts_only and q.type == "text" else rows) for q in questions
+        ],
     )
 
 
@@ -416,7 +420,7 @@ def _lookup_stats(survey_slug: str, session: Session) -> SurveyStatsOut | None:
     survey = session.scalar(select(PitchSurvey).where(PitchSurvey.slug == cleaned))
     if survey is None:
         return None
-    return _build_survey_stats(survey, session)
+    return _build_survey_stats(survey, session, real_texts_only=True)
 
 
 def _to_deck_out(deck: PitchDeck) -> PitchDeckOut:
