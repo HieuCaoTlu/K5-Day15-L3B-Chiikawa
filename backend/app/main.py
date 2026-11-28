@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager, suppress
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import admin, agent, health, items, pitching, planning
+from app.api import admin, agent, health, items, pitching, planning, quality
 from app.config import get_settings
 from app.db import init_db, session_scope
 from app.planning import github_app, setup
@@ -93,6 +93,7 @@ def create_app() -> FastAPI:
     app.include_router(admin.router, prefix="/api/v1")
     app.include_router(planning.router, prefix="/api/v1")
     app.include_router(pitching.router, prefix="/api/v1")
+    app.include_router(quality.router, prefix="/api/v1")
     return app
 
 

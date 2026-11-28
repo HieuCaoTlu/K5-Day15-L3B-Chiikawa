@@ -109,7 +109,7 @@ Chốt trước khi code, sửa ở đây khi đổi (FE đọc chi tiết ở `
 | POST | `/api/v1/planning/auth/demo` · `/api/v1/planning/auth/logout` | — | Tạo phiên demo hoặc kết thúc phiên (204) |
 | PUT | `/api/v1/planning/members` | `{members:[{github_id?,login,name,experience,tags,avatar}]}` | Lưu đội (204) |
 | PUT | `/api/v1/planning/board` | `{version,overview,stories,roles,links,stack,cost,revenue}` | Lưu nội dung tab (204); trưởng nhóm; 409 nếu `version` cũ. `GET /state` trả `board` và `invite_code` (chỉ trưởng nhóm) |
-| PUT | `/api/v1/planning/quality` | `{version,metrics,runs,source,nature,revenueModel,cost}` | Lưu tab Quality (204); mọi thành viên; 409 nếu `version` cũ. `GET /state` trả `quality` (`null` khi chưa vào đội; đội mới thì trống) |
+| PUT | `/api/v1/planning/quality` | `{version,metrics,runs,source,nature,revenueModel,cost,tips?}` (`tips`: tối đa 8 `{id,title,how,why}`) | Lưu tab Quality (204); mọi thành viên; 409 nếu `version` cũ. `GET /state` trả `quality` (`null` khi chưa vào đội; đội mới thì trống) |
 | PUT | `/api/v1/planning/maintain` | `{version,schedule,suggest}` | Lưu tab Maintaining (204); mọi thành viên; 409 nếu `version` cũ; người làm không thuộc đội thành chưa giao. `GET /state` trả `maintain` |
 | POST / DELETE | `/api/v1/planning/invite` | — | Tạo hoặc đổi mã, tắt mã (204); trưởng nhóm |
 | POST | `/api/v1/planning/join` | `{code,name,experience,tags,avatar}` | Vào đội (204); 404 sai mã, 409 đã có đội hoặc đội đủ 16 người, 429 sai 10 lần/10 phút |
@@ -140,6 +140,7 @@ Chốt trước khi code, sửa ở đây khi đổi (FE đọc chi tiết ở `
 | GET / PUT / DELETE | `/api/v1/pitching/decks/{slug}` | `PitchDeckPublishIn?` | `PitchDeck` / 204 |
 | POST | `/api/v1/pitching/assets/generate` | `{context, survey_slug?}` | `{ads[], source}` (bài quảng cáo chung có placeholder) |
 | POST | `/api/v1/pitching/overview` | `{context, survey_slug?}` | `{overview, total_responses, real_responses, sample_responses, source}` |
+| POST | `/api/v1/quality/money-tips` | `{context, monthly_cost_usd?}` | `{tips[{title,how,why}] (3–5), source: "llm" \| "fallback"}` (agent gợi ý cách kiếm tiền; cần header `X-Planning-Request: 1`, 403 nếu gọi từ trang khác) |
 
 Các yêu cầu ghi Planning từ trình duyệt gửi header `X-Planning-Request: 1`. `repo_version` đến từ `GET /state` để thao tác chỉ áp dụng vào repo đang xem.
 

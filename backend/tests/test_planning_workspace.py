@@ -3,7 +3,7 @@
 from tests.test_planning import _demo, _state, _write
 from tests.test_planning_team import _invite, _join, people  # noqa: F401 — fixture
 
-QUALITY = {"metrics": [], "runs": [], "source": "", "nature": "other", "revenueModel": "sub", "cost": {}}
+QUALITY = {"metrics": [], "runs": [], "source": "", "nature": "other", "revenueModel": "sub", "cost": {}, "tips": []}
 MAINTAIN = {"schedule": [], "suggest": []}
 METRIC = {
     "id": "k1",
@@ -28,6 +28,7 @@ RUN = {
     "actTok": 49200,
     "note": "",
 }
+TIP = {"id": "t1", "title": "Thuê bao theo đội", "how": "Thu phí mỗi đội mỗi tháng.", "why": "Dùng hằng ngày."}
 JOB = {"id": "m1", "title": "Rà bản nháp bị sửa", "every": 7, "next": "2026-12-04", "owner": "", "runs": 0}
 
 
@@ -50,7 +51,7 @@ def test_every_member_reads_and_writes_the_shared_data(people):  # noqa: F811
     _demo(leader)
     guest = people()
     _join(guest, _invite(leader))
-    saved = {**QUALITY, "metrics": [METRIC], "runs": [RUN], "cost": {"pricePerM": 5, "apiCalls": 100}}
+    saved = {**QUALITY, "metrics": [METRIC], "runs": [RUN], "cost": {"pricePerM": 5, "apiCalls": 100}, "tips": [TIP]}
     _save(guest, "quality", QUALITY, **saved)
     assert _state(leader)["quality"] == {**saved, "version": 1}
     owner = _state(guest)["profile"]["github_id"]
@@ -78,6 +79,9 @@ def test_invalid_or_anonymous_writes_are_rejected(people):  # noqa: F811
     _demo(leader)
     _save(leader, "quality", QUALITY, expected=422, runs=[{**RUN, "passed": 21}])
     _save(leader, "quality", QUALITY, expected=422, runs=[{**RUN, "sample": True}])
+    _save(leader, "quality", QUALITY, expected=422, tips=[{**TIP, "title": ""}])
+    _save(leader, "quality", QUALITY, expected=422, tips=[{**TIP, "how": "  "}])
+    _save(leader, "quality", QUALITY, expected=422, tips=[{**TIP, "amount": 100}])
     _save(leader, "maintain", MAINTAIN, expected=422, schedule=[{**JOB, "every": 0}])
     outsider = people(demo=False)
     _write(outsider, "PUT", "/quality", {**QUALITY, "version": 0}, expected=401)

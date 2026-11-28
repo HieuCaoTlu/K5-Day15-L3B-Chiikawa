@@ -16,7 +16,7 @@
       lead: 'Chia việc cho cả nhóm, theo dõi tiến độ',
       does: ['Tự động tạo ra các chặng công việc, phân công tự động cho từng thành viên', 'Tự động cập nhật trạng thái công việc theo nội dung Pull request'],
       from: 'Cứ ghi hết ticket ra rồi code thôi.', to: 'Làm việc này thì người dùng được gì? Tiền bỏ ra sẽ thu lại từ đâu?',
-      out: ['Vai trò', 'Tổng quan', 'File pitching', 'User story', 'Task', 'Tech stack', 'Chi phí và doanh thu'] },
+      out: ['Vai trò', 'Tổng quan', 'File pitching', 'User story', 'Task', 'Tech stack', 'Chi phí và gợi ý kiếm tiền'] },
     { id: 'pitching', name: 'Pitching', color: 'orange', hex: '#ff8a1f', tag: 'Khảo sát và quảng bá',
       lead: 'Thu thập khảo sát người dùng, quảng bá sản phẩm',
       does: ['Tự động tạo Form khảo sát và phân tích biểu đồ phản hồi', 'Tự động tạo Slide quảng bá sản phẩm'],
@@ -80,7 +80,7 @@
     tasks: { list: [], log: [] },
     pitch: { sections: [], form: [], responses: [], overview: '', deck: null, deckShown: false, deckSlug: '', deckTitle: '', deckSource: '', ads: '', adPosts: [] },
     maintain: { schedule: [], suggest: [] },
-    quality: { source: '', revenueModel: 'sub', nature: 'other', metrics: [], runs: [], cost: {} }
+    quality: { source: '', revenueModel: 'sub', nature: 'other', metrics: [], runs: [], cost: {}, tips: [] }
   });
 
   // Dữ liệu mẫu, chỉ dùng cho chế độ xem /workstation?demo=full và mô hình ở trang giới thiệu.
@@ -178,7 +178,8 @@
     quality: {
       source: SAMPLE_SCORE.metric[0],
       revenueModel: 'sub',
-      cost: { teams: 30, infra: 80, price: 39, pricePerM: 5, apiCalls: 45000, pricePerCall: 0.05, setupFee: 500, newCustomers: 2 },
+      cost: { infra: 80, pricePerM: 5, apiCalls: 45000 },
+      tips: [],
       metrics: [
         { id: 'k1', name: 'Mức giảm thời gian phản hồi trung vị', baseline: null, target: 50, unit: '%', direction: 'up', kind: 'value', method: 'So thời gian phản hồi trung vị của tuần đó với tuần trước khi dùng AI.',
           rule: 'Nếu thời gian phản hồi trung vị giảm từ 50% so với trước khi dùng thì xem là đạt.', from: 'mau' },

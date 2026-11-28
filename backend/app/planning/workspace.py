@@ -13,7 +13,15 @@ from app.planning.work import members_in
 router = APIRouter(dependencies=[Depends(require_same_origin)])
 
 EMPTY = {
-    "quality": {"metrics": [], "runs": [], "source": "", "nature": "other", "revenueModel": "sub", "cost": {}},
+    "quality": {
+        "metrics": [],
+        "runs": [],
+        "source": "",
+        "nature": "other",
+        "revenueModel": "sub",
+        "cost": {},
+        "tips": [],
+    },
     "maintain": {"schedule": [], "suggest": []},
 }
 
