@@ -1017,7 +1017,7 @@
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => { t.style.opacity = 0; }, 3200);
   }
-  async function copyTextWithFeedback(text, b, okMsg = 'Đã copy link') {
+  async function copyTextWithFeedback(text, b, okMsg = 'Đã copy link', failMsg = 'Trình duyệt chặn sao chép.') {
     let copied = false;
     try {
       if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -1036,7 +1036,7 @@
         ta.remove();
       } catch (e) { copied = false; }
     }
-    if (!copied) return toast('Trình duyệt chặn sao chép.');
+    if (!copied) return toast(failMsg);
     toast(okMsg);
     if (b && b.isConnected) {
       if (!b.dataset.origLabel) b.dataset.origLabel = b.textContent;
@@ -1192,7 +1192,7 @@
     const status = run && run.status;
     let actions = '<span class="muted">Trả lời câu hỏi của agent để tiếp tục</span>';
     if (status === 'waiting_review') actions = `${btn('think-approve', 'Duyệt Canvas', 'tone small', 'style="--c:var(--green)"')}${btn('think-reject', 'Chưa duyệt', 'soft small')}`;
-    if (status === 'approved') actions = '<span class="tag" style="--c:var(--green)">Đã duyệt</span>';
+    if (status === 'approved') actions = '<span class="tag" style="--c:var(--green)">Đã duyệt</span>' + (run.result && run.result.handoff === 'planning' ? btn('tab', 'Sang bước Planning', 'primary small', 'data-id="planning"') : '');
     if (status === 'rejected') actions = '<span class="tag" style="--c:var(--orange)">Chưa duyệt, cần bổ sung</span>';
     const sources = {
       fallback: '<span class="tag" style="--c:var(--orange)">Luật dự phòng</span>',
@@ -1314,7 +1314,7 @@
 
   const finishBtn = i => (i === 0 ? '' : stepState(i) === 'doing' ? btn('finish', 'Hoàn thành bước này', 'tone small', `data-id="${STEPS[i].id}"`) : stepState(i) === 'done' ? btn('reopen', 'Mở lại', 'soft small', `data-id="${STEPS[i].id}"`) : '');
   const lockNote = () => '';
-  const head = (i, sub, extra = '') => `<div class="view-head"><div><h2>${STEPS[i].name}${stateTag(i)}</h2>${sub ? `<p>${sub}</p>` : ''}</div><div class="head-tools">${finishBtn(i)}${extra}</div></div>${lockNote(i)}`;
+  const head = (i, sub, extra = '') => `<div class="view-head"><div><h2>${STEPS[i].name}${stateTag(i, `data-state="${i}"`)}</h2>${sub ? `<p>${sub}</p>` : ''}</div><div class="head-tools">${finishBtn(i)}${extra}</div></div>${lockNote(i)}`;
   const panelHead = (t, extra = '') => `<div class="panel-head"><h3>${t}</h3>${extra}</div>`;
   const btn = (act, label, cls = 'tone', data = '') => `<button class="btn ${cls}" data-act="${act}" ${data}>${label}</button>`;
 
@@ -1411,7 +1411,7 @@
         <span class="slide-num">${String(i + 1).padStart(2, '0')} / ${String(total).padStart(2, '0')}</span>
       </div>
       ${renderSlideLayoutBody(s, layout)}
-      <div class="slide-foot"><span>${esc(slideTitle)}</span><span>${esc(STEPS[i % STEPS.length].name)}</span></div>
+      <div class="slide-foot"><span>${esc(slideTitle)}</span></div>
     </section>`;
   }
   function renderSlideEditorBox() {
@@ -1705,7 +1705,7 @@
           ? `<textarea class="script-edit" data-bind="pitchAdsPlain" aria-label="Nội dung bài quảng cáo">${esc(p.ads)}</textarea><p style="margin-top:10px">${btn('copy', 'Sao chép', 'soft small', 'data-id="ads"')}</p><p class="muted" style="font-size:13px;margin-top:6px">Điền các phần còn thiếu trong ngoặc [...] trước khi sao chép và đăng bài lên diễn đàn.</p>`
           : emptyState('ads', 'Chưa có bài quảng cáo', 'Agent soạn bài đăng kèm chỗ trống [...] để bạn điền trước khi đăng lên diễn đàn.', btn('ads', 'Tạo bài quảng cáo', 'primary big'))}</div>`;
       const topActions = hasSurveys
-        ? `<div class="row" style="gap:6px">${btn('openSelectedEdit', 'Xem khảo sát', 'tone small')}${btn('openSelectedStats', 'Dashboard', 'soft small')}${btn('copySelectedLink', 'Publish link', 'soft small')}${btn('reloadSurveys', 'Làm mới', 'ghost small')}</div>`
+        ? `<div class="row" style="gap:6px">${btn('openSelectedEdit', 'Xem khảo sát', 'tone small')}${btn('openSelectedStats', 'Dashboard', 'soft small')}${btn('copySelectedLink', 'Copy link', 'soft small')}${btn('reloadSurveys', 'Làm mới', 'ghost small')}</div>`
         : `<div class="row" style="gap:6px">${btn('reloadSurveys', 'Làm mới', 'ghost small')}</div>`;
       const bottomBar = hasSurveys ? `<div class="survey-bottom">${btn('openCreateSurvey', '+ Tạo khảo sát', 'primary small')}</div>` : '';
       const hasDeck = !!(p.deck && p.deck.length) || !!p.deckSlug;
@@ -1774,7 +1774,6 @@
         <span><b>${esc(ctx.project_name)}</b></span>
         ${btn('tab', 'Sửa ở Product thinking', 'soft small', 'data-id="product"')}
       </div>
-      ${ctx.problem || ctx.overview ? `<div class="muted">${esc(ctx.problem || ctx.overview)}</div>` : ''}
       <span class="muted" style="margin-top:2px">Đối tượng nhận form</span>
       <div class="row">${roleOptions.map(r => `<button type="button" class="btn small ${curRole === r ? 'tone' : 'soft'}" data-act="pickRole" data-id="${esc(r)}">${esc(r)}</button>`).join('')}</div>
       <input data-bind="targetRole" value="${esc(curRole)}" placeholder="Hoặc nhập đối tượng khác">
@@ -1936,8 +1935,11 @@
     const selSurvey = selSlug && selSlug !== '__none__' ? list.find(x => x.slug === selSlug) : null;
     const role = (t.targetRole || S.pitch.targetRole || (selSurvey && selSurvey.target_role) || '').trim();
     const chatNotes = (S.chat || []).filter(m => m.who !== 'agent').slice(-4).map(m => m.text).join(' | ');
+    const canvas = (tk.run && tk.run.proposal && tk.run.proposal.canvas) || {};
+    const canvasName = String((canvas.solution && canvas.solution.content) || '').trim();
     return {
-      project_name: (sideMode === 'survey' && editSurveyTarget && editSurveyTarget.project_name) || (S.meta.name || '').trim() || (selSurvey && selSurvey.project_name) || 'Sản phẩm AI',
+      // Chưa đặt tên dự án thì lấy Solution của Canvas hiện tại, không mượn tên của khảo sát cũ
+      project_name: (sideMode === 'survey' && editSurveyTarget && editSurveyTarget.project_name) || (S.meta.name || '').trim() || canvasName || (selSurvey && selSurvey.project_name) || 'Sản phẩm AI',
       target_role: role,
       persona: score('persona') || role,
       problem: score('problem'),
@@ -2290,7 +2292,7 @@
       save('pitch');
       if (Array.isArray(surveysCache)) surveysCache = [created, ...surveysCache];
       refreshDashStats(true);
-      toast('Đã lưu khảo sát & tạo link');
+      await copyTextWithFeedback(location.origin + '/survey?slug=' + created.slug, null, 'Đã lưu và copy link khảo sát', 'Đã lưu. Trình duyệt chặn copy, hãy sao chép link ở ô bên dưới.');
       return ['pitch', () => rise($$('.pub-box', sidePanel))];
     },
     async saveEdit() {
@@ -2326,7 +2328,7 @@
         lastDashJson = '';
         refreshDashStats(true);
       }
-      toast('Đã lưu khảo sát & cập nhật link');
+      await copyTextWithFeedback(location.origin + '/survey?slug=' + updated.slug, null, 'Đã lưu và copy link khảo sát', 'Đã lưu. Trình duyệt chặn copy, hãy sao chép link ở ô bên dưới.');
       return ['pitch', () => rise($$('.pub-box', sidePanel))];
     },
     async summary() {
@@ -2632,7 +2634,10 @@ nature là bản chất problem: "behavior" nếu là problem hành vi (duy trì
     else { viewContent.innerHTML = views[tab](); overlay.innerHTML = ''; }
     if (tab === 'product') thinkMount();
     if (tab === 'planning') fitBoard();
-    if (tab === 'pitching') { loadPublishedSurveys(); renderSidePanel(); bindDeckScroll(); }
+    if (tab === 'pitching') {
+      if (!tk.loaded) { tk.loaded = true; thinkLoad(); } // Pitching cần Canvas đã duyệt dù chưa mở tab Thinking
+      loadPublishedSurveys(); renderSidePanel(); bindDeckScroll();
+    }
   }
   function layout(animate) {
     const over = tab === 'overview', isMobile = mobile.matches;
@@ -2840,7 +2845,7 @@ nature là bản chất problem: "behavior" nếu là problem hành vi (duy trì
         ${editSurveyTarget.targetRole ? `<div class="row" style="margin-top:6px"><span class="tag" style="--c:var(--orange)">${esc(editSurveyTarget.targetRole)}</span></div>` : ''}
       </div>
       <div class="row" style="gap:6px">
-        ${btn('copySlug', 'Publish link', 'soft small', `data-id="${esc(sideSlug)}"`)}
+        ${btn('saveEdit', 'Lưu', 'primary small', 'title="Lưu thay đổi và copy link khảo sát"')}
         ${btn('delSurvey', armedDeleteSlug === sideSlug ? 'Bấm nữa để xóa' : 'Xóa', 'danger small', `data-id="${esc(sideSlug)}"`)}
         ${btn('closeSurveySide', 'Đóng', 'soft small')}
       </div>
