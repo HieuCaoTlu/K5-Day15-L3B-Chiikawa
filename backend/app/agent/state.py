@@ -63,9 +63,13 @@ class CanvasUpdate(BaseModel):
     metrics: CellUpdate = Field(default_factory=CellUpdate)
     prior_art: CellUpdate = Field(default_factory=CellUpdate)
     persona_changed: bool = Field(default=False, description="Người dùng đổi persona sang người khác")
-    no_ai_needed: bool = Field(default=False, description="Bài toán rõ ràng giải được mà không cần AI")
-    solved_elsewhere: bool = Field(
-        default=False, description="Đã có sản phẩm giải quyết và người dùng không nêu được khác biệt"
+    no_ai_needed: bool | None = Field(
+        default=None,
+        description="true nếu bài toán giải được mà không cần AI, false nếu người dùng chỉ ra vì sao luật đơn giản không đủ, null nếu tin nhắn không nhắc tới",
+    )
+    solved_elsewhere: bool | None = Field(
+        default=None,
+        description="true nếu đã có sản phẩm cụ thể giải đúng việc này và người dùng không nêu được khác biệt, false nếu người dùng nêu được khác biệt rõ, null nếu tin nhắn không nhắc tới",
     )
 
 
@@ -94,6 +98,9 @@ class Review(BaseModel):
 class AgentState(TypedDict, total=False):
     request: str  # tin nhắn mới nhất của người dùng
     repeated_request: bool  # tin nhắn đã được xử lý trong phiên này
+    asked_cell: str | None  # ô agent vừa hỏi ở lượt trước (proposal.next_cell gần nhất)
+    last_question: str  # câu hỏi/trả lời gần nhất của agent (proposal.reply gần nhất)
+    changed_cells: list[str]  # các ô thay đổi trong lượt này (theo thứ tự CELLS)
     canvas: dict  # 9 ô: {content, who, when, quote, grounded, status}
     flags: dict  # no_ai_needed, solved_elsewhere
     intent: str  # update_canvas

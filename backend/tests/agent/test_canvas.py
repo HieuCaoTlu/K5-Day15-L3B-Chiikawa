@@ -174,8 +174,8 @@ def test_content_without_new_proof_preserves_evidence_and_new_proof_can_replace_
 
 
 def test_no_flags_persist_across_later_turns():
-    # Lượt sau không nhắc tới thì cờ NO không bị tự xóa (trước đây mỗi lượt ghi lại false).
-    before = _full_core()
+    # Cờ NO 3 trạng thái: null giữ giá trị cũ, true bật, false gỡ và đánh giá lại canvas.
+    before = _full()
     flags = {"no_ai_needed": True, "solved_elsewhere": False}
     _, carried = apply_update(before, _upd(), REQ, flags)
     assert carried == flags
@@ -183,6 +183,14 @@ def test_no_flags_persist_across_later_turns():
 
     _, raised = apply_update(before, _upd(solved_elsewhere=True), REQ, carried)
     assert raised == {"no_ai_needed": True, "solved_elsewhere": True}
+
+    _, cleared_one = apply_update(before, _upd(no_ai_needed=False), REQ, raised)
+    assert cleared_one == {"no_ai_needed": False, "solved_elsewhere": True}
+    assert decide(before, cleared_one)[0] == "NO"
+
+    _, cleared_all = apply_update(before, _upd(solved_elsewhere=False), REQ, cleared_one)
+    assert cleared_all == {"no_ai_needed": False, "solved_elsewhere": False}
+    assert decide(before, cleared_all)[0] == "GO"
 
 
 @pytest.mark.parametrize("form", ["NFC", "NFD"])
@@ -227,3 +235,128 @@ def test_workaround_quote_must_describe_what_they_do_today():
     assert _status("current_workaround", "chị Mai mất cả buổi sáng đối chiếu hóa đơn", request) == "assumption"
     request = "Hôm qua chị Mai đang làm tay trên Excel."
     assert _status("current_workaround", "chị Mai đang làm tay trên Excel", request) == "evidence"
+
+
+def test_proof_only_update_preserves_content_and_promotes_evidence():
+    canvas, _ = apply_update(
+        empty_canvas(),
+        _upd(current_workaround={"content": "Lục tin nhắn nhóm lớp và hỏi ChatGPT"}),
+        "Bạn ý đang tự lục tin nhắn nhóm lớp",
+        {},
+    )
+    assert canvas["current_workaround"]["status"] == "assumption"
+
+    msg = "Hôm qua chị H nói chị ấy đang tự lục tin nhắn nhóm lớp để tìm đáp án."
+    canvas, _ = apply_update(
+        canvas,
+        _upd(
+            current_workaround={
+                "who": "chị H",
+                "when": "hôm qua",
+                "quote": "đang tự lục tin nhắn nhóm lớp để tìm đáp án",
+            }
+        ),
+        msg,
+        {},
+    )
+    assert canvas["current_workaround"]["content"] == "Lục tin nhắn nhóm lớp và hỏi ChatGPT"
+    assert canvas["current_workaround"]["status"] == "evidence"
+
+
+def test_proof_only_metadata_cannot_reuse_old_quote_for_another_person():
+    """Lời trích lượt trước kể về chị Lan không được thành bằng chứng khi lượt sau chỉ bổ sung who là chị Mai."""
+    msg = "Chị Lan hôm qua đang dùng Excel, mất đơn và muốn trả lời kịp"
+    quote = "Chị Lan hôm qua đang dùng Excel, mất đơn và muốn trả lời kịp"
+    canvas, _ = apply_update(
+        empty_canvas(),
+        _upd(persona={"content": "Chủ shop online", "quote": quote}, pain_point={"content": "Mất đơn", "quote": quote}),
+        msg,
+        {},
+    )
+    assert canvas["persona"]["status"] == "assumption"
+    canvas, _ = apply_update(
+        canvas, _upd(persona={"who": "Chị Mai", "when": "sáng nay"}), "Chị Mai sáng nay cũng vậy.", {}
+    )
+    canvas, _ = apply_update(canvas, _upd(pain_point={"who": "Chị Lan", "when": "hôm qua"}), "Là chị Lan, hôm qua.", {})
+    assert canvas["persona"]["status"] == "assumption"
+    assert canvas["pain_point"]["status"] == "assumption"
+
+
+def test_proof_only_update_still_enforces_grounding_and_partial_accumulation():
+    base, _ = apply_update(
+        empty_canvas(),
+        _upd(current_workaround={"content": "Trả lời tay qua Zalo"}),
+        "Trả lời tay qua Zalo",
+        {},
+    )
+    # Quote bịa không được nâng lên evidence
+    bad_quote, _ = apply_update(
+        base,
+        _upd(current_workaround={"who": "chị Lan", "when": "hôm qua", "quote": "câu không có trong tin nhắn"}),
+        "Hôm qua chị Lan bận lắm.",
+        {},
+    )
+    assert bad_quote["current_workaround"]["status"] == "assumption"
+
+    # Bổ sung từng phần: lượt 1 thêm who, lượt 2 thêm when + quote hợp lệ
+    part1, _ = apply_update(base, _upd(current_workaround={"who": "chị Lan"}), "Chị Lan làm việc đó.", {})
+    assert part1["current_workaround"]["who"] == "chị Lan"
+    assert part1["current_workaround"]["status"] == "assumption"
+
+    part2, _ = apply_update(
+        part1,
+        _upd(current_workaround={"when": "hôm qua", "quote": "hôm qua chị ấy trả lời tay trên Zalo"}),
+        "Hôm qua chị ấy trả lời tay trên Zalo.",
+        {},
+    )
+    assert part2["current_workaround"]["who"] == "chị Lan"
+    assert part2["current_workaround"]["when"] == "hôm qua"
+    assert part2["current_workaround"]["status"] == "evidence"
+
+    # Không nhận quote đã dùng ở ô khác
+    other_cell, _ = apply_update(
+        base,
+        _upd(
+            pain_point={
+                "content": "mất đơn",
+                "who": "chị Lan",
+                "when": "hôm qua",
+                "quote": "hôm qua chị Lan đang ghi tay",
+            }
+        ),
+        "Hôm qua chị Lan đang ghi tay nên mất đơn.",
+        {},
+    )
+    reused, _ = apply_update(
+        other_cell,
+        _upd(current_workaround={"who": "chị Lan", "when": "hôm qua", "quote": "hôm qua chị Lan đang ghi tay"}),
+        "Hôm qua chị Lan đang ghi tay.",
+        {},
+    )
+    assert reused["current_workaround"]["status"] == "assumption"
+
+    # Ô trống không nhận bản cập nhật chỉ có who/when/quote
+    still_empty, _ = apply_update(
+        empty_canvas(),
+        _upd(persona={"who": "chị Lan", "when": "hôm qua", "quote": "chị Lan"}),
+        "Hôm qua chị Lan ghé shop.",
+        {},
+    )
+    assert still_empty["persona"]["status"] == "empty"
+
+
+def test_prior_art_placeholder_is_cleared_and_asks_user():
+    canvas = _full()
+    canvas["prior_art"] = {
+        "content": "Agent chưa tra cứu được đối thủ ở chế độ dự phòng. Nhóm tự rà các sản phẩm làm việc tương tự.",
+        "who": "Agent",
+        "when": "",
+        "quote": "",
+        "grounded": False,
+        "status": "assumption",
+    }
+    cleaned = recompute(canvas)
+    assert cleaned["prior_art"]["status"] == "empty"
+    verdict, _, next_cell = decide(cleaned, {})
+    assert verdict == "NOT YET"
+    assert next_cell == "prior_art"

@@ -121,6 +121,8 @@ def _previous_canvas(session: Session, session_id: str | None, request: str) -> 
         "flags": latest.proposal.get("flags") or {},
         "source": latest.source or "fallback",
         "repeated_request": repeated is not None,
+        "asked_cell": latest.proposal.get("next_cell"),
+        "last_question": latest.proposal.get("reply") or "",
     }
 
 

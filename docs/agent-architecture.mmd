@@ -6,10 +6,10 @@ flowchart TB
         G -- "bị chặn" --> B(["Từ chối + lý do"]):::out
         G -- "hợp lệ" --> X["update_canvas<br/><i>Gemini: trích tin nhắn<br/>vào 9 ô AI MVP Canvas</i>"]:::llm
         X --> E["mark_evidence<br/><i>code: CÓ BẰNG CHỨNG khi có người cụ thể<br/>+ lần cụ thể + trích dẫn có thật</i>"]:::code
-        E --> R{"4 ô lõi đủ<br/>bằng chứng?"}:::route
-        R -- "còn thiếu" --> Q["ask_next<br/><i>NOT YET + hỏi đúng 1 câu</i>"]:::code
+        E --> R{"Đủ 9 ô và 4 ô lõi<br/>có bằng chứng?"}:::route
+        R -- "còn thiếu" --> Q["ask_next<br/><i>NOT YET + ghi nhận ô mới<br/>+ hỏi 1 câu (tránh lặp)</i>"]:::code
         Q -. "chờ tin nhắn tiếp" .-> U
-        R -- "đủ, hoặc NO" --> V["verdict<br/><i>code: GO / NO</i>"]:::code
+        R -- "đủ, hoặc NO" --> V["verdict<br/><i>code: GO / NO (cờ 3 trạng thái)</i>"]:::code
         V --> H["human_review<br/><i>trưởng nhóm Duyệt / Chưa duyệt</i>"]:::human
         H -- "Duyệt" --> F(["Canvas đã chốt"]):::out
         H -. "Chưa duyệt" .-> U

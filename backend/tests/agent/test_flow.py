@@ -44,6 +44,7 @@ def _build_go(client):
         "AI hiểu câu hỏi tự do của khách thay vì khớp từ khoá.",
         "Bản đầu chỉ cần trả lời giá và size, chưa cần chốt đơn.",
         "Chị Lan sẵn sàng trả tiền nếu mỗi tuần giảm được 3 đơn mất.",
+        "Đối thủ hiện có là Zalo OA trả lời theo từ khoá cố định; mình khác ở chỗ hiểu câu hỏi tự do của khách.",
     ]
     run = None
     for text in answers:
@@ -151,6 +152,13 @@ def test_no_flags_carry_into_fallback_turn(client, monkeypatch):
     assert not run["proposal"]["flags"].get("solved_elsewhere")
     assert run["proposal"]["verdict"] == "NO"
 
+    with monkeypatch.context() as llm:
+        llm.setattr(nodes.llm, "structured", lambda *_args, **_kwargs: CanvasUpdate(no_ai_needed=False))
+        third = _say(client, "Quy tắc cứng không hiểu nổi câu hỏi tự do của khách nên vẫn cần AI.")
+    assert third["proposal"]["flags"].get("no_ai_needed") is False
+    assert third["proposal"]["verdict"] == "NOT YET"
+    assert third["proposal"]["next_cell"] == "pain_point"
+
 
 def test_runs_filter_by_session(client):
     _say(client, "Ý tưởng thô, chưa hỏi ai.", session_id="a")
@@ -188,3 +196,171 @@ def test_mock_all_nodes_runs_without_human(set_env, client):
         run = c.post("/api/v1/agent/runs", json={"request": "gì cũng được"}).json()
     assert run["status"] == "approved"
     assert run["source"] == "mock"
+
+
+def test_l1_prompt_receives_asked_cell_last_question_and_fills_workaround(client, monkeypatch):
+    prompts = []
+    turn1_msg = "Tuần trước bạn tôi chị H bị kẹt lỗi lab môn mạng máy tính mất cả buổi tối."
+    turn2_msg = "Bạn ý đang tự lục tin nhắn nhóm lớp và hỏi ChatGPT để sửa lỗi."
+    responses = [
+        CanvasUpdate.model_validate(
+            {
+                "persona": {
+                    "content": "Sinh viên học môn mạng máy tính",
+                    "who": "chị H",
+                    "when": "tuần trước",
+                    "quote": turn1_msg,
+                },
+                "pain_point": {
+                    "content": "Kẹt lỗi lab mất cả buổi tối",
+                    "who": "chị H",
+                    "when": "tuần trước",
+                    "quote": turn1_msg,
+                },
+            }
+        ),
+        CanvasUpdate.model_validate(
+            {
+                "current_workaround": {
+                    "content": "Tự lục tin nhắn nhóm lớp và hỏi ChatGPT",
+                    "who": "chị H",
+                    "when": "tuần trước",
+                    "quote": "tự lục tin nhắn nhóm lớp và hỏi ChatGPT",
+                }
+            }
+        ),
+    ]
+
+    def fake_llm(_schema, prompt, **_kwargs):
+        prompts.append(prompt)
+        return responses[len(prompts) - 1]
+
+    monkeypatch.setattr(nodes.llm, "structured", fake_llm)
+    run1 = _say(client, turn1_msg, session_id="l1-flow")
+    assert run1["proposal"]["next_cell"] == "current_workaround"
+
+    run2 = _say(client, turn2_msg, session_id="l1-flow")
+    assert "current_workaround (Current Workaround)" in prompts[1]
+    assert run1["proposal"]["reply"] in prompts[1]
+    assert "who=chị H, when=tuần trước" in prompts[1]
+    assert run2["proposal"]["canvas"]["current_workaround"]["status"] == "evidence"
+    assert run2["proposal"]["next_cell"] == "jtbd"
+
+
+def test_l1_proof_only_followup_and_non_repeating_question(client, monkeypatch):
+    responses = [
+        CanvasUpdate.model_validate({"persona": {"content": "Chủ shop mỹ phẩm"}}),
+        CanvasUpdate(),
+        CanvasUpdate.model_validate(
+            {
+                "persona": {
+                    "who": "chị Lan",
+                    "when": "tuần trước",
+                    "quote": "tuần trước chị Lan chủ shop mỹ phẩm bị trễ đơn",
+                }
+            }
+        ),
+    ]
+
+    def fake_llm(_schema, _prompt, **_kwargs):
+        return responses.pop(0)
+
+    monkeypatch.setattr(nodes.llm, "structured", fake_llm)
+    r1 = _say(client, "Mình làm cho chủ shop mỹ phẩm.", session_id="l1-repeat")
+    assert r1["proposal"]["next_cell"] == "persona"
+
+    r2 = _say(client, "Nhóm mình có 3 thành viên.", session_id="l1-repeat")
+    assert r2["proposal"]["next_cell"] == "persona"
+    assert r2["proposal"]["reply"] != r1["proposal"]["reply"]
+    assert "chưa thấy thông tin mới" in r2["proposal"]["reply"].lower()
+
+    r3 = _say(client, "Tuần trước chị Lan chủ shop mỹ phẩm bị trễ đơn.", session_id="l1-repeat")
+    assert r3["proposal"]["canvas"]["persona"]["content"] == "Chủ shop mỹ phẩm"
+    assert r3["proposal"]["canvas"]["persona"]["status"] == "evidence"
+    assert r3["proposal"]["next_cell"] == "pain_point"
+
+
+def test_l2_solved_elsewhere_three_state_flag(client, monkeypatch):
+    prompts = []
+    responses = [
+        CanvasUpdate(solved_elsewhere=True),
+        CanvasUpdate(),
+        CanvasUpdate(solved_elsewhere=False),
+    ]
+
+    def fake_llm(_schema, prompt, **_kwargs):
+        prompts.append(prompt)
+        return responses[len(prompts) - 1]
+
+    monkeypatch.setattr(nodes.llm, "structured", fake_llm)
+    r1 = _say(client, "Mình muốn làm chatbot AI trả lời khách cho các shop bán hàng online.", session_id="l2-flag")
+    assert r1["proposal"]["verdict"] == "NO"
+
+    r2 = _say(client, "Bot sẽ nối với fanpage.", session_id="l2-flag")
+    assert "solved_elsewhere: true (đang bật)" in prompts[1]
+    assert r2["proposal"]["verdict"] == "NO"
+
+    r3 = _say(client, "Zalo OA chỉ trả lời theo từ khoá cứng, bên mình hiểu câu hỏi tự do.", session_id="l2-flag")
+    assert r3["proposal"]["flags"].get("solved_elsewhere") is False
+    assert r3["proposal"]["verdict"] == "NOT YET"
+    assert r3["proposal"]["next_cell"] == "persona"
+
+
+def test_l3_missing_prior_art_is_not_yet_and_post_go_acknowledges_new_cell(client, monkeypatch):
+    msg_8 = (
+        "Chị Lan chủ shop tuần trước mất 3 đơn. Chị đang ghi tay vào Excel. Chị nói muốn trả lời khách ngay lập tức."
+    )
+    eight_cells = CanvasUpdate.model_validate(
+        {
+            "persona": {
+                "content": "Chủ shop",
+                "who": "chị Lan",
+                "when": "tuần trước",
+                "quote": "Chị Lan chủ shop tuần trước mất 3 đơn",
+            },
+            "pain_point": {
+                "content": "Mất 3 đơn",
+                "who": "chị Lan",
+                "when": "tuần trước",
+                "quote": "tuần trước mất 3 đơn",
+            },
+            "current_workaround": {
+                "content": "Ghi tay vào Excel",
+                "who": "chị Lan",
+                "when": "tuần trước",
+                "quote": "Chị đang ghi tay vào Excel",
+            },
+            "jtbd": {
+                "content": "Trả lời khách ngay lập tức",
+                "who": "chị Lan",
+                "when": "tuần trước",
+                "quote": "Chị nói muốn trả lời khách ngay lập tức",
+            },
+            "solution": {"content": "Bot Zalo trả lời giá"},
+            "ai_leverage": {"content": "Hiểu câu hỏi tự do"},
+            "mvp_scope": {"content": "Chỉ trả lời giá và tồn kho"},
+            "metrics": {"content": "Giảm còn dưới 1 đơn mất/tuần"},
+        }
+    )
+    add_prior_art = CanvasUpdate.model_validate(
+        {"prior_art": {"content": "Zalo OA chỉ theo từ khoá; mình hiểu câu hỏi tự do"}}
+    )
+    update_metrics = CanvasUpdate.model_validate(
+        {"metrics": {"content": "Giảm còn 0 đơn mất/tuần và shop trả 200k/tháng"}}
+    )
+    responses = [eight_cells, add_prior_art, update_metrics]
+
+    monkeypatch.setattr(nodes.llm, "structured", lambda *_a, **_k: responses.pop(0))
+    r1 = _say(client, msg_8, session_id="l3-go")
+    assert r1["proposal"]["verdict"] == "NOT YET"
+    assert r1["proposal"]["next_cell"] == "prior_art"
+    assert "chế độ dự phòng" not in r1["proposal"]["reply"].lower()
+    assert "chế độ dự phòng" not in r1["proposal"]["canvas"]["prior_art"]["content"].lower()
+
+    r2 = _say(client, "Zalo OA chỉ theo từ khoá, mình hiểu câu hỏi tự do.", session_id="l3-go")
+    assert r2["proposal"]["verdict"] == "GO"
+
+    r3 = _say(client, "Cập nhật chỉ số: giảm còn 0 đơn mất/tuần và shop trả 200k/tháng.", session_id="l3-go")
+    assert r3["proposal"]["verdict"] == "GO"
+    assert "Metrics" in r3["proposal"]["reply"]
+    assert r3["proposal"]["reply"] != r2["proposal"]["reply"]

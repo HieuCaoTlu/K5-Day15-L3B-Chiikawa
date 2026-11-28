@@ -2,7 +2,7 @@
 
 - Một ô chỉ là "evidence" khi có người cụ thể + lần cụ thể + đoạn trích nguyên văn có thật trong tin nhắn.
 - Agent chỉ đánh giá (GO / NO) khi cả 9 ô đã có nội dung. 4 ô lõi vẫn phải có chuyện thật; 5 ô còn lại chỉ cần có nội dung.
-- Ô Prior Art & Edge (đối thủ xung quanh) agent tự điền từ Solution + AI Leverage, người dùng không cần nhập; ô này luôn là giả định.
+- Ô Prior Art & Edge (đối thủ xung quanh) LLM có thể tự điền bằng nội dung thực từ Solution + AI Leverage; không dùng placeholder dự phòng, nếu trống thì hỏi người dùng.
 - GO / NOT YET / NO do `decide` quyết. LLM chỉ trích thông tin vào ô (node update_canvas).
 """
 
@@ -30,6 +30,18 @@ QUESTIONS: dict[str, str] = {
     "metrics": "Con số nào cho biết sản phẩm có giá trị với người đó, và ai là người sẽ trả tiền hay tiết kiệm được tiền?",
     "prior_art": "Bạn đã biết sản phẩm hay cách làm nào tương tự chưa, và mình khác ở điểm nào?",
 }
+FOLLOW_UP_HINTS: dict[str, str] = {
+    "persona": "nghề nghiệp hoặc vai trò cụ thể của người dùng và một lần họ gặp vấn đề",
+    "pain_point": "lần gần nhất người đó gặp vấn đề này là khi nào và họ bị thiệt gì",
+    "current_workaround": "hôm nay họ đang tự xoay xở bằng công cụ hay cách làm thủ công nào, và vì sao chưa bỏ",
+    "jtbd": "chính họ nói muốn đạt được kết quả gì trong lần đó (chép nguyên lời của họ)",
+    "solution": "cách người dùng sẽ thao tác với sản phẩm từ đầu đến cuối để giải quyết nỗi đau",
+    "ai_leverage": "AI xử lý phần nào mà quy tắc cứng hay cách làm thường không làm được",
+    "mvp_scope": "bản đầu làm đúng những việc gì và cố tình chưa làm gì",
+    "metrics": "chỉ số đo giá trị cụ thể và ai sẽ trả tiền hoặc tiết kiệm được tiền",
+    "prior_art": "tên sản phẩm hoặc cách làm tương tự đang có và điểm khác biệt của nhóm",
+}
+PRIOR_ART_PLACEHOLDER_PREFIX = "agent chưa tra cứu được đối thủ"
 REFUSALS: dict[str, str] = {
     "force_verdict": "Mình không đánh dấu ô nào là có bằng chứng khi chưa có chuyện thật của một người cụ thể.",
     "fabricate": "Mình không bịa số liệu hay trích dẫn. Hãy phỏng vấn hoặc khảo sát người thật rồi dán câu trả lời nguyên văn vào đây.",
@@ -103,11 +115,17 @@ def cell_status(cell: dict) -> str:
     return "evidence" if proof and cell.get("grounded") else "assumption"
 
 
+def is_prior_art_placeholder(cell: dict) -> bool:
+    return normalize(str(cell.get("content", ""))).startswith(PRIOR_ART_PLACEHOLDER_PREFIX)
+
+
 def recompute(canvas: dict) -> dict:
     """Tính lại trạng thái mọi ô từ bằng chứng đã lưu. Đây là chỗ DUY NHẤT gán 'evidence'."""
     out = copy.deepcopy(canvas) if canvas else empty_canvas()
     for cell in CELLS:
         out.setdefault(cell, empty_cell())
+        if cell == AGENT_FILLED and is_prior_art_placeholder(out[cell]):
+            out[cell] = empty_cell()
         out[cell]["status"] = cell_status(out[cell])
     return out
 
@@ -119,24 +137,61 @@ def apply_update(prev: dict | None, upd: CanvasUpdate, request: str, flags: dict
     if upd.intent != "answer":
         return canvas, flags
     text = normalize(request)
-    # Lời trích đã làm bằng chứng ở lượt trước không được dùng lại cho ô khác (chặn gửi lặp một câu để lên GO).
-    # Trong cùng một tin nhắn, một câu có thể là bằng chứng cho nhiều ô (vd vừa Persona vừa Pain Point).
-    used_quotes = {normalize(c["quote"]) for c in canvas.values() if c.get("quote") and c.get("grounded")}
     accepted = {}
     for cell in CELLS:
         u: CellUpdate = getattr(upd, cell)
+        prev_cell = canvas[cell]
         content = normalize(u.content)
-        if not content:
+        existing_content = str(prev_cell.get("content", "")).strip()
+        has_proof_input = any(str(getattr(u, k, "")).strip() for k in ("who", "when", "quote"))
+        # Lời trích đã làm bằng chứng ở ô khác không được dùng lại (chặn gửi lặp một câu để lên GO).
+        # Trong cùng một tin nhắn, một câu có thể là bằng chứng cho nhiều ô (vd vừa Persona vừa Pain Point).
+        other_used_quotes = {
+            normalize(c["quote"]) for name, c in canvas.items() if name != cell and c.get("quote") and c.get("grounded")
+        }
+        if content:
+            quote = u.quote.strip()
+            key = normalize(quote)
+            if key and key in other_used_quotes:
+                continue
+            grounded = bool(key) and key in text and quote_fits(cell, quote)
+            accepted[cell] = {
+                "content": u.content.strip()[:400],
+                "who": u.who.strip(),
+                "when": u.when.strip(),
+                "quote": quote,
+                "grounded": grounded,
+                "status": "assumption",
+            }
             continue
-        quote = u.quote.strip()
-        key = normalize(quote)
-        grounded = bool(key) and key in text and quote_fits(cell, quote)
-        if key in used_quotes:
+        if not has_proof_input or not existing_content:
             continue
+        if prev_cell["status"] == "evidence" and not u.quote.strip():
+            continue
+        inherit_prev_proof = prev_cell["status"] != "evidence" and not (
+            upd.persona_changed and cell in DEPENDS_ON_PERSONA
+        )
+        who = u.who.strip() or (str(prev_cell.get("who", "")).strip() if inherit_prev_proof else "")
+        when = u.when.strip() or (str(prev_cell.get("when", "")).strip() if inherit_prev_proof else "")
+        raw_quote = u.quote.strip()
+        if raw_quote:
+            quote = raw_quote
+            key = normalize(quote)
+            if key in other_used_quotes:
+                continue
+            grounded = bool(key) and key in text and quote_fits(cell, quote)
+        elif inherit_prev_proof:
+            # Giữ lại lời trích cũ để hiển thị nhưng không cho nó làm bằng chứng cho who/when vừa bổ sung:
+            # lời trích cũ có thể kể về người hoặc lần khác. Muốn lên evidence phải có lời trích mới trong tin nhắn này.
+            quote = str(prev_cell.get("quote", "")).strip()
+            grounded = False
+        else:
+            quote = ""
+            grounded = False
         accepted[cell] = {
-            "content": u.content.strip()[:400],
-            "who": u.who.strip(),
-            "when": u.when.strip(),
+            "content": existing_content[:400],
+            "who": who,
+            "when": when,
             "quote": quote,
             "grounded": grounded,
             "status": "assumption",
@@ -151,13 +206,14 @@ def apply_update(prev: dict | None, upd: CanvasUpdate, request: str, flags: dict
             or (cell == "persona" and upd.persona_changed)
         ):
             canvas[cell] = candidate
-    # Cờ NO đã bật thì giữ qua các lượt sau; lượt không nhắc tới thì không tự xóa.
+    # Cờ NO 3 trạng thái: null = giữ giá trị cũ, true = bật, false = gỡ.
     for flag in ("no_ai_needed", "solved_elsewhere"):
-        flags[flag] = bool(flags.get(flag)) or bool(getattr(upd, flag))
+        val = getattr(upd, flag)
+        flags[flag] = bool(flags.get(flag)) if val is None else bool(val)
     return recompute(canvas), flags
 
 
-def question_for(canvas: dict, cell: str | None) -> str:
+def question_for(canvas: dict, cell: str | None, *, repeated: bool = False) -> str:
     """Câu hỏi cho ô lõi cần hỏi tiếp. Ô đã có nội dung nhưng thiếu bằng chứng thì ghi nhận điều người dùng vừa nói
     và chỉ ra đúng phần còn thiếu, để không hỏi lại y nguyên câu cũ."""
     if not cell:
@@ -165,6 +221,12 @@ def question_for(canvas: dict, cell: str | None) -> str:
     data = canvas.get(cell) or {}
     content = str(data.get("content", "")).strip()
     if not content:
+        if repeated:
+            hint = FOLLOW_UP_HINTS.get(cell, "thông tin cụ thể cho ô này")
+            return (
+                f"Mình chưa thấy thông tin cho ô {CELL_LABELS[cell]} trong tin nhắn vừa rồi. "
+                f"Bạn kể cụ thể hơn giúp mình: {hint}?"
+            )
         return QUESTIONS.get(cell, "")
     missing = []
     if not str(data.get("who", "")).strip():
@@ -176,6 +238,11 @@ def question_for(canvas: dict, cell: str | None) -> str:
             "điều chính họ nói là muốn đạt, chép nguyên văn (không phải lời đoán hay nghe kể lại)"
             if cell == "jtbd"
             else "lời của chính họ chép nguyên văn, không tóm tắt"
+        )
+    if repeated:
+        return (
+            f"Mình chưa thấy thông tin mới để bổ sung bằng chứng cho ô {CELL_LABELS[cell]} trong tin nhắn vừa rồi. "
+            f"Bạn kể thêm {' và '.join(missing)} giúp mình nhé?"
         )
     return (
         f"Mình ghi nhận: {content.rstrip('.')}. Nhưng ô {CELL_LABELS[cell]} mới là giả định, chưa phải chuyện thật. "
