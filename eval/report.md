@@ -10,8 +10,11 @@
 |---|---|---|---|---|---|---|---|
 | 1 | run-1@20261128-010324 | 18/23 | 78% | 3/3 | 11/16 | 4/4 | **chưa** (thuong+kho 14/19 = 73,7%) |
 | 2 | run-2@20261128-021100 | 20/23 | 87% | 2/3 | 14/16 | 4/4 | **đạt** (thuong+kho 16/19 = 84,2%; 0 câu GO sai) |
+| 3 | run-3@20261128-112110 | 17/23 | 74% | 2/3 | 11/16 | 4/4 | **chưa** (thuong+kho 13/19 = 68,4%; 0 câu GO sai) |
 
-Kết quả từng câu: `eval/run-1.csv` (lượt 1), `eval/run-2.csv` (lượt 2, sau cải tiến). Trace: `traces/run-1.jsonl`, `traces/run-2.jsonl`.
+Kết quả từng câu: `eval/run-1.csv` (lượt 1), `eval/run-2.csv` (lượt 2, sau cải tiến), `eval/run-3.csv` (lượt 3, sau bổ sung nghiệp vụ). Trace: `traces/run-1.jsonl`, `traces/run-2.jsonl`, `traces/run-3.jsonl`.
+
+**Lượt 3 (thêm sau lượt 2, không sửa dòng cũ):** nhóm bổ sung nghiệp vụ cho agent: chỉ đánh giá khi đủ 9 ô, ô Prior Art do agent tự điền, và chỉnh prompt cho người cụ thể, sự việc và persona. Điểm giảm 87% → 74% (20/23 → 17/23). B02 và B15 trượt vì kỳ vọng GO từ một tin nhắn mà luật mới trả NOT YET; B04, B05, B06, B10 cũng trượt, nhóm chưa phân tích hết nguyên nhân từng câu. Bộ câu thử, đáp án và chuẩn "đạt" không đổi.
 
 ## 2. Lỗi lượt 1 — gom thành nhóm có tên
 

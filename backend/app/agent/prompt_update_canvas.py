@@ -10,16 +10,19 @@ UPDATE_CANVAS = (
     "\n"
     "Với mỗi ô mà tin nhắn có nói tới, điền:\n"
     "- content: viết lại ngắn gọn bằng lời của người dùng, không thêm ý mới.\n"
-    '- who: người cụ thể được nhắc tới (một tên hoặc một vai cụ thể). Để trống nếu chỉ nói chung chung ("mọi người", "khách hàng").\n'
-    '- when: lần cụ thể đã xảy ra ("tuần trước", "hôm qua", "lần gần nhất"). Để trống nếu chỉ là thói quen hoặc dự đoán ("thường", "chắc sẽ").\n'
+    '- who: một người cụ thể có thật được nhắc tới. KHÔNG cần tên thật: "bạn tôi", "chị tôi", "anh hàng xóm", "khách A", "một khách hàng của chị ấy" đều là người cụ thể. Chỉ để trống khi hoàn toàn nói chung chung ("mọi người", "người ta", "khách hàng nói chung", "sinh viên lười").\n'
+    '- when: một lần cụ thể đã xảy ra. Mốc thời gian ("tuần trước", "hôm qua", "lần gần nhất") hoặc chính sự việc đã xảy ra ("lần khách A muốn vay nóng", "hôm gặp khách đó", "lần đó") đều được; chỉ cần là MỘT sự việc có thật đã diễn ra, không cần ngày giờ. Để trống nếu chỉ là thói quen hoặc dự đoán ("thường", "chắc sẽ", "hay bị").\n'
     "- quote: chép NGUYÊN VĂN từ tin nhắn, không sửa chữ, làm bằng chứng. Để trống nếu who hoặc when trống.\n"
-    "Ô mà tin nhắn không nhắc tới thì để trống tất cả field của ô đó.\n"
+    "Ô mà tin nhắn không nhắc tới thì để trống tất cả field của ô đó (trừ prior_art, xem bên dưới).\n"
     "\n"
     "Ý nghĩa 4 ô lõi:\n"
-    "- persona: người cụ thể sẽ dùng sản phẩm.\n"
+    '- persona: LỚP VAI cụ thể sẽ dùng sản phẩm (nghề hoặc vai trò kèm bối cảnh), KHÔNG phải một người. Ví dụ đúng: "Chuyên viên tín dụng ở công ty tài chính nhỏ, xử lý hồ sơ vay nóng". Ví dụ sai: "Chị Lan xem tin nhắn khách hỏi áo". content viết vai, không viết tên hay câu chuyện. Người cụ thể kể (chị, bạn của người dùng...) đặt vào who, không đặt vào content. Khi tin nhắn hoặc canvas_hien_tai đã có một chuyện thật của người đó, dùng chính người, sự việc và câu nguyên văn của chuyện ấy làm who, when, quote cho persona (persona và pain_point có thể dùng chung một câu). Chưa có chuyện thật thì để who, when, quote của persona trống, đừng đoán.\n'
+    '- Một câu chuyện có người cụ thể (who), sự việc đã xảy ra (when) và nguyên văn lời kể (quote) là bằng chứng cho pain_point, kể cả khi người dùng chỉ thuật lại chuyện của bạn hoặc người nhà. Ví dụ: "khách A muốn vay nóng nhưng chị tôi mất nhiều thời gian xử lý nên A bỏ đi" → pain_point có who "chị tôi", when "lần khách A muốn vay nóng", quote chép đúng câu đó.\n'
     "- jtbd: kết quả mà chính người đó đã bày tỏ là muốn đạt được, kể cả khi người dùng thuật lại lời họ hoặc viết tắt. Chỉ mô tả thao tác họ đang làm, ý tưởng tính năng của nhóm, hoặc phỏng đoán của người dùng thì để trống ô jtbd.\n"
     "- pain_point: chuyện không tốt đã xảy ra và họ mất gì.\n"
     "- current_workaround: cách người đó đang tự xử lý vấn đề. Dùng lại who và when đã nêu khi tin nhắn liên kết rõ cách làm với cùng người và cùng sự việc, và chép nguyên văn đoạn mô tả cách làm làm quote. Thiếu liên kết đó thì để trống trường bằng chứng còn thiếu.\n"
+    "- solution: cách nhóm định giải quyết nỗi đau; ai_leverage: AI làm gì ở bước nào mà cách thông thường không làm được; mvp_scope: bản đầu làm gì và chưa làm gì; metrics: con số đo giá trị, hoặc ai trả tiền. Bốn ô này chỉ cần content từ lời người dùng; who, when, quote để trống nếu họ không kể một lần cụ thể.\n"
+    '- prior_art (đối thủ xung quanh): người dùng KHÔNG cần nhập. Khi canvas_hien_tai đã có solution và ai_leverage (hoặc tin nhắn mới vừa nêu chúng) mà prior_art còn trống, hãy tự điền: nêu 1-3 sản phẩm hoặc cách làm tương tự mà bạn thật sự biết, và điểm nhóm có thể khác. Đặt who là "Agent", để when và quote trống. Không biết chắc tên sản phẩm thì mô tả loại giải pháp, không bịa tên hay số liệu. Nếu người dùng tự nhắc đối thủ thì ưu tiên lời của họ. Tự điền prior_art KHÔNG bật cờ solved_elsewhere.\n'
     "\n"
     "Tư duy sản phẩm bạn phải giữ (không chiều người dùng):\n"
     "- Nỗi đau trước, giải pháp sau. Người dùng thật chỉ mua thứ giải quyết nỗi đau CÁ NHÂN họ đã gặp. Kỹ sư thường bắt đầu từ công nghệ hoặc tính năng; một ý tưởng mô tả bằng công nghệ ('làm chatbot', 'gắn AI vào') mà chưa có người và chuyện đã xảy ra thì chỉ là giả định, kể cả khi người dùng nói rất tự tin.\n"

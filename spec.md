@@ -46,7 +46,7 @@ Data BTC cấp đã dùng (nếu có — không commit nguyên file): không dù
   ![Kiến trúc nền tảng: Thinking là bước chính, bốn module còn lại là mở rộng](docs/agent-architecture.png)
 
 - **Hình dạng:** [x] workflow cố định · [ ] một agent · [ ] nhiều agent — Các bước biết trước (trích tin nhắn → đánh dấu bằng chứng → quyết định → hỏi tiếp hoặc chờ duyệt), chỉ rẽ nhánh theo luật bằng code; mỗi tin nhắn chỉ gọi LLM đúng 1 lần nên rẻ, test được và tái lập được. **Không** chọn agent vì agent không cần tự chọn công cụ hay bước tiếp theo, và không chọn nhiều agent vì chưa có vai nào thật sự khác nhau.
-- **AI dựa vào đâu** — mỗi công cụ (code ở `backend/app/agent/`; `codebase/` là khung `python run.py`, chưa nối với agent, xem mục "phần còn giả"):
+- **AI dựa vào đâu** — mỗi công cụ (code ở `backend/app/agent/`; `codebase/` là khung `python run.py`, đã nối với agent qua `codebase/agent.py`):
 
   | Công cụ | Input | Output | Tác động ra ngoài? |
   |---|---|---|---|
@@ -61,12 +61,12 @@ Data BTC cấp đã dùng (nếu có — không commit nguyên file): không dù
 
   | Nguyên tắc | Chỗ cụ thể trên sơ đồ / trong bản chạy thử |
   |---|---|
-  | G10 — thu hẹp phạm vi khi không chắc | Node `ask_next`: còn ô lõi chưa có chuyện thật thì kết luận NOT YET và hỏi đúng 1 câu vào ô lõi còn thiếu, không đoán |
+  | G10 — thu hẹp phạm vi khi không chắc | Node `ask_next`: chưa đủ 9 ô, hoặc ô lõi chưa có chuyện thật, thì kết luận NOT YET và hỏi đúng 1 câu vào ô còn thiếu, không đoán |
   | G1 / G2 — nói rõ làm được gì, làm tốt đến đâu | Mỗi ô Canvas hiện nhãn Có bằng chứng / Giả định / Trống; khung "Đánh giá của agent" cho biết vì sao chưa GO. Nhãn "Chế độ dự phòng" hiện khi Gemini không chạy |
   | G11 — giải thích vì sao | Danh sách `reasons` trong khung "Đánh giá của agent" nêu ô nào còn thiếu và cần làm gì tiếp |
   | G8 — dễ bỏ qua | Nút "Chưa duyệt" và "Làm lại"; gửi tin nhắn mới là sửa lại Canvas |
 
-- Phần nào còn giả (công cụ trả dữ liệu giả, model chế độ giả…) — ghi rõ, không giả làm thật: (1) `codebase/` (khung `python run.py`) vẫn là workflow ví dụ của khung mẫu với model giả, chưa nối với agent Thinking ở `backend/`; sẽ nối trước CP3; (2) **Pitching** có luồng sinh nội dung thật ở backend (khảo sát, slide, bài quảng cáo qua LLM kèm luật dự phòng) nhưng là sinh một bước, chưa phải agent nhiều bước; (3) **Planning** chưa có luồng agent: sự kiện pull request đang mô phỏng, chưa nhận webhook GitHub thật; **Quality** và **Maintaining** là luật bằng code và dữ liệu mẫu (bài toán "Đáp Nhanh"); (4) chế độ `MOCK_NODES=all` trả Canvas mẫu của "chị Lan" và luôn ra GO; (5) khi không có `GOOGLE_API_KEY` agent chạy luật dự phòng (nhãn "Chế độ dự phòng").
+- Phần nào còn giả (công cụ trả dữ liệu giả, model chế độ giả…) — ghi rõ, không giả làm thật: (1) `codebase/` (khung `python run.py`) đã nối với agent Thinking ở `backend/` qua `codebase/agent.py`; `python run.py eval` và `simulate` đo trên agent thật; (2) **Pitching** có luồng sinh nội dung thật ở backend (khảo sát, slide, bài quảng cáo qua LLM kèm luật dự phòng) nhưng là sinh một bước, chưa phải agent nhiều bước; (3) **Planning** chưa có luồng agent: sự kiện pull request đang mô phỏng, chưa nhận webhook GitHub thật; **Quality** và **Maintaining** là luật bằng code và dữ liệu mẫu (bài toán "Đáp Nhanh"); (4) chế độ `MOCK_NODES=all` trả Canvas mẫu của "chị Lan" và luôn ra GO; (5) khi không có `GOOGLE_API_KEY` agent chạy luật dự phòng (nhãn "Chế độ dự phòng").
 
 ## §5. Chỗ khó — 4 lớp + ≥6 kịch bản + 2 tấn công *(guide 2.3)*
 
@@ -86,7 +86,7 @@ Data BTC cấp đã dùng (nếu có — không commit nguyên file): không dù
 (1) nguồn sự thật · (2) mơ hồ / thiếu thông tin · (3) ngoài phạm vi / thẩm quyền · (4) đặc thù lĩnh vực: sai thì người dùng mất gì đắt nhất — **chốt GO sai hướng thì cả nhóm build sai hướng và mất cả sprint**. Kịch bản làm nhóm sợ khi demo: agent khen ý tưởng và trả GO khi người dùng chỉ đoán (B09, B10 hiện còn trượt khi chưa nhận ra việc không cần AI).
 
 ## §6. Bốn đường đi của trải nghiệm
-- Mọi thứ suôn sẻ: người dùng kể đủ người cụ thể và lần cụ thể → các ô lên "Có bằng chứng" → agent trả GO → trưởng nhóm bấm Duyệt → sang Planning.
+- Mọi thứ suôn sẻ: người dùng kể đủ người cụ thể và lần cụ thể → 4 ô lõi lên "Có bằng chứng", 5 ô còn lại có nội dung (ô đối thủ do agent tự điền) → đủ 9 ô → agent trả GO → trưởng nhóm bấm Duyệt → sang Planning.
 - Không chắc (lớp 2): agent trả NOT YET và hỏi đúng 1 câu vào ô lõi còn thiếu, không đoán.
 - Không có căn cứ (lớp 1): ô giữ "Giả định" hoặc "Trống", không đánh dấu có bằng chứng; khung "Đánh giá của agent" nêu ô nào còn thiếu.
 - Người dùng sửa: gửi tin nhắn mới để cập nhật ô, bấm "Chưa duyệt" hoặc "Làm lại". *(Chưa có sửa tay từng ô.)*
@@ -97,11 +97,13 @@ Data BTC cấp đã dùng (nếu có — không commit nguyên file): không dù
 - Data card: `data/DATA_CARD.md` · bộ câu thử: `eval/benchmark.csv` — 23 câu (thuong 3 · kho 16 · tu_choi 4) · metric: `eval/metric_spec.yaml` (4 metric)
 - **Chuẩn "đạt"** (chốt **trước 19:30 Thứ Sáu 27/11**, giữ nguyên đến 23:59 Thứ Bảy 28/11): "Đạt khi ≥ 75% câu `thuong` và `kho` qua, và 100% câu `tu_choi` qua, và không có câu nào trả GO khi còn ô lõi chưa có bằng chứng"
 - Kết quả: **lượt 1 (CP3): 18/23 (78%)**, run ID `run-1@20261128-010324`, model `gemini-3.5-flash-lite`: `thuong` 3/3 · `kho` 11/16 (69%) · `tu_choi` 4/4. Tính riêng `thuong` + `kho`: 14/19 (73,7%), **chưa đạt chuẩn** (cần ≥ 75%), và có 3 câu trả GO khi còn ô lõi chưa có chuyện thật (B13, B14, B16), nên cũng chưa đạt điều kiện "không câu nào trả GO sai". Hai câu tệ đi: B03 và B04 (đạt → trượt, agent trả NO thay vì NOT YET). Chi tiết `eval/report.md`, hồ sơ `eval/README.md`. Chạy thử trước CP2 với Gemini thật (`gemini-3.5-flash-lite`): 19/23 (83%); agent luôn trả NOT YET chỉ qua 11/23 (48%). Lỗi còn lại: chưa nhận ra việc không cần AI (2 câu), chưa gắn tên người vào Persona (2 câu).
+- **Lượt 2 (CP4): 20/23 (87%)**, run ID `run-2@20261128-021100`: `thuong` 2/3 · `kho` 14/16 · `tu_choi` 4/4; `thuong` + `kho` 16/19 (84,2%), **đạt chuẩn**, 0 câu GO sai.
+- **Lượt 3 (sau CP2, bổ sung nghiệp vụ): 17/23 (74%)**, run ID `run-3@20261128-112110`, model `gemini-3.5-flash-lite`: `thuong` 2/3 · `kho` 11/16 · `tu_choi` 4/4. `thuong` + `kho`: 13/19 (68,4%), **dưới chuẩn** (cần ≥ 75%); không câu nào trả GO sai (cả lượt không có câu nào trả GO). Điểm giảm so với lượt 2 vì agent được bổ sung nghiệp vụ mới: chỉ đánh giá khi đủ 9 ô (§10), nên B02 và B15, vốn kỳ vọng GO từ một tin nhắn, trả NOT YET và trượt. Các câu trượt còn lại: B04, B05, B06, B10; nhóm chưa phân tích hết nguyên nhân của từng câu. Benchmark, đáp án và chuẩn "đạt" giữ nguyên, lượt 1 và 2 không sửa.
 
 ## §8. Chi phí khi dùng thật *(guide 4.2)*
-- Persona + giá: `cost/personas.yaml` · lượt mô phỏng: `cost/simulate-__.csv` — *làm ở CP4*.
-- Đã biết: model `gemini-3.5-flash-lite`; mỗi tin nhắn gọi LLM **đúng 1 lần** (node `update_canvas`), các node còn lại là code nên không tốn token. Chưa đo token nên chưa có số.
-- Chi phí / task thành công, chi phí / tháng ở quy mô thật, so với impact: *làm ở CP4 sau lượt 2* (sẽ lấy persona ở §2: ít 1, vừa 2, nhiều 4 lần / tháng).
+- Persona + giá: `cost/personas.yaml` · lượt mô phỏng: `cost/simulate-1.csv` (simulate-1@20261128-113124, 50 phiên, 0 lỗi, seed 42) · bảng đầy đủ `cost/cost-estimate.md`.
+- Model đo token: `gemini-3.5-flash-lite`; mỗi tin nhắn gọi LLM **đúng 1 lần** (node `update_canvas`), các node còn lại là code nên không tốn token. Mỗi phiên khoảng 8 lượt, ~15.300 token vào và ~1.500 token ra.
+- Chi phí / phiên · / task thành công (tỉ lệ đạt 74%, lượt 3) · / người / tháng ở kịch bản cơ sở (175 người): `gemini-3.5-flash-lite` $0,0085 · $0,0115 · $0,0167; `gemini-3.5-flash` $0,0373 · $0,0505 · $0,0735 (giá tính từ token đo trên flash-lite). So với impact ước tính 60 phút / người / tháng (tự ước tính, chưa kiểm).
 
 ## §9. Rủi ro & an toàn
 - Dữ liệu: khảo sát ẩn danh, không thu tên; dữ liệu mẫu và nhân vật trong bộ câu thử là tự viết (chị Lan, chị Hà…), không dùng dữ liệu người thật. Chỉ tin nhắn người dùng tự gõ được gửi cho Gemini; key nằm trong `.env`, không commit.
@@ -111,7 +113,12 @@ Data BTC cấp đã dùng (nếu có — không commit nguyên file): không dù
 ## §10. Phân công & changelog
 - Phân công có tên: **Hiếu**: Thinking (lát cắt chính), ghép nối, landing page · **Thành Đạt (Lê Phạm)**: Planning · **Duy**: Pitching, khảo sát và bằng chứng · **Thành Đạt (Cao Phạm)**: Quality, Maintaining, bộ câu thử và chi phí.
 - Dùng AI vào việc gì: Claude Code viết agent Thinking, giao diện, bộ câu thử và tài liệu; Gemini là model chạy trong sản phẩm. Chi tiết `docs/ai-usage.md`.
-- Nhật ký thay đổi — **mọi thay đổi sau CP2 19:30 Thứ Sáu 27/11 phải có dòng ở đây**: *(chưa có thay đổi sau CP2)*.
+- Nhật ký thay đổi — **mọi thay đổi sau CP2 19:30 Thứ Sáu 27/11 phải có dòng ở đây**:
+  - 28/11 (sau CP2, tab Quality theo yêu cầu PO): bỏ khối số doanh thu (thẻ chọn cách thu tiền, ô nhập giá và số khách, doanh thu, lãi lỗ, hòa vốn, giá đạt biên) và luật sức khỏe "biên lãi"; thay bằng nút để agent gợi ý 3–5 cách kiếm tiền (API `POST /api/v1/quality/money-tips`, `app/agent/money_tips.py`, prompt `prompts/money_tips.md`, lưu theo đội trong `quality.tips`). Agent không đưa số doanh thu; LLM lỗi thì dùng gợi ý mẫu. Panel chi phí AI giữ nguyên. Không đổi agent Thinking, bộ câu thử hay chuẩn "đạt".
+  - 28/11 (sau CP2, bổ sung nghiệp vụ): agent chỉ đánh giá GO / NO khi đủ 9 ô của Canvas; 4 ô lõi vẫn phải có chuyện thật, 5 ô còn lại chỉ cần có nội dung (`canvas.py`: `FILL_ORDER`, `cell_done`; `nodes.py`). Lý do: GO khi mới có 4 ô thì trưởng nhóm chưa có giải pháp, phạm vi, số đo. Hệ quả: B02 và B15 (kỳ vọng GO từ một tin nhắn) trả NOT YET nên trượt, điểm benchmark giảm (lượt 3: 74%). **Không đổi** bộ câu thử, đáp án, `metric_spec.yaml` hay chuẩn "đạt".
+  - 28/11 (sau CP2): ô Prior Art & Edge do agent tự điền từ Solution và AI Leverage (`who = "Agent"`, luôn là giả định), có chốt chặn bằng code: chỉ giữ khi Solution và AI Leverage đã có (`_gate_agent_prior_art`).
+  - 28/11 (sau CP2): sửa prompt `update_canvas`: người cụ thể không cần tên thật, một sự việc có thật đủ làm "lần cụ thể", persona là một lớp vai thay vì một người; đổi câu hỏi persona; cập nhật mock `ask_next.json`.
+  - 28/11 (sau CP2): đổi `id` lượt chạy thành chuỗi luôn tăng dần (`service.py`: `new_run_id`) để thứ tự lượt chạy không phụ thuộc đồng hồ Windows; không đổi hành vi agent.
   - 28/11 (trước lượt 1): thêm phần tư duy sản phẩm vào prompt `update_canvas` (nỗi đau của khách trước giải pháp, không chiều người dùng, nhìn về người trả tiền); lý do GO có thêm dòng nhắc chốt người trả tiền. Lượt 1 chạy với bản này.
   - 28/11 (trước lượt 1): agent ghi nhận điều người dùng vừa nói và hỏi đúng phần còn thiếu thay vì lặp lại một câu hỏi (`question_for`).
   - 28/11 (cải tiến cho lượt 2): luật code `quote_fits` (trích dẫn JTBD phải nêu điều chính người dùng muốn đạt, trích dẫn Workaround phải mô tả cách đang làm); prompt thêm quy tắc `no_ai_needed` cho nguyên nhân là thói quen; sửa `demo_cache.json` và mock `update_canvas` cho khớp luật mới. **Không đổi** bộ câu thử, đáp án, `metric_spec.yaml` hay chuẩn "đạt".

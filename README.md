@@ -109,7 +109,7 @@ Chốt trước khi code, sửa ở đây khi đổi (FE đọc chi tiết ở `
 | POST | `/api/v1/planning/auth/demo` · `/api/v1/planning/auth/logout` | — | Tạo phiên demo hoặc kết thúc phiên (204) |
 | PUT | `/api/v1/planning/members` | `{members:[{github_id?,login,name,experience,tags,avatar}]}` | Lưu đội (204) |
 | PUT | `/api/v1/planning/board` | `{version,overview,stories,roles,links,stack,cost,revenue}` | Lưu nội dung tab (204); trưởng nhóm; 409 nếu `version` cũ. `GET /state` trả `board` và `invite_code` (chỉ trưởng nhóm) |
-| PUT | `/api/v1/planning/quality` | `{version,metrics,runs,source,nature,revenueModel,cost}` | Lưu tab Quality (204); mọi thành viên; 409 nếu `version` cũ. `GET /state` trả `quality` (`null` khi chưa vào đội; đội mới thì trống) |
+| PUT | `/api/v1/planning/quality` | `{version,metrics,runs,source,nature,revenueModel,cost,tips?}` (`tips`: tối đa 8 `{id,title,how,why}`) | Lưu tab Quality (204); mọi thành viên; 409 nếu `version` cũ. `GET /state` trả `quality` (`null` khi chưa vào đội; đội mới thì trống) |
 | PUT | `/api/v1/planning/maintain` | `{version,schedule,suggest}` | Lưu tab Maintaining (204); mọi thành viên; 409 nếu `version` cũ; người làm không thuộc đội thành chưa giao. `GET /state` trả `maintain` |
 | PUT | `/api/v1/planning/project` | `{version,name,done}` | Lưu tên dự án và tiến độ năm bước (204); mọi thành viên, riêng `done.product` chỉ trưởng nhóm đổi (403); 409 nếu `version` cũ. `GET /state` trả `project` |
 | PUT | `/api/v1/planning/thinking` | `{version,session,msgs}` | Lưu mã phiên và tin nhắn Thinking (204); chỉ trưởng nhóm, thành viên chỉ đọc qua `thinking` trong `GET /state`; 409 nếu `version` cũ |
@@ -144,6 +144,7 @@ Chốt trước khi code, sửa ở đây khi đổi (FE đọc chi tiết ở `
 | GET / PUT / DELETE | `/api/v1/pitching/decks/{slug}` | `PitchDeckPublishIn?` | `PitchDeck` / 204 |
 | POST | `/api/v1/pitching/assets/generate` | `{context, survey_slug?}` | `{ads[], source}` (bài quảng cáo chung có placeholder) |
 | POST | `/api/v1/pitching/overview` | `{context, survey_slug?}` | `{overview, total_responses, real_responses, sample_responses, source}` |
+| POST | `/api/v1/quality/money-tips` | `{context, monthly_cost_usd?}` | `{tips[{title,how,why}] (3–5), source: "llm" \| "fallback"}` (agent gợi ý cách kiếm tiền; cần header `X-Planning-Request: 1`, 403 nếu gọi từ trang khác) |
 
 Các yêu cầu ghi Planning từ trình duyệt gửi header `X-Planning-Request: 1`. `repo_version` đến từ `GET /state` để thao tác chỉ áp dụng vào repo đang xem.
 
@@ -240,14 +241,17 @@ Nhóm dùng stack khác (Node, Streamlit, notebook…): sửa hàm `run_app()` t
 
 | Thành phần | Thật / Giả | Ghi chú |
 |---|---|---|
-| Lời gọi AI ở quyết định trung tâm | **Thật** (bắt buộc từ CP3) | Model: ____ |
-|  |  |  |
+| Lời gọi AI ở quyết định trung tâm | **Thật** (bắt buộc từ CP3) | Model: `gemini-3.5-flash-lite` (Gemini API), node `update_canvas`, mỗi tin nhắn gọi đúng 1 lần |
+| GO / NOT YET / NO, đánh dấu bằng chứng | **Thật**, bằng code | `backend/app/agent/canvas.py`, không dùng LLM |
+| Planning, Pitching, Quality, Maintaining | **Một phần giả** | Pitching có luồng sinh nội dung thật; Planning mô phỏng sự kiện pull request, chưa nhận webhook GitHub thật; Quality và Maintaining là luật bằng code và dữ liệu mẫu. Chi tiết `spec.md` §4 |
+| `codebase/` (khung `python run.py`) | **Thật** | `codebase/agent.py` gọi trực tiếp agent Thinking ở `backend/`; `python run.py eval` và `python run.py simulate` đo trên agent này |
+| Không có `GOOGLE_API_KEY` | Chế độ dự phòng | Agent chạy luật dự phòng, giao diện hiện nhãn "Chế độ dự phòng" |
 
 ## Dùng AI vào việc gì
 
 2–3 dòng (bắt buộc): nhóm dùng công cụ AI nào để làm gì, người kiểm lại phần nào. Chi tiết: [docs/ai-usage.md](docs/ai-usage.md). Coding agent đọc [AGENTS.md](AGENTS.md).
 
-____
+Nhóm dùng Claude Code để viết code agent Thinking, giao diện, slide và cập nhật tài liệu; Gemini là model chạy trong sản phẩm. Người kiểm lại: đội trưởng chạy test và bộ câu thử, thử tay luồng trên giao diện và đọc lại slide. Bộ câu thử do nhóm tự viết, chấm bằng code (`eval/grade.py`), không dùng AI chấm.
 
 ## File mẫu — điền ở bước nào
 

@@ -40,6 +40,10 @@ def _build_go(client):
         "Tuần trước chị Lan mất 3 đơn vì trả lời tin nhắn trễ 2 giờ, mất khoảng 1,5 triệu.",
         "Hiện chị Lan trả lời tay qua Zalo, hôm qua chị Lan còn ghi đơn vào Excel vì chưa có công cụ khác.",
         "Chị Lan muốn trả lời kịp khách. Hôm qua chị Lan nói thẳng: phải trả lời kịp khách ngay lúc họ hỏi.",
+        "Giải pháp: làm một bot trả lời tin nhắn Zalo cho shop.",
+        "AI hiểu câu hỏi tự do của khách thay vì khớp từ khoá.",
+        "Bản đầu chỉ cần trả lời giá và size, chưa cần chốt đơn.",
+        "Chị Lan sẵn sàng trả tiền nếu mỗi tuần giảm được 3 đơn mất.",
     ]
     run = None
     for text in answers:

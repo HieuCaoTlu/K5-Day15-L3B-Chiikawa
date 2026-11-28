@@ -114,7 +114,7 @@
         "status": "evidence"
       },
       "solution": {
-        "content": "Bot tự trả lời câu hỏi giá và tồn kho",
+        "content": "Bot đọc tin nhắn Zalo và tự trả lời khách về giá và tồn kho",
         "who": "",
         "when": "",
         "quote": "",
@@ -122,36 +122,36 @@
         "status": "assumption"
       },
       "ai_leverage": {
-        "content": "",
+        "content": "AI hiểu câu hỏi tự do của khách thay vì khớp từ khoá cố định",
         "who": "",
         "when": "",
         "quote": "",
         "grounded": false,
-        "status": "empty"
+        "status": "assumption"
       },
       "mvp_scope": {
-        "content": "",
+        "content": "Bản đầu chỉ trả lời giá và tồn kho trên Zalo, chưa chốt đơn",
         "who": "",
         "when": "",
         "quote": "",
         "grounded": false,
-        "status": "empty"
+        "status": "assumption"
       },
       "metrics": {
-        "content": "",
+        "content": "Mỗi tuần mất không quá 1 đơn vì trả lời trễ",
         "who": "",
         "when": "",
         "quote": "",
         "grounded": false,
-        "status": "empty"
+        "status": "assumption"
       },
       "prior_art": {
-        "content": "",
-        "who": "",
+        "content": "Agent chưa tra cứu được đối thủ ở chế độ dự phòng. Nhóm tự rà các sản phẩm làm việc tương tự và ghi điểm khác biệt trước khi làm.",
+        "who": "Agent",
         "when": "",
         "quote": "",
         "grounded": false,
-        "status": "empty"
+        "status": "assumption"
       }
     },
     "flags": {

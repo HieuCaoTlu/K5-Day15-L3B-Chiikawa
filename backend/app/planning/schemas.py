@@ -132,6 +132,13 @@ class QualityCost(Input):
     newCustomers: Amount | None = None  # noqa: N815
 
 
+class MoneyTip(Input):
+    id: ItemId
+    title: str = Field(min_length=1, max_length=120)
+    how: str = Field(min_length=1, max_length=400)
+    why: str = Field(default="", max_length=240)
+
+
 class QualityInput(Input):
     version: int = Field(ge=0)
     metrics: list[Metric] = Field(max_length=20)
@@ -140,6 +147,7 @@ class QualityInput(Input):
     nature: Literal["behavior", "productivity", "other"]
     revenueModel: Literal["sub", "usage", "setup"]  # noqa: N815
     cost: QualityCost
+    tips: list[MoneyTip] = Field(default_factory=list, max_length=8)
 
 
 class MaintenanceJob(Input):

@@ -8,44 +8,43 @@
 sessions: 50        # số phiên mô phỏng — bản nộp ≥50
 seed: 42            # giữ cố định để chạy lại ra cùng chuỗi phiên
 
-users:              # số người dùng thật nếu đưa vào dùng — 3 kịch bản, ở quy mô thật của sản phẩm
-                    # track A: khoá học · track B–F: người dùng của sản phẩm / nhóm nhắm tới, nguồn công khai có link
-  low: 300
-  base: 700
-  high: 1000
-  source: "(ví dụ) track A — thay bằng số của nhóm. Cơ sở: lớp L3 hơn 700 học viên (README hackathon); thấp, cao: (tự ước tính)"
+users:              # số người dùng thật nếu đưa vào dùng — 3 kịch bản
+  low: 100
+  base: 175
+  high: 250
+  source: "Cơ sở: hơn 700 học viên L3 chia 4 người / nhóm = 175 trưởng nhóm (README hackathon, spec.md §2). Cao: cả khoá hơn 1.000 học viên chia 4 = 250. Thấp: 100 trưởng nhóm (tự ước tính)"
 
 personas:           # ≥3 kiểu người dùng; share cộng lại = 1
   - name: dung_it
-    share: 0.5              # tỉ lệ người dùng kiểu này
-    uses_per_month: 4       # số phiên / người / tháng
-    turns_per_session: 1    # số lượt hỏi trong một phiên
-    source: "(ví dụ) phỏng vấn P1, P3 — thay bằng nguồn của nhóm"
+    share: 0.5              # chốt một đề tài rồi làm
+    uses_per_month: 1
+    turns_per_session: 8
+    source: "spec.md §2 (tự ước tính, chưa kiểm). 8 lượt / phiên: agent chỉ đánh giá khi đủ 9 ô, tối thiểu 8 tin nhắn (4 ô lõi + Solution, AI Leverage, MVP Scope, Metrics; ô đối thủ agent tự điền). Lượt đo ở video chỉ cần 5 tin vì khi đó chỉ đòi 4 ô lõi"
   - name: dung_vua
-    share: 0.3
-    uses_per_month: 10
-    turns_per_session: 3
-    source: "(ví dụ) khảo sát n = 24, câu 3"
+    share: 0.3              # đổi hướng một lần
+    uses_per_month: 2
+    turns_per_session: 8
+    source: "spec.md §2 (tự ước tính, chưa kiểm). 8 lượt / phiên như trên"
   - name: dung_nhieu
-    share: 0.2
-    uses_per_month: 20
-    turns_per_session: 5
-    source: "(ví dụ) data/preclass: đếm số lượt / người — cách đếm ở evidence/data-mining.md"
+    share: 0.2              # đổi hướng nhiều lần
+    uses_per_month: 4
+    turns_per_session: 10
+    source: "spec.md §2 (tự ước tính, chưa kiểm). 10 lượt / phiên: 8 lượt như trên và thêm 2 lượt khi đổi hướng (tự ước tính)"
 # Mỗi lượt hỏi lấy ngẫu nhiên một đầu vào trong eval/benchmark.csv (type thuong và kho).
 # Persona hỏi kiểu riêng: thêm vào persona đó
 #     types: [thuong, kho, tu_choi]
 # hoặc
 #     inputs: ["câu hỏi kiểu 1", "câu hỏi kiểu 2"]
 
-prices:             # USD / 1 triệu token — chép từ further-reading/model-prices.md của repo đề. ≥2 mức model
-  - model: gemini-3.1-flash-lite
-    input: 0.25
-    output: 1.50
-    source: "(ví dụ) https://ai.google.dev/gemini-api/docs/pricing · xem 25/11/2026"
-  - model: gemini-4-hydrogen
+prices:             # USD / 1 triệu token — chép từ further-reading/model-prices.md của repo đề
+  - model: gemini-3.5-flash-lite
+    input: 0.30
+    output: 2.50
+    source: "https://ai.google.dev/gemini-api/docs/pricing · xem 25/11/2026 (bảng giá BTC)"
+  - model: gemini-3.5-flash
     input: 1.50
-    output: 7.50
-    source: "(ví dụ) https://ai.google.dev/gemini-api/docs/pricing · xem 25/11/2026"
+    output: 9.00
+    source: "Không có trong bảng BTC. https://cloud.google.com/gemini-enterprise-agent-platform/generative-ai/pricing · xem 28/11/2026 (giá khu vực global, gói trả phí tiêu chuẩn). Chưa đối chiếu được với trang ai.google.dev nên giá Developer API có thể khác"
 
 usd_to_vnd:         # tuỳ chọn: điền thì bản tóm tắt in thêm tiền Việt
   rate:
