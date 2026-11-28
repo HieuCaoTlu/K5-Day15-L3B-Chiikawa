@@ -20,7 +20,7 @@ AGENT_FILLED = "prior_art"
 DEPENDS_ON_PERSONA: tuple[str, ...] = ("jtbd", "pain_point", "current_workaround")
 
 QUESTIONS: dict[str, str] = {
-    "persona": "Một người cụ thể sẽ dùng thứ này là ai? Cho mình tên hoặc vai của họ và một lần gần nhất họ gặp vấn đề.",
+    "persona": "Ai sẽ dùng thứ này? Mô tả vai hoặc nghề của họ, và kể về lần gần nhất một người thuộc vai đó gặp vấn đề.",
     "pain_point": "Lần gần nhất người đó gặp vấn đề này là khi nào? Chuyện gì đã xảy ra và họ mất gì?",
     "current_workaround": "Hôm nay họ xử lý bằng cách nào, và vì sao họ chưa bỏ cách đó?",
     "jtbd": "Trong lần đó, họ nói muốn đạt được kết quả gì? Chép lại lời của họ, không có chữ AI.",
@@ -168,9 +168,9 @@ def question_for(canvas: dict, cell: str | None) -> str:
         return QUESTIONS.get(cell, "")
     missing = []
     if not str(data.get("who", "")).strip():
-        missing.append("một người cụ thể (tên hoặc vai)")
+        missing.append("một người có thật đã gặp chuyện này")
     if not str(data.get("when", "")).strip():
-        missing.append("một lần cụ thể đã xảy ra (khi nào, chuyện gì)")
+        missing.append("một lần đã xảy ra (chuyện gì, với ai)")
     if not missing:
         missing.append(
             "điều chính họ nói là muốn đạt, chép nguyên văn (không phải lời đoán hay nghe kể lại)"

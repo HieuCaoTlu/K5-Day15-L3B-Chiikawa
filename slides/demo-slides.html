@@ -9,220 +9,209 @@
 <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
 @page{size:1280px 720px;margin:0}
-:root{--ink:#121a33;--mute:#626d8c;--line:#e7ebf5;--soft:#f4f6fc;--blue:#0a9cf0;--indigo:#4d5bf0;--green:#14b86a;--orange:#ff8a1f;--red:#ff4d5e;--yellow:#ffc21a}
+:root{--ink:#121a33;--mute:#59647f;--line:#e7ebf5;--soft:#f4f6fc;--blue:#0a9cf0;--indigo:#4d5bf0;--green:#14b86a;--orange:#ff8a1f;--violet:#a24ce8;--red:#ff4d5e}
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{background:#fff;color:var(--ink);font-family:"Be Vietnam Pro","Segoe UI",system-ui,sans-serif;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-.slide{width:1280px;height:720px;padding:46px 64px 0;position:relative;overflow:hidden;page-break-after:always;break-after:page;background:#fff}
+.slide{width:1280px;height:720px;padding:44px 64px 0;position:relative;overflow:hidden;page-break-after:always;break-after:page;background:#fff}
 .slide:last-child{page-break-after:auto;break-after:auto}
-.kicker{display:flex;align-items:center;gap:10px;font-size:15px;font-weight:500;color:var(--mute);letter-spacing:.2px}
-.kicker i{width:10px;height:10px;border-radius:50%;background:var(--blue);display:inline-block}
-h1{font-size:38px;line-height:1.22;font-weight:500;margin-top:14px;max-width:1060px;letter-spacing:-.2px}
+.kicker{display:flex;align-items:center;gap:12px;font-size:18px;font-weight:500;color:var(--mute)}
+.kicker i{width:12px;height:12px;border-radius:50%;background:var(--blue);display:inline-block}
+.label{display:inline-block;background:var(--ink);color:#fff;border-radius:999px;padding:6px 20px;font-size:22px;font-weight:600;letter-spacing:.5px}
+h1{font-size:42px;line-height:1.2;font-weight:500;margin-top:16px;max-width:1120px;letter-spacing:-.3px}
 h1 em{font-style:normal;color:var(--blue)}
-.lead{font-size:17px;color:var(--mute);margin-top:10px;max-width:980px;line-height:1.5}
-.foot{position:absolute;left:64px;right:64px;bottom:22px;display:flex;justify-content:space-between;align-items:center;font-size:12.5px;color:var(--mute);border-top:1px solid var(--line);padding-top:12px}
+.lead{font-size:22px;color:var(--mute);margin-top:12px;line-height:1.45}
+.foot{position:absolute;left:64px;right:64px;bottom:20px;display:flex;justify-content:space-between;align-items:center;font-size:14px;color:var(--mute);border-top:1px solid var(--line);padding-top:10px}
 .foot b{font-weight:500;color:var(--ink)}
 .foot span:last-child{white-space:nowrap;margin-left:24px}
 .grid{display:grid;gap:18px;margin-top:26px}
-.card{border:1px solid var(--line);border-radius:20px;padding:22px 24px;background:#fff}
+.card{border:1px solid var(--line);border-radius:20px;padding:22px 26px;background:#fff}
 .card.soft{background:var(--soft);border-color:transparent}
-.card h3{font-size:15px;font-weight:500;color:var(--mute);margin-bottom:10px}
-.big{font-size:46px;font-weight:500;line-height:1;letter-spacing:-1px}
-.big small{font-size:18px;color:var(--mute);font-weight:400;letter-spacing:0;margin-left:6px}
-.cap{font-size:14.5px;color:var(--mute);margin-top:8px;line-height:1.45}
-.quote{font-size:19px;line-height:1.5;border-left:4px solid var(--blue);padding-left:18px;margin-top:2px}
-.quote span{display:block;font-size:13px;color:var(--mute);margin-top:6px}
-.tag{display:inline-block;border-radius:999px;padding:3px 12px;font-size:13px;font-weight:500;background:var(--soft);color:var(--ink)}
+.card h3{font-size:19px;font-weight:500;color:var(--mute);margin-bottom:10px}
+.big{font-size:56px;font-weight:500;line-height:1;letter-spacing:-1px}
+.big small{font-size:22px;color:var(--mute);font-weight:400;letter-spacing:0;margin-left:8px}
+.cap{font-size:19px;color:var(--mute);margin-top:10px;line-height:1.4}
+.quote{font-size:24px;line-height:1.45;border-left:5px solid var(--blue);padding-left:20px}
+.quote span{display:block;font-size:16px;color:var(--mute);margin-top:8px}
+.tag{display:inline-block;border-radius:999px;padding:4px 14px;font-size:16px;font-weight:500;background:var(--soft);color:var(--ink)}
 .tag.g{background:#e3f7ee;color:#0b7a46}.tag.o{background:#fff0e0;color:#a85500}.tag.b{background:#e2f4fd;color:#066fa8}.tag.r{background:#ffe6e9;color:#b32538}
-table{width:100%;border-collapse:collapse;font-size:15px}
-th{font-weight:500;color:var(--mute);text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);font-size:13.5px}
-td{padding:13px 12px;border-bottom:1px solid var(--line);vertical-align:top;line-height:1.4}
+table{width:100%;border-collapse:collapse;font-size:19px}
+th{font-weight:500;color:var(--mute);text-align:left;padding:10px 14px;border-bottom:1px solid var(--line);font-size:16px}
+td{padding:14px;border-bottom:1px solid var(--line);vertical-align:top;line-height:1.35}
 tr.pick td{background:var(--soft);font-weight:500}
 tr.pick td:first-child{border-radius:12px 0 0 12px}tr.pick td:last-child{border-radius:0 12px 12px 0}
-ul.dots{list-style:none;display:grid;gap:11px;font-size:16.5px;line-height:1.45}
-ul.dots li{position:relative;padding-left:22px}
-ul.dots li::before{content:"";position:absolute;left:0;top:.58em;width:9px;height:9px;border-radius:50%;background:var(--blue)}
-.flow{display:flex;align-items:center;gap:6px;flex-wrap:nowrap}
-.flow .step{border-radius:14px;padding:11px 12px;background:var(--soft);font-size:14px;font-weight:500;flex:1 1 0;min-width:0}
-.flow .step small{display:block;font-weight:400;color:var(--mute);font-size:12.5px;margin-top:2px}
-.flow .arr{color:var(--mute);font-size:16px;flex:0 0 auto}
-.cells{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px}
-.cell{border:1px dashed #cbd3e6;border-radius:10px;padding:7px 10px;font-size:12.5px;color:var(--mute)}
-.cell.on{border-style:solid;border-color:#bfe9d4;background:#effaf4;color:#0b7a46}
-.cell.as{border-style:solid;border-color:#ffd9ae;background:#fff6ea;color:#a85500}
-.bar{height:26px;border-radius:999px;background:var(--soft);position:relative;margin:9px 0}
+ul.dots{list-style:none;display:grid;gap:12px;font-size:21px;line-height:1.4}
+ul.dots li{position:relative;padding-left:24px}
+ul.dots li::before{content:"";position:absolute;left:0;top:.6em;width:10px;height:10px;border-radius:50%;background:var(--blue)}
+.mods{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-top:30px}
+.mod{border-radius:20px;padding:20px 18px;border:2px solid var(--c);background:#fff}
+.mod b{display:block;white-space:nowrap;font-size:22px;font-weight:600;color:var(--c)}
+.mod span{display:block;font-size:18px;color:var(--ink);margin-top:8px;line-height:1.35}
+.mod.main{background:var(--c);color:#fff}
+.mod.main b,.mod.main span{color:#fff}
+.flow{display:flex;align-items:stretch;gap:8px}
+.flow .step{border-radius:16px;padding:16px 14px;background:var(--soft);font-size:19px;font-weight:500;flex:1 1 0;min-width:0;line-height:1.3}
+.flow .step small{display:block;font-weight:400;color:var(--mute);font-size:15.5px;margin-top:6px}
+.flow .arr{color:var(--mute);font-size:22px;align-self:center}
+.cards9{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:26px}
+.c9{border-radius:16px;padding:16px 18px;background:var(--soft);font-size:22px;font-weight:500}
+.c9 small{display:block;font-size:16px;font-weight:400;color:var(--mute);margin-top:4px}
+.c9.core{background:#e2f4fd;color:#066fa8}
+.c9.core small{color:#066fa8}
+.cells{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:12px}
+.cell{border:1px dashed #cbd3e6;border-radius:8px;padding:5px 8px;font-size:14px;color:var(--mute)}
+.bar{height:34px;border-radius:999px;background:var(--soft);position:relative;margin:10px 0}
 .bar i{position:absolute;left:0;top:0;bottom:0;border-radius:999px}
-.bar b{position:absolute;right:12px;top:50%;transform:translateY(-50%);font-size:13px;font-weight:500}
+.bar b{position:absolute;right:14px;top:50%;transform:translateY(-50%);font-size:16px;font-weight:500}
 .row3{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
-.pill{white-space:nowrap;flex:0 0 auto;display:inline-flex;align-items:center;gap:8px;border-radius:999px;padding:9px 18px;font-size:15px;font-weight:500;background:var(--ink);color:#fff}
-.note{font-size:13px;color:var(--mute);line-height:1.5;margin-top:10px}
-.sm td,.sm th{padding:9px 10px;font-size:14px}
+.note{font-size:16px;color:var(--mute);line-height:1.45;margin-top:10px}
 </style>
 </head>
 <body>
 
-<!-- 1 · Người dùng & pain -->
+<!-- 1 · Sản phẩm và quy trình -->
 <section class="slide">
-  <div class="kicker"><i></i>Nhóm Chiikawa · Track A · ProductPilot · Bước Thinking</div>
-  <h1>Trưởng nhóm Engineer chốt đề tài khi chưa có <em>tư duy sản phẩm</em>, nên xây xong không ai dùng</h1>
-  <p class="lead">Người dùng chính: trưởng nhóm 3–5 Engineer, học viên AI20K Level 3–4 Khóa 5. Việc họ cố làm: chốt bài toán trước khi bắt đầu làm. Hậu quả khi chốt sai: mất cả một sprint.</p>
-  <div class="grid" style="grid-template-columns:repeat(3,1fr)">
-    <div class="card soft"><h3>Chọn hỏi khách "muốn có tính năng gì"</h3><div class="big">16/22<small>72,7%</small></div><p class="cap">Thay vì hỏi chuyện đã xảy ra, khi được gặp khách hàng 5 phút.</p></div>
-    <div class="card soft"><h3>Nghĩ công nghệ, dữ liệu, kiến trúc trước</h3><div class="big">12/22<small>54,5%</small></div><p class="cap">Chưa nghĩ tới khách hàng khi nghe chủ đề "Chăm sóc khách hàng cho shop online".</p></div>
-    <div class="card soft"><h3>Kể một lần build xong không đúng vấn đề</h3><div class="big">7/22<small>31,8%</small></div><p class="cap">Trong 7 câu có 3 câu nói thẳng "không ai dùng" hoặc "để không".</p></div>
+  <div class="kicker"><i></i>Nhóm Chiikawa · Track A · ProductPilot</div>
+  <h1>ProductPilot dẫn Engineer đi qua quy trình sản phẩm, từ <em>ý tưởng</em> đến <em>vận hành</em></h1>
+  <p class="lead">Mục tiêu: giúp các Engineer trải nghiệm quy trình sản phẩm rõ ràng trong giai đoạn học tập, tiến tới trở thành các FDE. Sản phẩm có <b style="font-weight:500">5 module</b>.</p>
+  <div class="mods">
+    <div class="mod main" style="--c:var(--blue)"><b>1 · Thinking</b><span>Chốt bài toán, điền AI MVP Canvas</span></div>
+    <div class="mod" style="--c:var(--green)"><b>2 · Planning</b><span>Chia việc, theo dõi tiến độ</span></div>
+    <div class="mod" style="--c:var(--orange)"><b>3 · Pitching</b><span>Khảo sát người dùng, quảng bá</span></div>
+    <div class="mod" style="--c:var(--indigo)"><b>4 · Quality</b><span>Chất lượng model, dự đoán chi phí</span></div>
+    <div class="mod" style="--c:var(--violet)"><b>5 · Maintaining</b><span>Giữ sản phẩm khỏe sau khi ra mắt</span></div>
   </div>
-  <div class="card" style="margin-top:18px"><p class="quote">"Build 1 web đặt lịch sân bóng xong ko ai dùng"<span>Phiếu khảo sát 1, học viên AI20K</span></p></div>
-  <div class="foot"><span>Nguồn: <b>evidence/summary.md</b> · khảo sát Google Form n = 22, ẩn danh. Mẫu nhỏ, cùng khoá, chưa kiểm lại bằng phỏng vấn.</span><span>1 / 8</span></div>
+  <div class="card soft" style="margin-top:26px"><p style="font-size:24px;line-height:1.45"><b style="font-weight:500">Sản phẩm chính của nhóm là Thinking.</b> Đây là module mọi bước sau đều dựa vào, và là phần nhóm đo bằng 23 câu thử.</p></div>
+  <div class="foot"><span>Nguồn: landing page ProductPilot · <b>frontend/public/tang/data.js</b>.</span><span>1 / 8</span></div>
 </section>
 
-<!-- 2 · Vì sao chọn bài này -->
+<!-- 2 · Thinking -->
 <section class="slide">
-  <div class="kicker"><i></i>Vì sao chọn bài này</div>
-  <h1>Chọn <em>Thinking</em> vì có số đếm được và mọi bước sau đều phụ thuộc vào nó</h1>
-  <div class="card" style="margin-top:26px;padding:14px 18px">
-    <table>
-      <tr><th style="width:34%">Hướng</th><th>Người gặp</th><th>Lần / tháng</th><th>Mỗi lần tốn</th><th>Impact / tháng</th><th>Chọn?</th></tr>
-      <tr class="pick"><td>Thinking: phân tích ý tưởng bằng tư duy sản phẩm</td><td>~175 trưởng nhóm</td><td>1</td><td>60 phút</td><td>10.500 phút</td><td><span class="tag g">Chọn</span></td></tr>
-      <tr><td>Planning: chia sprint, giao task</td><td>~175</td><td>4</td><td>30 phút</td><td>21.000 phút</td><td><span class="tag">Loại</span></td></tr>
-      <tr><td>Pitching: tạo khảo sát và slide</td><td>~175</td><td>1</td><td>120 phút</td><td>21.000 phút</td><td><span class="tag">Loại</span></td></tr>
-    </table>
+  <div class="kicker"><i></i>Sản phẩm chính</div>
+  <h1><em>Thinking</em> là agent hỗ trợ điền <em>9 thẻ</em> AI MVP Canvas, người dùng duyệt</h1>
+  <div class="cards9">
+    <div class="c9 core">Persona<small>ai sẽ dùng</small></div>
+    <div class="c9 core">Pain Point<small>chuyện không tốt đã xảy ra</small></div>
+    <div class="c9 core">Current Workaround<small>họ đang tự xử lý thế nào</small></div>
+    <div class="c9 core">Job-to-be-done<small>họ muốn đạt được gì</small></div>
+    <div class="c9">Solution<small>nhóm giải quyết thế nào</small></div>
+    <div class="c9">AI Leverage<small>AI làm gì, ở bước nào</small></div>
+    <div class="c9">MVP Scope<small>bản đầu làm gì, chưa làm gì</small></div>
+    <div class="c9">Metrics<small>con số đo, ai trả tiền</small></div>
+    <div class="c9">Prior Art &amp; Edge<small>đối thủ xung quanh, agent tự điền</small></div>
+  </div>
+  <p class="lead" style="margin-top:22px">Nhóm tạo ra cấu trúc này từ kinh nghiệm các bài workshop của chương trình.</p>
+  <div class="foot"><span>Nguồn: <b>spec.md §4</b> · <b>backend/app/agent/canvas.py</b> · 9 thẻ, trong đó 4 thẻ lõi.</span><span>2 / 8</span></div>
+</section>
+
+<!-- 3 · WHY -->
+<section class="slide">
+  <span class="label">WHY</span>
+  <h1>Vì sao cần: Engineer chốt đề tài khi chưa nghĩ như người làm sản phẩm, nên <em>xây xong không ai dùng</em></h1>
+  <div class="grid" style="grid-template-columns:repeat(3,1fr)">
+    <div class="card soft"><h3>Hỏi khách "muốn tính năng gì"</h3><div class="big">16/22<small>72,7%</small></div><p class="cap">thay vì hỏi chuyện đã xảy ra.</p></div>
+    <div class="card soft"><h3>Nghĩ công nghệ trước, khách sau</h3><div class="big">12/22<small>54,5%</small></div><p class="cap">khi nghe đề "chăm sóc khách cho shop online".</p></div>
+    <div class="card soft"><h3>Từng build xong không đúng vấn đề</h3><div class="big">7/22<small>31,8%</small></div><p class="cap">3 người nói thẳng "không ai dùng".</p></div>
+  </div>
+  <div class="card" style="margin-top:20px"><p class="quote">"Build 1 web đặt lịch sân bóng xong ko ai dùng"<span>Phiếu khảo sát 1, học viên AI20K</span></p></div>
+  <div class="foot"><span>Nguồn: <b>evidence/summary.md</b> · khảo sát n = 22, ẩn danh, mẫu nhỏ, chưa kiểm lại bằng phỏng vấn.</span><span>3 / 8</span></div>
+</section>
+
+<!-- 4 · WHO -->
+<section class="slide">
+  <span class="label">WHO</span>
+  <h1>Ai dùng: nhóm 3–5 Engineer học viên AI20K. Trưởng nhóm chốt đề tài, sai là mất <em>cả một sprint</em></h1>
+  <div class="grid" style="grid-template-columns:1fr 1fr;margin-top:28px">
+    <div class="card" style="border:2px solid var(--blue)">
+      <span class="tag b" style="font-size:18px">Người dùng chính</span>
+      <div style="font-size:34px;font-weight:500;margin-top:14px">Trưởng nhóm</div>
+      <ul class="dots" style="font-size:21px;gap:10px;margin-top:14px">
+        <li>Chốt bài toán trước khi bắt đầu làm.</li>
+        <li>Kể chuyện cho agent, xem Canvas, bấm Duyệt.</li>
+      </ul>
+    </div>
+    <div class="card soft">
+      <span class="tag" style="font-size:18px;background:#fff">Cộng tác</span>
+      <div style="font-size:34px;font-weight:500;margin-top:14px">Các thành viên còn lại</div>
+      <ul class="dots" style="font-size:21px;gap:10px;margin-top:14px">
+        <li>Tham gia không gian làm việc.</li>
+        <li>Thực hiện Planning, Pitching, ...</li>
+      </ul>
+    </div>
+  </div>
+  <div class="foot"><span>Nguồn: <b>spec.md §2</b> · nhóm 3–5 Engineer học viên AI20K.</span><span>4 / 8</span></div>
+</section>
+
+<!-- 5 · HOW -->
+<section class="slide">
+  <span class="label">HOW</span>
+  <h1>Làm thế nào: trưởng nhóm kể chuyện, <em>AI điền thẻ</em>, code kiểm bằng chứng, người duyệt</h1>
+  <div class="flow" style="margin-top:34px">
+    <div class="step">Tin nhắn<small>kể chuyện</small></div><span class="arr">→</span>
+    <div class="step">AI điền thẻ<small>Gemini, 1 lần / tin</small></div><span class="arr">→</span>
+    <div class="step">Code kiểm<small>người + lần + trích dẫn</small></div><span class="arr">→</span>
+    <div class="step">Đủ 9 thẻ?<small>chưa: hỏi 1 câu</small></div><span class="arr">→</span>
+    <div class="step" style="background:#e3f7ee">GO / NOT YET / NO<small>code quyết</small></div><span class="arr">→</span>
+    <div class="step" style="background:var(--ink);color:#fff">Người duyệt<small style="color:#aeb6d0">rồi sang Planning</small></div>
   </div>
   <div class="grid" style="grid-template-columns:1fr 1fr">
-    <div class="card soft"><h3>Vì sao chọn</h3><ul class="dots"><li>Có số đếm từ 22 phản hồi khảo sát, hai hướng kia chưa có bằng chứng từ người dùng.</li><li>Chốt sai ở bước này thì cả nhóm build sai hướng; sửa lúc này rẻ hơn sửa sau khi code.</li></ul></div>
-    <div class="card soft"><h3>Hai hướng bị loại</h3><ul class="dots"><li>Planning và Pitching có impact ước tính lớn hơn (21.000 phút) nhưng khảo sát chỉ hỏi về bước phân tích bài toán.</li><li>Vẫn có module trong Workstation, nằm ngoài bộ câu thử.</li></ul></div>
+    <div class="card"><h3>AI làm</h3><ul class="dots" style="font-size:20px;gap:8px"><li>Điền 9 thẻ, hỏi thẻ còn thiếu.</li><li>Tự điền thẻ đối thủ, luôn là giả định.</li></ul></div>
+    <div class="card"><h3>Người quyết</h3><ul class="dots" style="font-size:20px;gap:8px"><li>Chốt GO hoặc NO.</li><li>AI không bịa số liệu, không viết code.</li></ul></div>
   </div>
-  <div class="foot"><span>Nguồn: <b>spec.md §2</b> · ~175 = hơn 700 học viên L3 ÷ 4 người / nhóm. Số lần và số phút là <b>tự ước tính</b>, chưa kiểm.</span><span>2 / 8</span></div>
+  <div class="foot"><span>Nguồn: <b>spec.md §4</b> · workflow cố định, 1 lần gọi LLM mỗi tin nhắn · mức tự động "AI gợi ý, người quyết".</span><span>5 / 8</span></div>
 </section>
 
-<!-- 3 · Giải pháp -->
+<!-- 6 · WHAT: demo -->
 <section class="slide">
-  <div class="kicker"><i></i>Giải pháp</div>
-  <h1>Một trưởng nhóm kể chuyện, AI điền <em>9 ô Canvas</em>, trưởng nhóm duyệt rồi mới sang Planning</h1>
-  <div class="card soft" style="margin-top:22px;padding:18px 24px">
-    <p style="font-size:16px;line-height:1.55"><b style="font-weight:500">Lát cắt một câu:</b> một trưởng nhóm Engineer · chốt đề tài trước khi code · AI quyết định GO / NOT YET / NO dựa trên việc các ô đã có chuyện thật hay mới là giả định · kết quả là AI MVP Canvas được duyệt.</p>
-  </div>
-  <div class="flow" style="margin-top:22px">
-    <div class="step">Tin nhắn<small>trưởng nhóm kể chuyện</small></div><span class="arr">→</span>
-    <div class="step">Trích vào Canvas<small>Gemini, 1 lần / tin nhắn</small></div><span class="arr">→</span>
-    <div class="step">Đánh dấu bằng chứng<small>code: người + lần + trích dẫn thật</small></div><span class="arr">→</span>
-    <div class="step">Đủ 9 ô?<small>chưa đủ: hỏi đúng 1 câu</small></div><span class="arr">→</span>
-    <div class="step" style="background:#e3f7ee">GO / NOT YET / NO<small>code quyết, không phải LLM</small></div><span class="arr">→</span>
-    <div class="step" style="background:var(--ink);color:#fff">Trưởng nhóm duyệt<small style="color:#aeb6d0">rồi mới sang Planning</small></div>
-  </div>
-  <div class="grid" style="grid-template-columns:repeat(3,1fr)">
-    <div class="card"><h3>AI tự làm đến đâu</h3><ul class="dots" style="font-size:15px;gap:8px"><li>Trích thông tin vào 9 ô và hỏi tiếp ô còn thiếu.</li><li>Tự điền ô đối thủ (Prior Art) từ Solution và AI Leverage; ô này luôn là giả định.</li></ul></div>
-    <div class="card"><h3>Người quyết</h3><ul class="dots" style="font-size:15px;gap:8px"><li>Chốt GO hoặc NO và mở bước Planning.</li><li>AI không tự chốt, không bịa số liệu hay trích dẫn, không viết code.</li></ul></div>
-    <div class="card"><h3>Vì sao workflow cố định</h3><ul class="dots" style="font-size:15px;gap:8px"><li>Các bước biết trước, chỉ 1 lần gọi LLM mỗi tin nhắn: rẻ, test được, tái lập được.</li><li>4 ô lõi phải có chuyện thật mới được GO.</li></ul></div>
-  </div>
-  <div class="foot"><span>Nguồn: <b>spec.md §4</b> · mức tự động "AI gợi ý, người quyết" · 9 ô, trong đó 4 ô lõi (Persona, Pain Point, Current Workaround, JTBD).</span><span>3 / 8</span></div>
-</section>
-
-<!-- 4 · Demo -->
-<section class="slide">
-  <div class="kicker"><i></i>Demo live · kết quả thật từ bộ câu thử (run-5)</div>
-  <h1>Một ca thường, một ca khó: agent <em>không khen ý tưởng</em>, chỉ hỏi chuyện thật</h1>
+  <span class="label">WHAT · Demo</span>
+  <h1>Agent <em>không khen ý tưởng</em>, chỉ hỏi chuyện thật</h1>
   <div class="grid" style="grid-template-columns:1fr 1fr">
     <div class="card"><h3><span class="tag b">Ca thường · B01</span></h3>
-      <p class="quote" style="font-size:16px">"mình mới nghĩ ra ý tưởng làm con chatbot trả lời tin nhắn cho mấy shop online á, chắc là ổn đó, tuần này mình code luôn nha"</p>
-      <div class="cells"><div class="cell">Persona</div><div class="cell">Pain Point</div><div class="cell">Workaround</div><div class="cell">JTBD</div><div class="cell">Solution</div><div class="cell">AI Leverage</div><div class="cell">MVP Scope</div><div class="cell">Metrics</div><div class="cell">Prior Art</div></div>
-      <p class="cap" style="color:var(--ink)"><span class="tag o">NOT YET</span> 0/9 ô có nội dung. Agent hỏi đúng 1 câu: "Một người cụ thể sẽ dùng thứ này là ai? Cho mình tên hoặc vai của họ và một lần gần nhất họ gặp vấn đề."</p></div>
-    <div class="card"><h3><span class="tag r">Ca khó · B05 · lời kể lại</span></h3>
-      <p class="quote" style="font-size:16px">"nghe bạn mình bảo giáo viên cấp 2 mất cả buổi tối để soạn đề theo ma trận, nghe đâu ai cũng than, chắc đúng đó"</p>
-      <div class="cells"><div class="cell">Persona</div><div class="cell">Pain Point</div><div class="cell">Workaround</div><div class="cell">JTBD</div><div class="cell">Solution</div><div class="cell">AI Leverage</div><div class="cell">MVP Scope</div><div class="cell">Metrics</div><div class="cell">Prior Art</div></div>
-      <p class="cap" style="color:var(--ink)"><span class="tag o">NOT YET</span> 0/9 ô có bằng chứng. Nghe kể lại không phải chuyện của một người cụ thể, nên agent hỏi lại người và lần gần nhất.</p></div>
+      <p class="quote" style="font-size:20px">"mình mới nghĩ ra ý tưởng làm con chatbot trả lời tin nhắn cho mấy shop online á, chắc là ổn đó, tuần này mình code luôn nha"</p>
+      <p class="cap" style="color:var(--ink)"><span class="tag o">NOT YET</span> 4 thẻ lõi còn trống. Agent hỏi 1 câu: ai sẽ dùng, và lần gần nhất họ gặp vấn đề.</p></div>
+    <div class="card"><h3><span class="tag r">Ca khó · B05 · nghe kể lại</span></h3>
+      <p class="quote" style="font-size:20px">"nghe bạn mình bảo giáo viên cấp 2 mất cả buổi tối để soạn đề theo ma trận, nghe đâu ai cũng than, chắc đúng đó"</p>
+      <p class="cap" style="color:var(--ink)"><span class="tag o">NOT YET</span> Các thẻ mới là giả định. Nghe kể lại chưa phải chuyện thật, nên agent hỏi lại khi nào, chuyện gì.</p></div>
   </div>
-  <div class="card soft" style="margin-top:18px;display:flex;align-items:center;gap:18px;padding:16px 24px">
-    <span class="pill">Luồng đầy đủ</span>
-    <p style="font-size:16px;line-height:1.45">Đã chạy thử 9 tin nhắn về một chủ shop: <b style="font-weight:500">9/9 ô</b> có nội dung, 4 ô lõi có bằng chứng → <span class="tag g">GO</span> → trưởng nhóm bấm Duyệt → mở Planning.</p>
-  </div>
-  <div class="foot"><span>Nguồn: <b>eval/run-5.csv</b> (B01, B05) · <b>eval/benchmark.csv</b> · luồng 9 tin nhắn chạy qua API <b>/api/v1/agent/runs</b>, model gemini-3.5-flash-lite.</span><span>4 / 8</span></div>
+  <div class="card soft" style="margin-top:20px"><p style="font-size:22px;line-height:1.45"><b style="font-weight:500">Luồng đầy đủ:</b> 9 tin nhắn về một chủ shop → <b style="font-weight:500">9/9 thẻ</b> có nội dung → <span class="tag g">GO</span> → bấm Duyệt → mở Planning.</p></div>
+  <div class="foot"><span>Nguồn: <b>eval/run-2.csv</b> (B01, B05) · luồng 9 tin chạy qua <b>/api/v1/agent/runs</b> · gemini-3.5-flash-lite.</span><span>6 / 8</span></div>
 </section>
 
-<!-- 5 · Đánh giá thế nào -->
+<!-- 7 · WHAT: đo được -->
 <section class="slide">
-  <div class="kicker"><i></i>Đánh giá thế nào</div>
-  <h1>Bộ 23 câu thử, chấm bằng code: lượt 1 <em>78%</em> → lượt 2 <em>87%</em>, sau khi đổi sang 9 ô vẫn đạt <em>83%</em></h1>
-  <div class="grid" style="grid-template-columns:1.05fr 1fr;gap:22px">
-    <div>
-      <div class="card" style="padding:18px 22px">
-        <h3>Đạt / 23 câu (cùng bộ câu thử, cùng cách chấm)</h3>
-        <div class="bar"><i style="width:78%;background:#b9c4e4"></i><b>Lượt 1 · run-1 · 18/23 · 78%</b></div>
-        <div class="bar"><i style="width:87%;background:#6fd0a3"></i><b>Lượt 2 · run-2 · 20/23 · 87%</b></div>
-        <div class="bar"><i style="width:83%;background:#7cc6f2"></i><b>Lượt 3 · run-5 · 19/23 · 83% (đủ 9 ô)</b></div>
-        <p class="note">Chuẩn "đạt" (chốt ở CP2): thuong + kho ≥ 75%, tu_choi 100%, không câu nào GO khi còn ô lõi chưa có bằng chứng.</p>
-      </div>
-      <div class="card soft" style="margin-top:14px;padding:6px 14px">
-        <table class="sm"><tr><th>Lượt</th><th>thuong + kho</th><th>tu_choi</th><th>GO sai</th><th>Chuẩn</th></tr>
-          <tr><td>1</td><td>14/19 = 73,7%</td><td>4/4</td><td>3</td><td><span class="tag r">Chưa</span></td></tr>
-          <tr><td>2</td><td>16/19 = 84,2%</td><td>4/4</td><td>0</td><td><span class="tag g">Đạt</span></td></tr>
-          <tr><td>3</td><td>15/19 = 78,9%</td><td>4/4</td><td>0</td><td><span class="tag g">Đạt</span></td></tr></table>
-      </div>
+  <span class="label">WHAT · Đo được</span>
+  <h1>23 câu thử chấm bằng code: <em>78%</em> → <em>87%</em> → <em>74%</em>. Chi phí <em>$0,0167</em> / người / tháng</h1>
+  <div class="grid" style="grid-template-columns:1.15fr 1fr;gap:22px">
+    <div class="card" style="padding:18px 24px">
+      <h3>Đạt / 23 câu, cùng bộ câu, cùng cách chấm</h3>
+      <div class="bar"><i style="width:78%;background:#b9c4e4"></i><b>Lượt 1 · 18/23</b></div>
+      <div class="bar"><i style="width:87%;background:#6fd0a3"></i><b>Lượt 2 · 20/23</b></div>
+      <div class="bar"><i style="width:74%;background:#ffc58a"></i><b>Lượt 3 · 17/23 (thêm luật đủ 9 thẻ)</b></div>
+      <p class="note">Chuẩn "đạt" chốt ở CP2: thuong + kho ≥ 75%, tu_choi 100%, 0 câu GO sai. Lượt 3 giảm vì bổ sung nghiệp vụ: agent chỉ đánh giá khi đủ 9 thẻ, nên 2 câu kỳ vọng GO từ một tin nhắn trả NOT YET. Lượt 3 chưa đạt chuẩn (thuong + kho 68,4%).</p>
     </div>
-    <div class="card" style="padding:20px 24px">
-      <h3>Đo gì, bằng gì</h3>
-      <ul class="dots" style="font-size:14.5px;gap:8px">
-        <li><b style="font-weight:500">Dataset:</b> khảo sát 22 phản hồi (ẩn danh); 23 câu thử tự viết, dán nhãn synthetic, 8/23 từ người dùng hoặc data thật.</li>
-        <li><b style="font-weight:500">Bộ câu thử:</b> thuong 3 · kho 16 · tu_choi 4 (2 câu tấn công). Agent luôn trả NOT YET chỉ qua 11/23 (48%).</li>
-        <li><b style="font-weight:500">4 metric:</b> đánh dấu bằng chứng đúng · kết luận đúng · từ chối và không bịa · hỏi đúng một câu.</li>
-      </ul>
-      <h3 style="margin-top:16px">Lỗi chính</h3>
-      <ul class="dots" style="font-size:14.5px;gap:8px">
-        <li>Lượt 1: 3 câu GO sai (B13, B14, B16) do lời đoán bị coi là bằng chứng → sửa bằng luật code, còn 0 câu.</li>
-        <li>Tệ đi ở lượt 2: B03, B04 bị trả NO sớm. Còn lại: B10 chưa nhận ra việc không cần AI.</li>
-        <li>Lượt 3: B02 và B15 trượt vì kỳ vọng GO từ <b style="font-weight:500">một</b> tin nhắn, luật 9 ô trả NOT YET. Bộ câu thử giữ nguyên.</li>
-      </ul>
+    <div class="card soft" style="padding:18px 24px">
+      <h3>Chi phí / task thành công (tỉ lệ đạt 74%)</h3>
+      <div class="big" style="font-size:40px">$0,0115<small style="font-size:17px">flash-lite · $0,0167 / người / tháng</small></div>
+      <div class="big" style="font-size:40px;margin-top:14px">$0,0505<small style="font-size:17px">flash · $0,0735 / người / tháng</small></div>
+      <p class="note">Kịch bản cơ sở, 175 người. Token đo trên flash-lite, tính giá cả hai model.</p>
     </div>
   </div>
-  <div class="foot"><span>Nguồn: <b>eval/README.md</b>, <b>eval/report.md</b> · run-1@20261128-010324 · run-2@20261128-021100 · run-5@20261128-091745 · model gemini-3.5-flash-lite. Trước chốt chặn Prior Art, cùng luật 9 ô ra 16/23 (run-4): kết quả dao động vài câu giữa các lần chạy.</span><span>5 / 8</span></div>
+  <div class="foot"><span>Nguồn: <b>eval/README.md</b> (run-1, run-2, run-3) · <b>cost/cost-estimate.md</b> (simulate-1, 50 phiên) · giá BTC ngày 25/11/2026 và Google Cloud ngày 28/11/2026.</span><span>7 / 8</span></div>
 </section>
 
-<!-- 6 · Chi phí -->
+<!-- 8 · Kết luận -->
 <section class="slide">
-  <div class="kicker"><i></i>Chi phí khi dùng thật</div>
-  <h1>Khoảng <em>0,0163 USD</em> mỗi người mỗi tháng để tiết kiệm khoảng 60 phút</h1>
-  <div class="grid" style="grid-template-columns:repeat(3,1fr)">
-    <div class="card soft"><h3>Chi phí / phiên (8,4 lượt)</h3><div class="big">$0,0083</div><p class="cap">Đo thật qua bản chạy thử: 50 phiên, 0 lỗi, seed 42.</p></div>
-    <div class="card soft"><h3>Chi phí / task thành công</h3><div class="big">$0,0100</div><p class="cap">= chi phí / phiên ÷ tỉ lệ đạt 83% (run-5), không coi như đạt 100%.</p></div>
-    <div class="card soft"><h3>Chi phí / người / tháng (cơ sở)</h3><div class="big">$0,0163</div><p class="cap">So với impact 60 phút / người / tháng.</p></div>
-  </div>
-  <div class="card" style="margin-top:18px;padding:14px 18px">
-    <table>
-      <tr><th>Kịch bản</th><th>Số người dùng</th><th>Chi phí / tháng</th><th>Nguồn số người</th></tr>
-      <tr><td>Thấp</td><td>100</td><td>$1,63</td><td>tự ước tính</td></tr>
-      <tr class="pick"><td>Cơ sở</td><td>175</td><td>$2,85</td><td>hơn 700 học viên L3 ÷ 4 người / nhóm</td></tr>
-      <tr><td>Cao</td><td>250</td><td>$4,07</td><td>hơn 1.000 học viên cả khoá ÷ 4</td></tr>
-    </table>
-  </div>
-  <p class="note" style="margin-top:14px">Persona (tự ước tính): ít 50% · 1 phiên / tháng · 8 lượt; vừa 30% · 2 phiên · 8 lượt; nhiều 20% · 4 phiên · 10 lượt. 8 lượt là mức tối thiểu vì agent chỉ đánh giá khi đủ 9 ô. Mô phỏng lấy đầu vào ngẫu nhiên từ bộ câu thử, chưa phải cuộc trò chuyện thật. Mới tính 1 mức model.</p>
-  <div class="foot"><span>Nguồn: <b>cost/cost-estimate.md</b> · <b>cost/simulate-2.csv</b> · gemini-3.5-flash-lite vào 0,30 · ra 2,50 USD / 1 triệu token (ai.google.dev/gemini-api/docs/pricing, xem 25/11/2026).</span><span>6 / 8</span></div>
-</section>
-
-<!-- 7 · Kết luận -->
-<section class="slide">
-  <div class="kicker"><i></i>Kết luận</div>
+  <span class="label">Kết luận</span>
   <h1>Quyết định: <em>Iterate</em>. Đáng làm tiếp, nhưng cần kiểm lại với người dùng thật</h1>
   <div class="row3" style="margin-top:28px">
-    <div class="card soft"><h3>Có vấn đề thật (trang 1)</h3><div class="big">72,7%<small>16/22</small></div><p class="cap">chọn hỏi tính năng thay vì hỏi chuyện đã xảy ra; 7/22 từng build xong không đúng vấn đề.</p></div>
-    <div class="card soft"><h3>Agent đạt chuẩn (trang 5)</h3><div class="big">83%<small>19/23</small></div><p class="cap">thuong + kho 78,9% ≥ 75%, tu_choi 4/4, 0 câu GO sai. Lượt 2 là 87%.</p></div>
-    <div class="card soft"><h3>Chi phí đủ nhỏ (trang 6)</h3><div class="big">$0,0163<small>/ người / tháng</small></div><p class="cap">so với khoảng 60 phút tiết kiệm mỗi người mỗi tháng.</p></div>
+    <div class="card soft"><h3>Nhu cầu thật</h3><div class="big">72,7%<small>16/22</small></div></div>
+    <div class="card soft"><h3>Kết quả khả quan</h3><div class="big">87%<small>lượt 2 · 20/23</small></div></div>
+    <div class="card soft"><h3>Chi phí có kiểm soát</h3><div class="big" style="font-size:46px">$0,0167<small style="white-space:nowrap;font-size:18px">/ người / tháng</small></div></div>
   </div>
-  <div class="grid" style="grid-template-columns:1fr 1fr">
-    <div class="card"><h3>Vì sao chưa chốt Go hẳn</h3><ul class="dots" style="font-size:15px;gap:8px"><li>Bằng chứng mới từ khảo sát n = 22, chưa có phỏng vấn kiểm lại.</li><li>Impact (60 phút / lần, 1 lần / tháng) là tự ước tính.</li></ul></div>
-    <div class="card"><h3>Rủi ro còn lại</h3><ul class="dots" style="font-size:15px;gap:8px"><li>Kết quả dao động vài câu giữa các lần chạy (16 đến 19 trên 23).</li><li>B03, B04 vẫn bị trả NO quá sớm, B10 chưa nhận ra việc không cần AI.</li></ul></div>
+  <div class="grid" style="grid-template-columns:1fr 1fr;margin-top:20px">
+    <div class="card"><h3>Còn rủi ro</h3><ul class="dots" style="font-size:20px;gap:8px"><li>Bằng chứng mới từ khảo sát n = 22.</li><li>Thêm luật đủ 9 thẻ, lượt 3 còn 74%, chưa đạt chuẩn.</li></ul></div>
+    <div class="card"><h3>Nếu có thêm 1 tuần</h3><ul class="dots" style="font-size:20px;gap:8px"><li>Chạy mỗi lượt ít nhất 3 lần.</li><li>Phỏng vấn 3 trưởng nhóm, đo số phút thật.</li></ul></div>
   </div>
-  <div class="foot"><span>Nguồn: trang 1 (evidence/summary.md) · trang 5 (eval/README.md) · trang 6 (cost/cost-estimate.md).</span><span>7 / 8</span></div>
-</section>
-
-<!-- 8 · Nếu có thêm 1 tuần -->
-<section class="slide">
-  <div class="kicker"><i></i>Nếu có thêm 1 tuần</div>
-  <h1>Ba việc, mỗi việc trỏ về một lỗi hoặc một chỗ chưa kiểm</h1>
-  <div class="grid" style="grid-template-columns:repeat(3,1fr);margin-top:30px">
-    <div class="card"><span class="tag b">1</span><h3 style="margin-top:14px;color:var(--ink);font-size:18px;font-weight:500">Đo độ dao động</h3><p class="cap" style="font-size:15.5px">Chạy mỗi lượt ≥ 3 lần và báo khoảng dao động. Hai lần chạy liền nhau với luật 9 ô ra 16/23 và 19/23, nên một con số 83% chưa đủ chắc.</p></div>
-    <div class="card"><span class="tag b">2</span><h3 style="margin-top:14px;color:var(--ink);font-size:18px;font-weight:500">Siết cờ "không cần AI" bằng luật code</h3><p class="cap" style="font-size:15.5px">B03 và B04 bị trả NO sớm vì cờ bật quá rộng trong prompt. Chỉ bật khi người dùng tự nói nguyên nhân là thói quen của chính họ.</p></div>
-    <div class="card"><span class="tag b">3</span><h3 style="margin-top:14px;color:var(--ink);font-size:18px;font-weight:500">Phỏng vấn 3 trưởng nhóm</h3><p class="cap" style="font-size:15.5px">Kiểm lại giả thuyết bằng chuyện thật và đo số lần / tháng, số phút mỗi lần, để thay các con số "tự ước tính" ở impact và persona.</p></div>
-  </div>
-  <div class="card soft" style="margin-top:22px;padding:16px 24px"><p style="font-size:15.5px;line-height:1.5">Ngoài ra: thêm câu thử theo chuỗi nhiều tin nhắn cho luồng 9 ô (B02 và B15 hiện đo từng tin nhắn đơn lẻ), và thêm một mức giá model mạnh hơn để so chi phí.</p></div>
-  <div class="foot"><span>Nguồn: <b>eval/report.md</b> mục 4 (lỗi còn lại) · <b>evidence/summary.md</b> (số chưa đo) · <b>cost/cost-estimate.md</b>.</span><span>8 / 8</span></div>
+  <div class="foot"><span>Nguồn: trang 3 (evidence/summary.md) · trang 7 (eval/README.md, cost/cost-estimate.md) · <b>eval/report.md</b>.</span><span>8 / 8</span></div>
 </section>
 
 </body>

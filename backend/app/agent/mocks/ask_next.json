@@ -82,7 +82,7 @@
   "output": {
     "proposal": {
       "verdict": "NOT YET",
-      "reply": "Một người cụ thể sẽ dùng thứ này là ai? Cho mình tên hoặc vai của họ và một lần gần nhất họ gặp vấn đề.",
+      "reply": "Ai sẽ dùng thứ này? Mô tả vai hoặc nghề của họ, và kể về lần gần nhất một người thuộc vai đó gặp vấn đề.",
       "next_cell": "persona",
       "reasons": [
         "Persona còn trống",
@@ -170,7 +170,7 @@
       },
       "flags": {},
       "title": "NOT YET: còn thiếu bằng chứng",
-      "summary": "Một người cụ thể sẽ dùng thứ này là ai? Cho mình tên hoặc vai của họ và một lần gần nhất họ gặp vấn đề.",
+      "summary": "Ai sẽ dùng thứ này? Mô tả vai hoặc nghề của họ, và kể về lần gần nhất một người thuộc vai đó gặp vấn đề.",
       "steps": [
         "Persona còn trống",
         "Pain Point còn trống",

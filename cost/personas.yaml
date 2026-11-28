@@ -41,6 +41,10 @@ prices:             # USD / 1 triệu token — chép từ further-reading/model
     input: 0.30
     output: 2.50
     source: "https://ai.google.dev/gemini-api/docs/pricing · xem 25/11/2026 (bảng giá BTC)"
+  - model: gemini-3.5-flash
+    input: 1.50
+    output: 9.00
+    source: "Không có trong bảng BTC. https://cloud.google.com/gemini-enterprise-agent-platform/generative-ai/pricing · xem 28/11/2026 (giá khu vực global, gói trả phí tiêu chuẩn). Chưa đối chiếu được với trang ai.google.dev nên giá Developer API có thể khác"
 
 usd_to_vnd:         # tuỳ chọn: điền thì bản tóm tắt in thêm tiền Việt
   rate:
